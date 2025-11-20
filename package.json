@@ -1,0 +1,30 @@
+{
+  "name": "bhmhockey",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run api\" \"npm run mobile\"",
+    "api": "cd apps/api/BHMHockey.Api && dotnet watch run",
+    "mobile": "cd apps/mobile && expo start",
+    "api:build": "cd apps/api/BHMHockey.Api && dotnet build",
+    "api:migrations": "cd apps/api/BHMHockey.Api && dotnet ef migrations add",
+    "api:update-db": "cd apps/api/BHMHockey.Api && dotnet ef database update",
+    "mobile:ios": "cd apps/mobile && expo start --ios",
+    "mobile:android": "cd apps/mobile && expo start --android",
+    "mobile:web": "cd apps/mobile && expo start --web",
+    "lint": "cd apps/mobile && npm run lint",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "lerna": "^8.0.1"
+  },
+  "description": "BHM Hockey - Monorepo for mobile app and API",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

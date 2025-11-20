@@ -1,0 +1,93 @@
+name: bhm-hockey-api
+region: nyc
+
+# Database (using your existing managed PostgreSQL)
+databases:
+  - name: bhmhockey
+    engine: PG
+    production: false
+    cluster_name: your-db-cluster-name # Replace with your actual DB cluster name
+
+# .NET 8 API Service
+services:
+  - name: api
+    github:
+      repo: your-username/bhmhockey2 # Replace with your repo
+      branch: main
+      deploy_on_push: true
+
+    # Build configuration - Monorepo structure
+    source_dir: /apps/api
+    dockerfile_path: Dockerfile
+
+    # HTTP configuration
+    http_port: 8080
+
+    # Health check
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+
+    # Environment variables
+    envs:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: "Production"
+
+      - key: ASPNETCORE_URLS
+        value: "http://+:8080"
+
+      # Database connection (uses DO managed database)
+      - key: ConnectionStrings__DefaultConnection
+        value: ${bhmhockey.DATABASE_URL}
+
+      # JWT Configuration
+      - key: Jwt__Secret
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        # Set this in DO console: openssl rand -base64 32
+
+      - key: Jwt__Issuer
+        value: "https://api.bhmhockey.com"
+
+      - key: Jwt__Audience
+        value: "https://api.bhmhockey.com"
+
+      - key: Jwt__ExpiryMinutes
+        value: "60"
+
+      - key: Jwt__RefreshExpiryDays
+        value: "7"
+
+      # CORS Configuration
+      - key: Cors__AllowedOrigins
+        value: "https://yourdomain.com,exp://localhost:8081"
+
+      # Expo Push Notifications
+      - key: Expo__AccessToken
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        # Set this in DO console after getting from Expo
+
+    # Resource sizing
+    instance_count: 1
+    instance_size_slug: basic-xxs # $5/month, upgrade to basic-xs ($12/month) for production
+
+    # Routes
+    routes:
+      - path: /api
+        preserve_path_prefix: true
+      - path: /health
+        preserve_path_prefix: true
+
+# Static site for API documentation (optional)
+# static_sites:
+#   - name: api-docs
+#     github:
+#       repo: your-username/bhm-hockey-backend
+#       branch: main
+#     source_dir: /docs
+#     output_dir: /
