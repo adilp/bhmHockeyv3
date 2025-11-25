@@ -9,6 +9,12 @@ public class User
     public string LastName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
     public string? PushToken { get; set; }
+
+    // Hockey profile fields
+    public string? SkillLevel { get; set; } // Gold, Silver, Bronze, D-League
+    public string? Position { get; set; } // Forward, Defense, Goalie
+    public string? VenmoHandle { get; set; }
+
     public string Role { get; set; } = "Player"; // Player, Organizer, Admin
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

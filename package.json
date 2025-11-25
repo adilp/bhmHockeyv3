@@ -17,7 +17,14 @@
     "mobile:android": "cd apps/mobile && expo start --android",
     "mobile:web": "cd apps/mobile && expo start --web",
     "lint": "cd apps/mobile && npm run lint",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "yarn test:api && yarn test:frontend",
+    "test:api": "cd apps/api/BHMHockey.Api.Tests && dotnet test",
+    "test:frontend": "yarn workspace @bhmhockey/shared test && yarn workspace @bhmhockey/api-client test && yarn workspace @bhmhockey/mobile test",
+    "test:shared": "yarn workspace @bhmhockey/shared test",
+    "test:api-client": "yarn workspace @bhmhockey/api-client test",
+    "test:mobile": "yarn workspace @bhmhockey/mobile test",
+    "test:watch": "yarn workspace @bhmhockey/mobile test:watch",
+    "test:coverage": "yarn test:api -- --collect:\"XPlat Code Coverage\" && yarn test:frontend --coverage"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

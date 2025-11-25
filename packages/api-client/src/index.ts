@@ -3,6 +3,7 @@ export { initializeApiClient, apiClient } from './client';
 
 // Export services
 export { authService } from './services/auth';
+export { userService } from './services/users';
 export { organizationService } from './services/organizations';
 export { eventService } from './services/events';
 

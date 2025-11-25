@@ -5,6 +5,9 @@ export interface User {
   firstName: string;
   lastName: string;
   phoneNumber?: string;
+  skillLevel?: SkillLevel;
+  position?: Position;
+  venmoHandle?: string;
   role: UserRole;
   pushToken?: string;
   isActive: boolean;
@@ -13,6 +16,7 @@ export interface User {
 }
 
 export type UserRole = 'Player' | 'Organizer' | 'Admin';
+export type Position = 'Forward' | 'Defense' | 'Goalie';
 
 // Organization types
 export interface Organization {
@@ -27,7 +31,7 @@ export interface Organization {
   updatedAt: string;
 }
 
-export type SkillLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'All';
+export type SkillLevel = 'Gold' | 'Silver' | 'Bronze' | 'D-League';
 
 export interface OrganizationSubscription {
   id: string;
@@ -85,6 +89,15 @@ export interface AuthResponse {
   token: string;
   refreshToken: string;
   user: User;
+}
+
+export interface UpdateUserProfileRequest {
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  skillLevel?: SkillLevel;
+  position?: Position;
+  venmoHandle?: string;
 }
 
 // API Response types

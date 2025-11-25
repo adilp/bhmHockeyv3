@@ -6,14 +6,20 @@ public record UserDto(
     string FirstName,
     string LastName,
     string? PhoneNumber,
+    string? SkillLevel,
+    string? Position,
+    string? VenmoHandle,
     string Role,
     DateTime CreatedAt
 );
 
-public record UpdateUserRequest(
+public record UpdateUserProfileRequest(
     string? FirstName,
     string? LastName,
-    string? PhoneNumber
+    string? PhoneNumber,
+    string? SkillLevel,
+    string? Position,
+    string? VenmoHandle
 );
 
 public record UpdatePushTokenRequest(

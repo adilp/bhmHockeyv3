@@ -179,6 +179,9 @@ public class EventService : IEventService
                 r.User.FirstName,
                 r.User.LastName,
                 r.User.PhoneNumber,
+                r.User.SkillLevel,
+                r.User.Position,
+                r.User.VenmoHandle,
                 r.User.Role,
                 r.User.CreatedAt
             ),
