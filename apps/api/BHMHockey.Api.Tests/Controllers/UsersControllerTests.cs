@@ -17,12 +17,14 @@ namespace BHMHockey.Api.Tests.Controllers;
 public class UsersControllerTests
 {
     private readonly Mock<IUserService> _mockUserService;
+    private readonly Mock<IOrganizationService> _mockOrgService;
     private readonly UsersController _sut;
 
     public UsersControllerTests()
     {
         _mockUserService = new Mock<IUserService>();
-        _sut = new UsersController(_mockUserService.Object);
+        _mockOrgService = new Mock<IOrganizationService>();
+        _sut = new UsersController(_mockUserService.Object, _mockOrgService.Object);
     }
 
     private void SetupControllerWithClaims(IEnumerable<Claim> claims)

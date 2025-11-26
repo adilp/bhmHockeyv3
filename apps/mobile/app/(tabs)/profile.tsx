@@ -13,12 +13,14 @@ import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
+import { useOrganizationStore } from '../../stores/organizationStore';
 import type { User, SkillLevel, Position } from '@bhmhockey/shared';
 import { SKILL_LEVELS, POSITIONS } from '@bhmhockey/shared';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user: authUser, setUser: setAuthUser, logout } = useAuthStore();
+  const { mySubscriptions, fetchMySubscriptions } = useOrganizationStore();
 
   const [user, setUser] = useState<User | null>(authUser);
   const [loading, setLoading] = useState(false);
@@ -41,6 +43,12 @@ export default function ProfileScreen() {
       setSkillLevel(authUser.skillLevel || '');
       setPosition(authUser.position || '');
       setVenmoHandle(authUser.venmoHandle || '');
+    }
+  }, [authUser]);
+
+  useEffect(() => {
+    if (authUser) {
+      fetchMySubscriptions();
     }
   }, [authUser]);
 
@@ -188,6 +196,27 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {mySubscriptions.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>My Organizations</Text>
+            {mySubscriptions.map((sub) => (
+              <TouchableOpacity
+                key={sub.id}
+                style={styles.subscriptionCard}
+                onPress={() => router.push(`/organizations/${sub.organization.id}`)}
+              >
+                <View style={styles.subscriptionInfo}>
+                  <Text style={styles.subscriptionName}>{sub.organization.name}</Text>
+                  {sub.organization.skillLevel && (
+                    <Text style={styles.subscriptionSkill}>{sub.organization.skillLevel}</Text>
+                  )}
+                </View>
+                <Text style={styles.subscriptionArrow}>›</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSave}
@@ -317,5 +346,32 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontSize: 16,
     fontWeight: '600',
+  },
+  subscriptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  subscriptionInfo: {
+    flex: 1,
+  },
+  subscriptionName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  subscriptionSkill: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  subscriptionArrow: {
+    fontSize: 24,
+    color: '#ccc',
+    marginLeft: 8,
   },
 });

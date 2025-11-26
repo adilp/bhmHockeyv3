@@ -12,10 +12,12 @@ namespace BHMHockey.Api.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly IOrganizationService _organizationService;
 
-    public UsersController(IUserService userService)
+    public UsersController(IUserService userService, IOrganizationService organizationService)
     {
         _userService = userService;
+        _organizationService = organizationService;
     }
 
     private Guid GetCurrentUserId()
@@ -87,6 +89,21 @@ public class UsersController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("me/subscriptions")]
+    public async Task<ActionResult<List<OrganizationSubscriptionDto>>> GetMySubscriptions()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var subscriptions = await _organizationService.GetUserSubscriptionsAsync(userId);
+            return Ok(subscriptions);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
         }
     }
 }

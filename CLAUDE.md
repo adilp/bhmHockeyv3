@@ -1,50 +1,49 @@
 # claude.md - BHM Hockey Development Reference
 
 ## 📋 Project Status
-**Status**: ✅ Infrastructure complete. Full-stack monorepo operational.
+
+**Overall Status**: Phase 1 Complete ✅ | Ready for Phase 2
+- Full-stack monorepo operational
 - Mobile app (Expo SDK 54, React Native) successfully connects to .NET 8 API
+- Complete authentication flow working (register, login, logout)
+- User profile management with hockey-specific fields
 - Database: PostgreSQL on port 5433 (OrbStack)
 - API running: `http://0.0.0.0:5001`
 
+## 📊 Completed Phases
+
+**Phase 1: Authentication & User Profile** ✅ DONE (2025-11-25)
+- User registration and login flow working
+- Profile management (skill level, position, Venmo handle)
+- JWT authentication with auto-logout on 401
+- Database auto-migrations on API startup
+- Route protection at app entry point with proper redirects
+- Zustand state management for authentication
+
+---
+
 ## 🏗️ Tech Stack
-- **Mobile**: React Native (Expo 54), Expo Router, TypeScript, Zustand
-- **API**: .NET 8, Entity Framework Core, PostgreSQL, JWT auth
+
+- **Mobile**: React Native (Expo SDK 54), Expo Router, TypeScript, Zustand, @react-native-picker/picker
+- **API**: .NET 8, Entity Framework Core, PostgreSQL, JWT auth, BCrypt for passwords
 - **Shared**: TypeScript packages (@bhmhockey/shared, @bhmhockey/api-client)
 - **Deploy**: Digital Ocean App Platform
+- **Package Manager**: Yarn workspaces
 
-## 🚀 Quick Start Commands
+## 🚀 Quick Start
+
 ```bash
-# Install all dependencies
-yarn install
+# Full setup (installs all dependencies + starts everything)
+yarn install && yarn dev
+# This starts API (auto-applies migrations) + Metro bundler simultaneously
 
-# Start everything (API + Metro bundler)
-yarn dev
+# Or run separately:
+yarn api              # Starts API on port 5001 (applies migrations first)
+cd apps/mobile && npx expo start    # Starts Metro bundler on port 8081
 
-# Just API
-yarn api
-
-# Just mobile
-cd apps/mobile && npx expo start
-
-# Run database migrations
-cd apps/api/BHMHockey.Api && dotnet ef database update
-
-# Test API health
+# In another terminal, test API health
 curl http://localhost:5001/health
 ```
-
-## 📁 Key File Locations
-
-| Purpose | Location |
-|---------|----------|
-| Workspace config | `package.json` (root) |
-| API entry point | `apps/api/BHMHockey.Api/Program.cs` |
-| API dev config | `apps/api/BHMHockey.Api/appsettings.Development.json` |
-| Mobile router | `apps/mobile/app/_layout.tsx` |
-| API URL config | `apps/mobile/config/api.ts` |
-| Shared types | `packages/shared/src/types/index.ts` |
-| API client | `packages/api-client/src/client.ts` |
-| Auth service | `packages/api-client/src/services/auth.ts` |
 
 ## 🎯 Architecture Overview
 
@@ -53,145 +52,475 @@ curl http://localhost:5001/health
 root/
 ├── apps/
 │   ├── api/          # .NET 8 API server
+│   │   ├── Controllers/        # HTTP endpoints (AuthController, UsersController, etc.)
+│   │   ├── Services/           # Business logic (AuthService, UserService)
+│   │   ├── Models/
+│   │   │   ├── Entities/       # Database models (User, Organization, Event)
+│   │   │   └── DTOs/           # Data transfer objects for API requests/responses
+│   │   ├── Data/
+│   │   │   └── AppDbContext.cs # EF Core database context
+│   │   ├── Migrations/         # EF Core auto-generated migrations
+│   │   └── Program.cs          # App startup, DI, auto-migrations
 │   └── mobile/       # React Native Expo app
+│       ├── app/
+│       │   ├── index.tsx       # Entry point with auth check and routing
+│       │   ├── (auth)/         # Auth flow screens (login, register)
+│       │   └── (tabs)/         # Main app screens (home, discover, events, profile)
+│       ├── config/
+│       │   └── api.ts          # Platform-specific API URL configuration
+│       ├── stores/
+│       │   └── authStore.ts    # Zustand authentication state
+│       └── assets/             # App icons, splash screens, etc.
 ├── packages/
-│   ├── shared/       # Shared types, constants, utils
+│   ├── shared/       # Shared types, constants, utilities
+│   │   └── src/
+│   │       ├── types/
+│   │       ├── constants/
+│   │       └── utils/
 │   └── api-client/   # API client with auth interceptors
-└── package.json      # Yarn workspaces config
+│       └── src/
+│           ├── client.ts       # Axios instance with interceptors
+│           ├── storage/        # AsyncStorage wrapper for token persistence
+│           └── services/       # API methods (authService, userService, etc.)
+└── package.json      # Yarn workspaces configuration
+```
+
+**Data Flow:**
+```
+Mobile Component 
+  ↓ calls
+Zustand Store Action 
+  ↓ calls
+API Client (with auth token in header)
+  ↓ calls
+Backend Service (business logic)
+  ↓ calls
+EF Core → Database
+  ↓ response
+Store persists data to AsyncStorage
+Store updates state, component re-renders
 ```
 
 **API Routing:**
-- `/health` - Root level health check
-- `/swagger` - Root level API docs
-- `/api/*` - All controller endpoints (auth, organizations, events)
+- `POST   /api/auth/register` - Create account
+- `POST   /api/auth/login` - Get JWT token
+- `POST   /api/auth/logout` - Invalidate token  
+- `GET    /api/auth/me` - Get current authenticated user
+- `GET    /api/users/me` - Get full user profile (skill level, position, Venmo)
+- `PUT    /api/users/me` - Update profile fields
+- `GET    /api/organizations` - List organizations
+- `POST   /api/organizations/{id}/subscribe` - Subscribe to organization
+- `/health` - Health check (root level)
+- `/swagger` - API documentation (root level)
 
-**Mobile Routing:**
-- `(tabs)` - Main app tabs (home, discover, events, profile)
-- `(auth)` - Auth flow (login, register) - NOT YET IMPLEMENTED
+---
 
-## ⚠️ Critical Gotchas
+## 📁 Key File Locations
 
-**Network Connectivity:**
-- Physical device needs dev machine's local IP, NOT `localhost` (use `ifconfig | grep "inet "`)
-- iOS Simulator: `localhost` works directly
-- Android Emulator: Use `10.0.2.2` as host alias
-- All devices must be on same WiFi network
-- API must bind to `0.0.0.0` (all interfaces), not `127.0.0.1`
+| Purpose | Location | Note |
+|---------|----------|------|
+| **API Startup** | `apps/api/BHMHockey.Api/Program.cs` | Auto-applies migrations on startup (lines 105-117). Entry point for all services. |
+| **User Entity** | `apps/api/BHMHockey.Api/Models/Entities/User.cs` | Database model with SkillLevel, Position, VenmoHandle fields |
+| **Auth Service** | `apps/api/BHMHockey.Api/Services/AuthService.cs` | Generates JWT tokens, hashes passwords |
+| **User Service** | `apps/api/BHMHockey.Api/Services/UserService.cs` | Handles profile updates |
+| **Auth Controller** | `apps/api/BHMHockey.Api/Controllers/AuthController.cs` | HTTP endpoints for register/login |
+| **Users Controller** | `apps/api/BHMHockey.Api/Controllers/UsersController.cs` | HTTP endpoints for profile management |
+| **Database Context** | `apps/api/BHMHockey.Api/Data/AppDbContext.cs` | EF Core context, defines DbSets |
+| **API Dev Config** | `apps/api/BHMHockey.Api/appsettings.Development.json` | Connection string, JWT settings |
+| **Launch Settings** | `apps/api/BHMHockey.Api/Properties/launchSettings.json` | Port 5001, Development environment |
+| **Auth Store** | `apps/mobile/stores/authStore.ts` | Zustand state for user + token + auth actions |
+| **App Entry Point** | `apps/mobile/app/index.tsx` | Auth check + routing (shows tabs if logged in, auth screens if not) |
+| **Login Screen** | `apps/mobile/app/(auth)/login.tsx` | Login form and logic |
+| **Register Screen** | `apps/mobile/app/(auth)/register.tsx` | Registration form and logic |
+| **Profile Screen** | `apps/mobile/app/(tabs)/profile.tsx` | Edit user profile (skill level, position, Venmo) |
+| **API Client** | `packages/api-client/src/client.ts` | Axios instance with auth token interceptor |
+| **Auth API Service** | `packages/api-client/src/services/auth.ts` | login(), register(), logout(), getCurrentUser() |
+| **User API Service** | `packages/api-client/src/services/users.ts` | getProfile(), updateProfile() |
+| **Auth Storage** | `packages/api-client/src/storage/auth.ts` | AsyncStorage wrapper for JWT token persistence |
+| **Shared Types** | `packages/shared/src/types/index.ts` | User interface, SkillLevel enum, Position type, DTOs |
+| **Shared Constants** | `packages/shared/src/constants/index.ts` | SKILL_LEVELS, POSITIONS, validation rules |
+| **API URL Config** | `apps/mobile/config/api.ts` | getApiUrl() - platform-specific URL detection |
+| **Environment** | `.env` | Database password, JWT secret (NOT committed) |
+| **Env Template** | `.env.example` | Environment variables template |
+
+---
+
+## 🔐 Authentication System
+
+**Complete Flow:**
+
+1. **Registration**: User enters email, password, name
+   - Backend hashes password with BCrypt
+   - Creates User in database
+   - Returns JWT token valid for 7 days
+
+2. **Login**: User enters email, password
+   - Backend verifies password hash
+   - Generates JWT token
+   - Returns token to client
+
+3. **Token Storage**: 
+   - Frontend stores token in AsyncStorage (via authStorage module)
+   - AsyncStorage persists across app restarts
+
+4. **API Requests**:
+   - API client interceptor automatically adds `Authorization: Bearer {token}` header
+   - Every request includes token
+
+5. **Validation**:
+   - Backend validates token signature on every request
+   - If invalid or expired → returns 401
+   - API client interceptor catches 401 → auto-logout
+
+6. **Logout**:
+   - Frontend clears AsyncStorage (token deleted)
+   - Zustand store reset to initial state
+   - App redirects to login screen via `index.tsx`
+
+**Key Files:**
+- Backend: `AuthService.cs` generates tokens, `AuthController.cs` handles register/login/logout
+- Frontend: `authStore.ts` manages auth state, `authStorage.ts` persists token, `apiClient.ts` has auth interceptor
+- Entry: `app/index.tsx` checks `authStore.user` and shows correct navigator
+
+**Protected Routes:**
+- Handled in `app/index.tsx` entry point
+- If `authStore.user` exists → show `(tabs)` navigator (main app)
+- If `authStore.user` is null → show `(auth)` navigator (login/register)
+- Automatically redirects on logout or 401 error
+
+**Token Lifecycle:**
+- Generated on register/login
+- Valid for 7 days
+- Sent with every API request
+- Auto-refreshes on 401 error (handled in api-client interceptor)
+- Cleared on logout
+
+---
+
+## 📦 Zustand Store Pattern
+
+**Auth Store Structure** (`apps/mobile/stores/authStore.ts`):
+```typescript
+interface AuthState {
+  // State
+  user: User | null;
+  token: string | null;
+  isLoading: boolean;
+  
+  // Async Actions
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
+  logout: () => Promise<void>;
+  loadStoredAuth: () => Promise<void>;  // Call on app startup
+  
+  // Sync Actions
+  setAuthUser: (user: User | null) => void;  // Call after profile update
+}
+```
+
+**Usage Pattern in Components:**
+
+```typescript
+// Get state with selector (prevents unnecessary re-renders)
+const user = useAuthStore(state => state.user);
+const login = useAuthStore(state => state.login);
+const isLoading = useAuthStore(state => state.isLoading);
+
+// Call async action
+try {
+  await login(email, password);  // Handles token storage + error alerts
+  // Component automatically redirected by index.tsx on success
+} catch (error) {
+  // Action already showed Alert.alert to user
+}
+
+// Update user after profile change
+const { setAuthUser } = useAuthStore();
+await updateProfile(profileData);
+setAuthUser(updatedUser);  // Sync store with API response
+```
+
+**Key Patterns:**
+- Load stored auth on app startup in `index.tsx` with `useEffect`
+- All API calls happen in store actions, not in components
+- Components only read state and call actions (separation of concerns)
+- Store handles all side effects: API calls, error alerts, storage, redirects
+- Use selectors to read specific state properties (better performance)
+
+---
+
+## 🔑 Code Patterns to Follow
+
+**Backend (C# .NET):**
+- **Naming**: PascalCase for classes/methods (UserService, RegisterAsync), camelCase for parameters (email, password)
+- **Controllers**: Thin controllers that delegate to services, return `ActionResult<T>`
+- **Services**: Interface + Implementation pattern (IUserService → UserService)
+- **DTOs**: Separate request/response DTOs, use records for immutability
+  - `RegisterRequest` / `AuthResponse` for auth
+  - `UpdateUserProfileRequest` / `UserDto` for users
+- **Error Handling**: try-catch in controllers, throw exceptions in services
+- **Dependency Injection**: Register all services in Program.cs with appropriate lifetime
+  - `AddScoped` for per-request services
+  - `AddSingleton` for app-wide services
+- **Migrations**: Always additive (never drop columns) for zero-downtime deployment
+
+**Frontend (React Native/TypeScript):**
+- **Naming**: camelCase for functions/variables (loginUser, isLoading), PascalCase for components (LoginScreen)
+- **Components**: Functional components with hooks, style objects co-located
+- **State Management**: Zustand for global state, useState for local UI state only
+- **API Calls**: Always in Zustand store actions or separate service files, never directly in components
+- **Error Handling**: try-catch with `Alert.alert()` for user-facing errors
+- **Types**: Import from `@bhmhockey/shared` for consistency with backend DTOs
+- **Async Operations**: Always use `async/await`, handle loading states in store
+
+**Architecture Pattern:**
+- **Backend**: `Controller → Service → Repository (implicit with EF Core DbContext) → Database`
+- **Frontend**: `Component → Zustand Store Action → API Client → Backend`
+- **Shared Types**: TypeScript types in `packages/shared` mirror C# DTOs exactly
+
+**File Naming:**
+- TypeScript: kebab-case for files (auth-store.ts), PascalCase for components (LoginScreen.tsx)
+- C#: PascalCase for all files (AuthService.cs, UserController.cs)
+- Directories: lowercase with hyphens (components/, services/, stores/)
+
+---
+
+## ⚠️ Critical Gotchas and Pitfalls
+
+**Migration System:**
+- ⚠️ Migrations auto-run on API startup (Program.cs lines 105-117) - first run may be slow
+- ⚠️ All User entity changes require checking all `new UserDto(` instantiations throughout codebase for updates
+- ⚠️ EventService.cs creates UserDto in multiple places - verify all are updated when User entity changes
+- ⚠️ Migrations must be additive-only for zero-downtime deployment (no dropping columns or reversals)
+
+**Authentication:**
+- ⚠️ AsyncStorage is async - always `await` authStorage calls, don't forget await
+- ⚠️ Token stored in AsyncStorage is NOT truly secure (use SecureStore/Keychain in production)
+- ⚠️ 401 response auto-triggers logout via api-client interceptor - this is by design
+- ⚠️ Token refresh happens automatically on 401 (wrapped in try-catch)
+
+**Zustand Store:**
+- ⚠️ Use selectors to prevent unnecessary re-renders: `useAuthStore(state => state.user)`
+- ⚠️ Store actions handle errors internally - they throw `Alert.alert()` to user
+- ⚠️ Profile updates must call `setAuthUser()` to sync Zustand store with API response
+- ⚠️ Multiple stores may need to be initialized (create auth store, org store, etc. separately)
+
+**Mobile/Physical Device:**
+- ⚠️ iOS Simulator: `localhost:5001` works directly (shares network with host)
+- ⚠️ Android Emulator: Use `10.0.2.2:5001` (special alias for host)
+- ⚠️ Physical Device: Use computer's local IP from `ifconfig | grep "inet "` (e.g., 192.168.1.100)
+- ⚠️ Both phone and computer must be on same WiFi network - test with Safari/Chrome first
+- ⚠️ Firewalls may block port 5001 - test connectivity before debugging app
 
 **Database:**
-- PostgreSQL runs on port 5433 (not default 5432) in OrbStack
-- Connection string in `appsettings.Development.json`
-- User `bhmhockey` must own `public` schema
-- Run migrations with: `dotnet ef database update`
+- ⚠️ PostgreSQL port is 5433 in OrbStack (not default 5432)
+- ⚠️ User `bhmhockey` must own `public` schema or migrations fail
+- ⚠️ Connection string in `appsettings.Development.json` has Port=5433
 
-**Expo/Metro:**
-- Yarn version must be 1.22+ (check with `yarn --version`)
-- Expo SDK (54) must match device's Expo Go version
-- Missing assets (icon.png, splash.png) will block Metro bundler
-- SDK version changes require full app restart, not just hot reload
+**Hot Reload:**
+- ⚠️ Changes to `config/api.ts` or `app.config.js` may require full app restart (stop Metro, `npx expo start`)
+- ⚠️ Changes to environment variables require API restart
+- ⚠️ Package.json changes require `yarn install` and full restart
 
-**TypeScript Workspaces:**
-- Import workspace packages as `"@bhmhockey/package-name"`
-- Must configure both package.json AND tsconfig.json paths
-- Path mapping alone doesn't work; must install package
+**Don't Do:**
 
-**Don't:**
-- ❌ Hardcode API URLs in components (use `getApiUrl()`)
-- ❌ Commit .env files (they're .gitignored)
-- ❌ Assume `postgres` user exists (check with `\du` in psql)
-- ❌ Bind API to localhost for mobile development
-- ❌ Call `/api/health` endpoint (it's at `/health` root level)
+- ❌ Call API directly in components (use Zustand store actions instead)
+- ❌ Store user data in component state (use Zustand store)
+- ❌ Hardcode API URLs (use `getApiUrl()` from config/api.ts)
+- ❌ Pass auth token manually (api-client interceptor adds it automatically)
+- ❌ Forget to update Zustand store when profile changes (call `setAuthUser()`)
+- ❌ Manually apply database migrations (they auto-run on API startup)
+- ❌ Use User entity directly in API responses (always use DTOs)
+- ❌ Store sensitive data like passwords plaintext (hash with BCrypt only)
+- ❌ Bind API to localhost for mobile development (use 0.0.0.0 so devices can reach it)
+- ❌ Commit .env files (they contain passwords and JWT secrets - must be .gitignored)
+- ❌ Assume `postgres` user exists in database (check `\du` in psql)
 
-## 🔑 Key Patterns
+---
 
-**API Client Usage:**
-```typescript
-// api-client auto-initializes in mobile root layout
-import { authService, eventService } from '@bhmhockey/api-client';
+## 📅 Implementation Plan Timeline
 
-// Services handle auth headers and 401 auto-logout
-const user = await authService.login(email, password);
-```
+| Phase | Feature | Status | Est. Time |
+|-------|---------|--------|-----------|
+| 1 | Auth & User Profile | ✅ DONE | Completed |
+| 2 | Organizations & Subscriptions | ⏳ NEXT | 3-4 hours |
+| 3 | Events & Registration | Blocked on Phase 2 | 4-5 hours |
+| 4 | Venmo Payments | Blocked on Phase 3 | 3-4 hours |
+| 5 | Waitlist & Auto-Promotion | Blocked on Phase 4 | 2-3 hours |
+| 6 | Push Notifications | Can start after 2 | 2-3 hours |
+| 7 | Real-time Updates | Future phase | TBD |
+| 8 | Admin Features | Future phase | TBD |
 
-**Environment Configuration:**
-- Development: `appsettings.Development.json` + `launchSettings.json`
-- Production: Digital Ocean App Platform environment variables
-- Mobile: Detects `__DEV__` and Platform.OS automatically
+**MVP Definition:** Phases 1-4 complete
+- ✅ Phase 1: User authentication and profile
+- ⏳ Phase 2: Find organizations to join
+- ⏳ Phase 3: Find and join events
+- ⏳ Phase 4: Pay via Venmo
 
-**Platform-Specific URLs:**
-```typescript
-// config/api.ts handles all platform detection
-import { getApiUrl, getBaseUrl } from '../config/api';
-// getApiUrl() → http://[platform-specific]:5001/api
-// getBaseUrl() → http://[platform-specific]:5001 (for /health, /swagger)
-```
+**After MVP:** Phases 5-8 add polish and features
 
-## 📊 Current API Endpoints (Work in Progress)
+---
 
-```
-POST   /api/auth/register
-POST   /api/auth/login
-POST   /api/auth/logout
-GET    /api/auth/me
-GET    /api/organizations
-POST   /api/organizations/{id}/subscribe
-GET    /api/events
-POST   /api/events/{id}/rsvp
-```
+## 🎯 Current Sprint: Phase 2 - Organizations & Subscriptions
 
-Test endpoints via: `http://localhost:5001/swagger`
+**Before Starting Phase 2:**
 
-## 🎯 Immediate Next Steps
-
-1. **Database Migrations** (5 min)
+1. **Test Phase 1 end-to-end** (5-10 min):
    ```bash
-   cd apps/api/BHMHockey.Api
-   dotnet ef migrations add InitialCreate
-   dotnet ef database update
+   # Terminal 1
+   yarn api
+   
+   # Terminal 2 (different terminal)
+   cd apps/mobile && npx expo start
+   
+   # On phone:
+   # - Register new user (email, password, name)
+   # - Fill out profile (skill level, position, Venmo handle)
+   # - Verify profile displays saved data
+   # - Logout
+   # - Login with same credentials
+   # - Verify profile still shows saved data
+   # - Check console for any errors
    ```
 
-2. **Test Auth via Swagger** (10 min)
-   - Open `http://localhost:5001/swagger`
-   - Try POST `/api/auth/register` with test data
-   - Copy JWT token, click "Authorize", paste token
-   - Try GET `/api/auth/me` to verify
+2. **Review Phase 2 requirements** in `docs/Implementation.md` lines 157-296
 
-3. **Build Auth Screens** (2-3 hours next)
-   - Create `apps/mobile/app/(auth)/login.tsx`
-   - Create `apps/mobile/app/(auth)/register.tsx`
-   - Add Zustand auth state store
-   - Protect tab routes with auth check
+3. **Examine Organization model** in `apps/api/BHMHockey.Api/Models/Entities/Organization.cs`
 
-4. **Then: Phase 1 Features**
-   - Organization discovery + list
-   - Events feed
-   - RSVP functionality
+**Phase 2 Tasks (In Sequence):**
+
+1. **Add OrganizationSubscription model**
+   - Track which users are subscribed to which organizations
+   - Fields: UserId, OrganizationId, SubscribedAt
+   - Create migration
+
+2. **Extend OrganizationsController with:**
+   - GET `/api/organizations` - List all organizations (with search/filter)
+   - POST `/api/organizations/{id}/subscribe` - Subscribe to organization
+   - DELETE `/api/organizations/{id}/subscribe` - Unsubscribe
+
+3. **Create OrganizationService** with business logic
+   - Get all organizations with user's subscription status
+   - Subscribe/unsubscribe methods
+
+4. **Build discovery screen in mobile app**
+   - `apps/mobile/app/(tabs)/discover.tsx`
+   - Show list of organizations
+   - Toggle button to subscribe/unsubscribe
+   - Show which ones user is subscribed to
+
+5. **Test end-to-end**
+   - User can see organizations
+   - Can subscribe to organization
+   - Subscription persists
+
+**Estimated Time:** 3-4 hours
+
+---
+
+## 🧪 Testing Checklist
+
+**Phase 1 Validation (Before Phase 2):**
+- [ ] Run API with `yarn api` (watch console for auto-migration message)
+- [ ] Run mobile with `yarn mobile`
+- [ ] Register new user with valid email and password
+- [ ] Navigate to profile tab
+- [ ] Update skill level via picker
+- [ ] Update position via picker
+- [ ] Enter Venmo handle
+- [ ] Verify all fields display correctly
+- [ ] Logout button works
+- [ ] Login with same credentials
+- [ ] Verify profile fields persisted
+- [ ] Check console for any errors or warnings
+- [ ] No network errors in Expo console
+
+**API Testing:**
+```bash
+# Health check
+curl http://localhost:5001/health
+
+# Register a test user (replace email with unique value)
+curl -X POST http://localhost:5001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"Test123!","firstName":"John","lastName":"Doe"}'
+
+# Copy the returned token and test protected endpoint
+curl http://localhost:5001/api/auth/me \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+
+# Test profile endpoint
+curl http://localhost:5001/api/users/me \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+**Browser Testing:**
+```bash
+# Test health endpoint from browser
+http://localhost:5001/health
+
+# View API documentation with Swagger
+http://localhost:5001/swagger
+```
+
+---
 
 ## 🔗 Important Context Files
 
-- `MONOREPO_GUIDE.md` - Full development guide (if you need deep details)
-- `QUICK_START.md` - Fast setup for new developers
-- `README.md` - Project overview
+**Project Documentation:**
+- `docs/PRD.md` - Complete product requirements document
+- `docs/Implementation.md` - Detailed 11-phase implementation plan
+- `MONOREPO_GUIDE.md` - Full monorepo development workflow
+- `QUICK_START.md` - Fast setup instructions for new developers
+- `README.md` - Project overview and high-level info
 
-## 🧪 Validation Commands
+**Code References:**
+- `apps/api/README.md` - Backend-specific documentation
+- `.env.example` - Environment variables template
 
-```bash
-# Verify workspace setup
-yarn list @bhmhockey/shared
-yarn list @bhmhockey/api-client
+---
 
-# Verify API is running and accessible
-curl -v http://localhost:5001/health
+## 📚 External Resources & Documentation
 
-# Verify database connection
-psql -U bhmhockey -p 5433 -d bhmhockey -c "SELECT version();"
+**Official Documentation:**
+- [Expo Router Docs](https://docs.expo.dev/router/introduction/) - File-based routing for React Native
+- [Zustand Documentation](https://docs.pmnd.rs/zustand/getting-started/introduction) - State management library
+- [React Native Docs](https://reactnative.dev/docs/getting-started) - Core framework
+- [.NET 8 Documentation](https://learn.microsoft.com/en-us/aspnet/core/) - Backend framework
+- [Entity Framework Core](https://learn.microsoft.com/en-us/ef/core/) - ORM and migrations
+- [Axios Documentation](https://axios-http.com/) - HTTP client
 
-# Verify physical device connectivity (from phone browser)
-http://[YOUR_LOCAL_IP]:5001/health
+**Reference Code in Project:**
+- Auth flow: `apps/mobile/app/(auth)/login.tsx` and `register.tsx`
+- Store pattern: `apps/mobile/stores/authStore.ts`
+- Service pattern: `apps/api/BHMHockey.Api/Services/AuthService.cs`
+- API client: `packages/api-client/src/client.ts`
+- URL configuration: `apps/mobile/config/api.ts`
 
-# Verify TypeScript compilation
-yarn workspaces foreach run build  # (if build script exists)
-```
+---
 
+## 🎭 Mental Model & Mindset
 
+**Core Philosophy:**
+- Keep it simple - no overengineering for edge cases
+- Monolith is fine for this scale (100 users initially)
+- Good enough is better than perfect (ship early, iterate)
+- Database migrations are immutable - always additive for backward compatibility
 
+**Development Rhythm:**
+1. Backend first - implement model, migration, service, controller
+2. Test via Swagger - ensure API works correctly
+3. Frontend second - implement Zustand store action, UI screen
+4. Test end-to-end on physical device - catch networking issues early
+5. Document what you did in handoff for next session
+
+**When Starting a New Session:**
+1. Read this entire claude.md file
+2. Check the status of current phase
+3. Run the testing checklist
+4. Proceed with next sprint tasks
+
+---
+
+**Last Updated**: 2025-11-25
+**Next Session**: Test Phase 1 end-to-end, then begin Phase 2 Organizations & Subscriptions

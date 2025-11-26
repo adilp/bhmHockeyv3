@@ -1,4 +1,9 @@
-import type { Organization, OrganizationSubscription } from '@bhmhockey/shared';
+import type {
+  Organization,
+  OrganizationSubscription,
+  CreateOrganizationRequest,
+  UpdateOrganizationRequest
+} from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
 /**
@@ -24,7 +29,7 @@ export const organizationService = {
   /**
    * Create organization
    */
-  async create(data: Partial<Organization>): Promise<Organization> {
+  async create(data: CreateOrganizationRequest): Promise<Organization> {
     const response = await apiClient.instance.post<Organization>('/organizations', data);
     return response.data;
   },
@@ -32,7 +37,7 @@ export const organizationService = {
   /**
    * Update organization
    */
-  async update(id: string, data: Partial<Organization>): Promise<Organization> {
+  async update(id: string, data: UpdateOrganizationRequest): Promise<Organization> {
     const response = await apiClient.instance.put<Organization>(`/organizations/${id}`, data);
     return response.data;
   },

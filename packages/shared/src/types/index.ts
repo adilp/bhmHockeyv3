@@ -26,19 +26,32 @@ export interface Organization {
   creatorId: string;
   location?: string;
   skillLevel?: SkillLevel;
-  isActive: boolean;
+  subscriberCount: number;
+  isSubscribed: boolean;
   createdAt: string;
-  updatedAt: string;
 }
 
 export type SkillLevel = 'Gold' | 'Silver' | 'Bronze' | 'D-League';
 
 export interface OrganizationSubscription {
   id: string;
-  organizationId: string;
-  userId: string;
+  organization: Organization;
   notificationEnabled: boolean;
   subscribedAt: string;
+}
+
+export interface CreateOrganizationRequest {
+  name: string;
+  description?: string;
+  location?: string;
+  skillLevel?: SkillLevel;
+}
+
+export interface UpdateOrganizationRequest {
+  name?: string;
+  description?: string;
+  location?: string;
+  skillLevel?: SkillLevel;
 }
 
 // Event types
