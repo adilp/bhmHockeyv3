@@ -16,6 +16,13 @@ public class EventService : IEventService
 
     public async Task<EventDto> CreateAsync(CreateEventRequest request, Guid creatorId)
     {
+        // Validate visibility rules
+        var visibility = request.Visibility ?? "Public";
+        if (visibility == "OrganizationMembers" && !request.OrganizationId.HasValue)
+        {
+            throw new InvalidOperationException("OrganizationMembers visibility requires an organization");
+        }
+
         var evt = new Event
         {
             OrganizationId = request.OrganizationId,
@@ -27,7 +34,8 @@ public class EventService : IEventService
             Venue = request.Venue,
             MaxPlayers = request.MaxPlayers,
             Cost = request.Cost,
-            RegistrationDeadline = request.RegistrationDeadline
+            RegistrationDeadline = request.RegistrationDeadline,
+            Visibility = visibility
         };
 
         _context.Events.Add(evt);
@@ -38,6 +46,14 @@ public class EventService : IEventService
 
     public async Task<List<EventDto>> GetAllAsync(Guid? currentUserId = null)
     {
+        // Get user's organization subscriptions for visibility filtering
+        var userSubscribedOrgIds = currentUserId.HasValue
+            ? await _context.OrganizationSubscriptions
+                .Where(s => s.UserId == currentUserId.Value)
+                .Select(s => s.OrganizationId)
+                .ToListAsync()
+            : new List<Guid>();
+
         var events = await _context.Events
             .Include(e => e.Organization)
             .Include(e => e.Registrations)
@@ -45,8 +61,11 @@ public class EventService : IEventService
             .OrderBy(e => e.EventDate)
             .ToListAsync();
 
+        // Filter by visibility
+        var visibleEvents = events.Where(e => CanUserSeeEvent(e, currentUserId, userSubscribedOrgIds)).ToList();
+
         var dtos = new List<EventDto>();
-        foreach (var evt in events)
+        foreach (var evt in visibleEvents)
         {
             dtos.Add(await MapToDto(evt, currentUserId));
         }
@@ -54,8 +73,36 @@ public class EventService : IEventService
         return dtos;
     }
 
+    /// <summary>
+    /// Determines if a user can see an event based on visibility rules.
+    /// Phase B: Will add InviteOnly check against EventInvitation table.
+    /// </summary>
+    private bool CanUserSeeEvent(Event evt, Guid? currentUserId, List<Guid> userSubscribedOrgIds)
+    {
+        // Creator can always see their own events
+        if (currentUserId.HasValue && evt.CreatorId == currentUserId.Value)
+        {
+            return true;
+        }
+
+        return evt.Visibility switch
+        {
+            "Public" => true,
+            "OrganizationMembers" => evt.OrganizationId.HasValue && userSubscribedOrgIds.Contains(evt.OrganizationId.Value),
+            "InviteOnly" => false, // Phase B: Check EventInvitation table
+            _ => true // Default to visible for unknown visibility types
+        };
+    }
+
     public async Task<List<EventDto>> GetByOrganizationAsync(Guid organizationId, Guid? currentUserId = null)
     {
+        // Check if user is subscribed to this organization
+        var isSubscribed = currentUserId.HasValue &&
+            await _context.OrganizationSubscriptions
+                .AnyAsync(s => s.UserId == currentUserId.Value && s.OrganizationId == organizationId);
+
+        var userSubscribedOrgIds = isSubscribed ? new List<Guid> { organizationId } : new List<Guid>();
+
         var events = await _context.Events
             .Include(e => e.Organization)
             .Include(e => e.Registrations)
@@ -63,8 +110,11 @@ public class EventService : IEventService
             .OrderBy(e => e.EventDate)
             .ToListAsync();
 
+        // Filter by visibility
+        var visibleEvents = events.Where(e => CanUserSeeEvent(e, currentUserId, userSubscribedOrgIds)).ToList();
+
         var dtos = new List<EventDto>();
-        foreach (var evt in events)
+        foreach (var evt in visibleEvents)
         {
             dtos.Add(await MapToDto(evt, currentUserId));
         }
@@ -79,7 +129,22 @@ public class EventService : IEventService
             .Include(e => e.Registrations)
             .FirstOrDefaultAsync(e => e.Id == id);
 
-        return evt == null ? null : await MapToDto(evt, currentUserId);
+        if (evt == null) return null;
+
+        // Check visibility
+        var userSubscribedOrgIds = currentUserId.HasValue && evt.OrganizationId.HasValue
+            ? await _context.OrganizationSubscriptions
+                .Where(s => s.UserId == currentUserId.Value && s.OrganizationId == evt.OrganizationId.Value)
+                .Select(s => s.OrganizationId)
+                .ToListAsync()
+            : new List<Guid>();
+
+        if (!CanUserSeeEvent(evt, currentUserId, userSubscribedOrgIds))
+        {
+            return null; // User cannot see this event
+        }
+
+        return await MapToDto(evt, currentUserId);
     }
 
     public async Task<EventDto?> UpdateAsync(Guid id, UpdateEventRequest request, Guid userId)
@@ -98,6 +163,17 @@ public class EventService : IEventService
         if (request.Cost.HasValue) evt.Cost = request.Cost.Value;
         if (request.RegistrationDeadline.HasValue) evt.RegistrationDeadline = request.RegistrationDeadline;
         if (request.Status != null) evt.Status = request.Status;
+
+        // Handle visibility changes
+        if (request.Visibility != null)
+        {
+            // Validate OrganizationMembers requires an organization
+            if (request.Visibility == "OrganizationMembers" && !evt.OrganizationId.HasValue)
+            {
+                throw new InvalidOperationException("OrganizationMembers visibility requires an organization");
+            }
+            evt.Visibility = request.Visibility;
+        }
 
         evt.UpdatedAt = DateTime.UtcNow;
 
@@ -130,7 +206,8 @@ public class EventService : IEventService
         var existingReg = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
 
-        if (existingReg != null) return false;
+        // If already registered (not cancelled), return false
+        if (existingReg != null && existingReg.Status == "Registered") return false;
 
         var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
         if (registeredCount >= evt.MaxPlayers)
@@ -138,15 +215,24 @@ public class EventService : IEventService
             throw new InvalidOperationException("Event is full");
         }
 
-        var registration = new EventRegistration
+        if (existingReg != null)
         {
-            EventId = eventId,
-            UserId = userId
-        };
+            // Re-activate cancelled registration
+            existingReg.Status = "Registered";
+            existingReg.RegisteredAt = DateTime.UtcNow;
+        }
+        else
+        {
+            // Create new registration
+            var registration = new EventRegistration
+            {
+                EventId = eventId,
+                UserId = userId
+            };
+            _context.EventRegistrations.Add(registration);
+        }
 
-        _context.EventRegistrations.Add(registration);
         await _context.SaveChangesAsync();
-
         return true;
     }
 
@@ -219,13 +305,21 @@ public class EventService : IEventService
             (evt.Registrations?.Any(r => r.UserId == currentUserId.Value && r.Status == "Registered") ??
              await _context.EventRegistrations.AnyAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && r.Status == "Registered"));
 
-        var orgName = evt.Organization?.Name ??
-            (await _context.Organizations.FindAsync(evt.OrganizationId))?.Name ?? "Unknown";
+        // Organization name is null for standalone events
+        string? orgName = null;
+        if (evt.OrganizationId.HasValue)
+        {
+            orgName = evt.Organization?.Name ??
+                (await _context.Organizations.FindAsync(evt.OrganizationId))?.Name;
+        }
+
+        var isCreator = currentUserId.HasValue && evt.CreatorId == currentUserId.Value;
 
         return new EventDto(
             evt.Id,
             evt.OrganizationId,
             orgName,
+            evt.CreatorId,
             evt.Name,
             evt.Description,
             evt.EventDate,
@@ -236,7 +330,9 @@ public class EventService : IEventService
             evt.Cost,
             evt.RegistrationDeadline,
             evt.Status,
+            evt.Visibility,
             isRegistered,
+            isCreator,
             evt.CreatedAt
         );
     }

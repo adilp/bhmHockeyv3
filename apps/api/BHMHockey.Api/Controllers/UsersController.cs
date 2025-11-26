@@ -13,11 +13,13 @@ public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
     private readonly IOrganizationService _organizationService;
+    private readonly IEventService _eventService;
 
-    public UsersController(IUserService userService, IOrganizationService organizationService)
+    public UsersController(IUserService userService, IOrganizationService organizationService, IEventService eventService)
     {
         _userService = userService;
         _organizationService = organizationService;
+        _eventService = eventService;
     }
 
     private Guid GetCurrentUserId()
@@ -100,6 +102,36 @@ public class UsersController : ControllerBase
             var userId = GetCurrentUserId();
             var subscriptions = await _organizationService.GetUserSubscriptionsAsync(userId);
             return Ok(subscriptions);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("me/registrations")]
+    public async Task<ActionResult<List<EventDto>>> GetMyRegistrations()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var events = await _eventService.GetUserRegistrationsAsync(userId);
+            return Ok(events);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("me/organizations")]
+    public async Task<ActionResult<List<OrganizationDto>>> GetMyOrganizations()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var organizations = await _organizationService.GetUserCreatedOrganizationsAsync(userId);
+            return Ok(organizations);
         }
         catch (UnauthorizedAccessException ex)
         {

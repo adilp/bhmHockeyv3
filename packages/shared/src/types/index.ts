@@ -57,7 +57,7 @@ export interface UpdateOrganizationRequest {
 // Event types
 export interface Event {
   id: string;
-  organizationId: string;
+  organizationId?: string;      // Optional - null for standalone pickup games
   creatorId: string;
   name: string;
   description?: string;
@@ -68,11 +68,18 @@ export interface Event {
   cost: number;
   registrationDeadline?: string;
   status: EventStatus;
+  visibility: EventVisibility;  // Controls who can see/register
   createdAt: string;
   updatedAt: string;
 }
 
 export type EventStatus = 'Draft' | 'Published' | 'Full' | 'Completed' | 'Cancelled';
+
+// Visibility options:
+// - Public: Anyone can see and register
+// - OrganizationMembers: Only subscribers of the organization (requires organizationId)
+// - InviteOnly: Only invited users can see/register (Phase B: will use invitations)
+export type EventVisibility = 'Public' | 'OrganizationMembers' | 'InviteOnly';
 
 export interface EventRegistration {
   id: string;
@@ -83,6 +90,64 @@ export interface EventRegistration {
 }
 
 export type RegistrationStatus = 'Registered' | 'Cancelled';
+
+// EventDto - API response with computed fields
+export interface EventDto {
+  id: string;
+  organizationId?: string;       // Optional - null for standalone events
+  organizationName?: string;     // Optional - null for standalone events
+  creatorId: string;             // Who created the event
+  name: string;
+  description?: string;
+  eventDate: string;
+  duration: number;
+  venue?: string;
+  maxPlayers: number;
+  registeredCount: number;
+  cost: number;
+  registrationDeadline?: string;
+  status: EventStatus;
+  visibility: EventVisibility;   // Public, OrganizationMembers, InviteOnly
+  isRegistered: boolean;
+  isCreator: boolean;            // True if current user created this event
+  createdAt: string;
+}
+
+// EventRegistrationDto - API response for registration with user details
+export interface EventRegistrationDto {
+  id: string;
+  eventId: string;
+  user: User;
+  status: RegistrationStatus;
+  registeredAt: string;
+}
+
+// Event request types
+export interface CreateEventRequest {
+  organizationId?: string;       // Optional - omit for standalone pickup games
+  name: string;
+  description?: string;
+  eventDate: string;
+  duration: number;
+  venue?: string;
+  maxPlayers: number;
+  cost: number;
+  registrationDeadline?: string;
+  visibility?: EventVisibility;  // Default: 'Public'
+}
+
+export interface UpdateEventRequest {
+  name?: string;
+  description?: string;
+  eventDate?: string;
+  duration?: number;
+  venue?: string;
+  maxPlayers?: number;
+  cost?: number;
+  registrationDeadline?: string;
+  status?: EventStatus;
+  visibility?: EventVisibility;  // Can change visibility after creation
+}
 
 // Auth types
 export interface LoginRequest {

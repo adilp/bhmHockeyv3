@@ -18,13 +18,15 @@ public class UsersControllerTests
 {
     private readonly Mock<IUserService> _mockUserService;
     private readonly Mock<IOrganizationService> _mockOrgService;
+    private readonly Mock<IEventService> _mockEventService;
     private readonly UsersController _sut;
 
     public UsersControllerTests()
     {
         _mockUserService = new Mock<IUserService>();
         _mockOrgService = new Mock<IOrganizationService>();
-        _sut = new UsersController(_mockUserService.Object, _mockOrgService.Object);
+        _mockEventService = new Mock<IEventService>();
+        _sut = new UsersController(_mockUserService.Object, _mockOrgService.Object, _mockEventService.Object);
     }
 
     private void SetupControllerWithClaims(IEnumerable<Claim> claims)
@@ -234,6 +236,84 @@ public class UsersControllerTests
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var returnedSubs = okResult.Value as List<OrganizationSubscriptionDto>;
         returnedSubs.Should().BeEmpty();
+    }
+
+    #endregion
+
+    #region GetMyRegistrations Endpoint Tests
+
+    [Fact]
+    public async Task GetMyRegistrations_WithValidUser_ReturnsOkWithEvents()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var events = new List<EventDto>
+        {
+            new EventDto(
+                Id: Guid.NewGuid(),
+                OrganizationId: Guid.NewGuid(),
+                OrganizationName: "Test Org",
+                CreatorId: userId,
+                Name: "Test Event",
+                Description: "Description",
+                EventDate: DateTime.UtcNow.AddDays(7),
+                Duration: 60,
+                Venue: "Test Venue",
+                MaxPlayers: 20,
+                RegisteredCount: 5,
+                Cost: 25.00m,
+                RegistrationDeadline: DateTime.UtcNow.AddDays(6),
+                Status: "Published",
+                Visibility: "Public",
+                IsRegistered: true,
+                IsCreator: false,
+                CreatedAt: DateTime.UtcNow
+            )
+        };
+
+        var claims = new List<Claim> { new Claim("sub", userId.ToString()) };
+        SetupControllerWithClaims(claims);
+        _mockEventService.Setup(s => s.GetUserRegistrationsAsync(userId)).ReturnsAsync(events);
+
+        // Act
+        var result = await _sut.GetMyRegistrations();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returnedEvents = okResult.Value as List<EventDto>;
+        returnedEvents.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetMyRegistrations_WithInvalidClaims_ReturnsUnauthorized()
+    {
+        // Arrange - no claims
+        SetupControllerWithClaims(new List<Claim>());
+
+        // Act
+        var result = await _sut.GetMyRegistrations();
+
+        // Assert
+        result.Result.Should().BeOfType<UnauthorizedObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetMyRegistrations_WithNoRegistrations_ReturnsEmptyList()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var claims = new List<Claim> { new Claim("sub", userId.ToString()) };
+        SetupControllerWithClaims(claims);
+        _mockEventService.Setup(s => s.GetUserRegistrationsAsync(userId))
+            .ReturnsAsync(new List<EventDto>());
+
+        // Act
+        var result = await _sut.GetMyRegistrations();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returnedEvents = okResult.Value as List<EventDto>;
+        returnedEvents.Should().BeEmpty();
     }
 
     #endregion

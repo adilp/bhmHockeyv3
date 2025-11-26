@@ -14,6 +14,7 @@ import { Picker } from '@react-native-picker/picker';
 import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
 import { useOrganizationStore } from '../../stores/organizationStore';
+import { useEventStore } from '../../stores/eventStore';
 import type { User, SkillLevel, Position } from '@bhmhockey/shared';
 import { SKILL_LEVELS, POSITIONS } from '@bhmhockey/shared';
 
@@ -21,6 +22,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user: authUser, setUser: setAuthUser, logout } = useAuthStore();
   const { mySubscriptions, fetchMySubscriptions } = useOrganizationStore();
+  const { myRegistrations, fetchMyRegistrations } = useEventStore();
 
   const [user, setUser] = useState<User | null>(authUser);
   const [loading, setLoading] = useState(false);
@@ -49,6 +51,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (authUser) {
       fetchMySubscriptions();
+      fetchMyRegistrations();
     }
   }, [authUser]);
 
@@ -210,6 +213,31 @@ export default function ProfileScreen() {
                   {sub.organization.skillLevel && (
                     <Text style={styles.subscriptionSkill}>{sub.organization.skillLevel}</Text>
                   )}
+                </View>
+                <Text style={styles.subscriptionArrow}>›</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {myRegistrations.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>My Upcoming Events</Text>
+            {myRegistrations.slice(0, 5).map((event) => (
+              <TouchableOpacity
+                key={event.id}
+                style={styles.subscriptionCard}
+                onPress={() => router.push(`/events/${event.id}`)}
+              >
+                <View style={styles.subscriptionInfo}>
+                  <Text style={styles.subscriptionName}>{event.name}</Text>
+                  <Text style={styles.subscriptionSkill}>
+                    {new Date(event.eventDate).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })} - {event.organizationName}
+                  </Text>
                 </View>
                 <Text style={styles.subscriptionArrow}>›</Text>
               </TouchableOpacity>

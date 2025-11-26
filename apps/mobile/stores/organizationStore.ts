@@ -5,12 +5,14 @@ import type { Organization, OrganizationSubscription, CreateOrganizationRequest 
 interface OrganizationState {
   organizations: Organization[];
   mySubscriptions: OrganizationSubscription[];
+  myOrganizations: Organization[]; // Organizations I created/own
   isLoading: boolean;
   error: string | null;
 
   // Actions
   fetchOrganizations: () => Promise<void>;
   fetchMySubscriptions: () => Promise<void>;
+  fetchMyOrganizations: () => Promise<void>;
   createOrganization: (data: CreateOrganizationRequest) => Promise<Organization>;
   subscribe: (organizationId: string) => Promise<void>;
   unsubscribe: (organizationId: string) => Promise<void>;
@@ -20,6 +22,7 @@ interface OrganizationState {
 export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   organizations: [],
   mySubscriptions: [],
+  myOrganizations: [],
   isLoading: false,
   error: null,
 
@@ -49,13 +52,24 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
     }
   },
 
+  fetchMyOrganizations: async () => {
+    try {
+      const myOrganizations = await organizationService.getMyOrganizations();
+      set({ myOrganizations });
+    } catch (error) {
+      // Silently fail - user might not own any orgs
+      console.log('Failed to fetch my organizations:', error);
+    }
+  },
+
   createOrganization: async (data: CreateOrganizationRequest) => {
     set({ isLoading: true, error: null });
     try {
       const newOrg = await organizationService.create(data);
-      // Add to organizations list
+      // Add to organizations list and myOrganizations list
       set((state) => ({
         organizations: [newOrg, ...state.organizations],
+        myOrganizations: [newOrg, ...state.myOrganizations],
         isLoading: false
       }));
       return newOrg;

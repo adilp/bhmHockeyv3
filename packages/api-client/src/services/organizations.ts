@@ -63,4 +63,12 @@ export const organizationService = {
     const response = await apiClient.instance.get<OrganizationSubscription[]>('/users/me/subscriptions');
     return response.data;
   },
+
+  /**
+   * Get organizations created by the current user
+   */
+  async getMyOrganizations(): Promise<Organization[]> {
+    const response = await apiClient.instance.get<Organization[]>('/users/me/organizations');
+    return response.data;
+  },
 };

@@ -1,44 +1,45 @@
-import type { Event, EventRegistration } from '@bhmhockey/shared';
+import type { EventDto, EventRegistrationDto, CreateEventRequest, UpdateEventRequest } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
 /**
- * Event service
+ * Event service - uses EventDto which includes computed fields (registeredCount, isRegistered, organizationName)
  */
 export const eventService = {
   /**
-   * Get all events
+   * Get all upcoming events
    */
-  async getAll(): Promise<Event[]> {
-    const response = await apiClient.instance.get<Event[]>('/events');
+  async getAll(organizationId?: string): Promise<EventDto[]> {
+    const params = organizationId ? { organizationId } : undefined;
+    const response = await apiClient.instance.get<EventDto[]>('/events', { params });
     return response.data;
   },
 
   /**
    * Get event by ID
    */
-  async getById(id: string): Promise<Event> {
-    const response = await apiClient.instance.get<Event>(`/events/${id}`);
+  async getById(id: string): Promise<EventDto> {
+    const response = await apiClient.instance.get<EventDto>(`/events/${id}`);
     return response.data;
   },
 
   /**
    * Create event
    */
-  async create(data: Partial<Event>): Promise<Event> {
-    const response = await apiClient.instance.post<Event>('/events', data);
+  async create(data: CreateEventRequest): Promise<EventDto> {
+    const response = await apiClient.instance.post<EventDto>('/events', data);
     return response.data;
   },
 
   /**
    * Update event
    */
-  async update(id: string, data: Partial<Event>): Promise<Event> {
-    const response = await apiClient.instance.put<Event>(`/events/${id}`, data);
+  async update(id: string, data: UpdateEventRequest): Promise<EventDto> {
+    const response = await apiClient.instance.put<EventDto>(`/events/${id}`, data);
     return response.data;
   },
 
   /**
-   * Cancel event
+   * Cancel/delete event
    */
   async cancel(id: string): Promise<void> {
     await apiClient.instance.delete(`/events/${id}`);
@@ -59,18 +60,18 @@ export const eventService = {
   },
 
   /**
-   * Get event registrations
+   * Get event registrations (attendee list)
    */
-  async getRegistrations(eventId: string): Promise<EventRegistration[]> {
-    const response = await apiClient.instance.get<EventRegistration[]>(`/events/${eventId}/registrations`);
+  async getRegistrations(eventId: string): Promise<EventRegistrationDto[]> {
+    const response = await apiClient.instance.get<EventRegistrationDto[]>(`/events/${eventId}/registrations`);
     return response.data;
   },
 
   /**
-   * Get user's registrations
+   * Get current user's registered events
    */
-  async getMyRegistrations(): Promise<EventRegistration[]> {
-    const response = await apiClient.instance.get<EventRegistration[]>('/users/me/registrations');
+  async getMyRegistrations(): Promise<EventDto[]> {
+    const response = await apiClient.instance.get<EventDto[]>('/users/me/registrations');
     return response.data;
   },
 };

@@ -54,7 +54,7 @@ namespace BHMHockey.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<Guid>("OrganizationId")
+                    b.Property<Guid?>("OrganizationId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("RegistrationDeadline")
@@ -71,6 +71,10 @@ namespace BHMHockey.Api.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Venue")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("Id");
@@ -256,8 +260,7 @@ namespace BHMHockey.Api.Migrations
                     b.HasOne("BHMHockey.Api.Models.Entities.Organization", "Organization")
                         .WithMany("Events")
                         .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Creator");
 

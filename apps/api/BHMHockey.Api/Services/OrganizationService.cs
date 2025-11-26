@@ -142,6 +142,23 @@ public class OrganizationService : IOrganizationService
         return dtos;
     }
 
+    public async Task<List<OrganizationDto>> GetUserCreatedOrganizationsAsync(Guid userId)
+    {
+        var organizations = await _context.Organizations
+            .Include(o => o.Subscriptions)
+            .Where(o => o.CreatorId == userId && o.IsActive)
+            .OrderBy(o => o.Name)
+            .ToListAsync();
+
+        var dtos = new List<OrganizationDto>();
+        foreach (var org in organizations)
+        {
+            dtos.Add(await MapToDto(org, userId));
+        }
+
+        return dtos;
+    }
+
     private async Task<OrganizationDto> MapToDto(Organization org, Guid? currentUserId)
     {
         var subscriberCount = org.Subscriptions?.Count ??
