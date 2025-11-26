@@ -65,13 +65,9 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
       // Refresh subscriptions to get full data
       await get().fetchMySubscriptions();
     } catch (error) {
-      // Rollback optimistic update
+      // Rollback optimistic update - restore original state
       set({
-        organizations: organizations.map(org =>
-          org.id === organizationId
-            ? { ...org, isSubscribed: false, subscriberCount: org.subscriberCount - 1 }
-            : org
-        ),
+        organizations,
         error: error instanceof Error ? error.message : 'Failed to subscribe'
       });
     }

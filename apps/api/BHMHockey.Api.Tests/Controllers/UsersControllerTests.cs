@@ -176,4 +176,65 @@ public class UsersControllerTests
     }
 
     #endregion
+
+    #region GetMySubscriptions Endpoint Tests
+
+    [Fact]
+    public async Task GetMySubscriptions_WithValidUser_ReturnsOkWithSubscriptions()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var orgDto = new OrganizationDto(
+            Guid.NewGuid(), "Test Org", "Description", "Boston", "Gold", Guid.NewGuid(), 10, true, DateTime.UtcNow);
+        var subscriptions = new List<OrganizationSubscriptionDto>
+        {
+            new OrganizationSubscriptionDto(Guid.NewGuid(), orgDto, true, DateTime.UtcNow)
+        };
+
+        var claims = new List<Claim> { new Claim("sub", userId.ToString()) };
+        SetupControllerWithClaims(claims);
+        _mockOrgService.Setup(s => s.GetUserSubscriptionsAsync(userId)).ReturnsAsync(subscriptions);
+
+        // Act
+        var result = await _sut.GetMySubscriptions();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returnedSubs = okResult.Value as List<OrganizationSubscriptionDto>;
+        returnedSubs.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetMySubscriptions_WithInvalidClaims_ReturnsUnauthorized()
+    {
+        // Arrange - no claims
+        SetupControllerWithClaims(new List<Claim>());
+
+        // Act
+        var result = await _sut.GetMySubscriptions();
+
+        // Assert
+        result.Result.Should().BeOfType<UnauthorizedObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetMySubscriptions_WithNoSubscriptions_ReturnsEmptyList()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var claims = new List<Claim> { new Claim("sub", userId.ToString()) };
+        SetupControllerWithClaims(claims);
+        _mockOrgService.Setup(s => s.GetUserSubscriptionsAsync(userId))
+            .ReturnsAsync(new List<OrganizationSubscriptionDto>());
+
+        // Act
+        var result = await _sut.GetMySubscriptions();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returnedSubs = okResult.Value as List<OrganizationSubscriptionDto>;
+        returnedSubs.Should().BeEmpty();
+    }
+
+    #endregion
 }
