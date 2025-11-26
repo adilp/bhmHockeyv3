@@ -44,17 +44,8 @@ export default function CreateEventScreen() {
   const [cost, setCost] = useState('0');
   const [visibility, setVisibility] = useState<EventVisibility>('Public');
 
-  // Keyboard + focus management
+  // Keyboard accessory ID for iOS
   const inputAccessoryViewID = 'eventFormAccessory';
-  const [_, setKeyboardVisible] = useState(false);
-  useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   const nameRef = useRef<TextInput | null>(null);
   const descriptionRef = useRef<TextInput | null>(null);

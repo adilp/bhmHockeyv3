@@ -20,6 +20,7 @@ export default function EventsScreen() {
     events,
     isLoading,
     error,
+    processingEventId,
     fetchEvents,
     register,
     cancelRegistration,
@@ -61,6 +62,7 @@ export default function EventsScreen() {
   const renderEvent = ({ item }: { item: EventDto }) => {
     const spotsLeft = item.maxPlayers - item.registeredCount;
     const isFull = spotsLeft <= 0;
+    const isProcessing = processingEventId === item.id;
 
     return (
       <TouchableOpacity
@@ -121,21 +123,22 @@ export default function EventsScreen() {
                 style={[
                   styles.registerButton,
                   item.isRegistered && styles.registeredButton,
-                  isFull && !item.isRegistered && styles.disabledButton,
+                  (isFull && !item.isRegistered) && styles.disabledButton,
                 ]}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleRegisterToggle(item);
-                }}
-                disabled={isFull && !item.isRegistered}
+                onPress={() => handleRegisterToggle(item)}
+                disabled={(isFull && !item.isRegistered) || isProcessing}
               >
-                <Text style={[
-                  styles.registerButtonText,
-                  item.isRegistered && styles.registeredButtonText,
-                  isFull && !item.isRegistered && styles.disabledButtonText,
-                ]}>
-                  {item.isRegistered ? 'Cancel' : isFull ? 'Full' : 'Register'}
-                </Text>
+                {isProcessing ? (
+                  <ActivityIndicator size="small" color={item.isRegistered ? '#FF3B30' : '#fff'} />
+                ) : (
+                  <Text style={[
+                    styles.registerButtonText,
+                    item.isRegistered && styles.registeredButtonText,
+                    isFull && !item.isRegistered && styles.disabledButtonText,
+                  ]}>
+                    {item.isRegistered ? 'Cancel' : isFull ? 'Full' : 'Register'}
+                  </Text>
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -399,6 +402,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
   },
   registeredButton: {
     backgroundColor: '#fff',

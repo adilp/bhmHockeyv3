@@ -9,6 +9,7 @@ interface EventState {
   selectedEvent: EventDto | null;
   isLoading: boolean;
   isCreating: boolean;
+  processingEventId: string | null; // Track which event is being registered/cancelled
   error: string | null;
 
   // Actions
@@ -29,6 +30,7 @@ export const useEventStore = create<EventState>((set, get) => ({
   selectedEvent: null,
   isLoading: false,
   isCreating: false,
+  processingEventId: null,
   error: null,
 
   // Fetch all upcoming events (optionally filtered by organization)
@@ -102,8 +104,9 @@ export const useEventStore = create<EventState>((set, get) => ({
       registeredCount: event.registeredCount + 1,
     });
 
-    // Optimistic update
+    // Optimistic update + track processing
     set({
+      processingEventId: eventId,
       events: events.map(e => e.id === eventId ? updateEvent(e) : e),
       selectedEvent: selectedEvent?.id === eventId ? updateEvent(selectedEvent) : selectedEvent,
     });
@@ -114,7 +117,9 @@ export const useEventStore = create<EventState>((set, get) => ({
       // Add to my registrations
       const registeredEvent = events.find(e => e.id === eventId);
       if (registeredEvent) {
-        set({ myRegistrations: [...myRegistrations, updateEvent(registeredEvent)] });
+        set({ myRegistrations: [...myRegistrations, updateEvent(registeredEvent)], processingEventId: null });
+      } else {
+        set({ processingEventId: null });
       }
 
       return true;
@@ -123,6 +128,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       set({
         events,
         selectedEvent,
+        processingEventId: null,
         error: error instanceof Error ? error.message : 'Failed to register'
       });
       return false;
@@ -140,8 +146,9 @@ export const useEventStore = create<EventState>((set, get) => ({
       registeredCount: Math.max(0, event.registeredCount - 1),
     });
 
-    // Optimistic update
+    // Optimistic update + track processing
     set({
+      processingEventId: eventId,
       events: events.map(e => e.id === eventId ? updateEvent(e) : e),
       selectedEvent: selectedEvent?.id === eventId ? updateEvent(selectedEvent) : selectedEvent,
       myRegistrations: myRegistrations.filter(e => e.id !== eventId),
@@ -149,6 +156,7 @@ export const useEventStore = create<EventState>((set, get) => ({
 
     try {
       await eventService.cancelRegistration(eventId);
+      set({ processingEventId: null });
       return true;
     } catch (error) {
       // Rollback on failure
@@ -156,6 +164,7 @@ export const useEventStore = create<EventState>((set, get) => ({
         events,
         selectedEvent,
         myRegistrations,
+        processingEventId: null,
         error: error instanceof Error ? error.message : 'Failed to cancel registration'
       });
       return false;

@@ -41,6 +41,12 @@ public class EventService : IEventService
         _context.Events.Add(evt);
         await _context.SaveChangesAsync();
 
+        // Load organization for MapToDto if event belongs to one
+        if (evt.OrganizationId.HasValue)
+        {
+            evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
+        }
+
         return await MapToDto(evt, creatorId);
     }
 
@@ -150,6 +156,8 @@ public class EventService : IEventService
     public async Task<EventDto?> UpdateAsync(Guid id, UpdateEventRequest request, Guid userId)
     {
         var evt = await _context.Events
+            .Include(e => e.Organization)
+            .Include(e => e.Registrations)
             .FirstOrDefaultAsync(e => e.Id == id && e.CreatorId == userId);
 
         if (evt == null) return null;
@@ -306,12 +314,8 @@ public class EventService : IEventService
              await _context.EventRegistrations.AnyAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && r.Status == "Registered"));
 
         // Organization name is null for standalone events
-        string? orgName = null;
-        if (evt.OrganizationId.HasValue)
-        {
-            orgName = evt.Organization?.Name ??
-                (await _context.Organizations.FindAsync(evt.OrganizationId))?.Name;
-        }
+        // Note: Callers should ensure Organization is included when OrganizationId is set
+        string? orgName = evt.OrganizationId.HasValue ? evt.Organization?.Name : null;
 
         var isCreator = currentUserId.HasValue && evt.CreatorId == currentUserId.Value;
 
