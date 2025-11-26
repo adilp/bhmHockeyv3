@@ -236,4 +236,76 @@ describe('organizationStore', () => {
       expect(useOrganizationStore.getState().error).toBeNull();
     });
   });
+
+  describe('createOrganization', () => {
+    const mockCreate = jest.fn();
+
+    beforeEach(() => {
+      // Add create to the mock
+      jest.requireMock('@bhmhockey/api-client').organizationService.create = mockCreate;
+    });
+
+    it('adds new organization to list on success', async () => {
+      const existingOrg = createMockOrg({ id: 'existing-org' });
+      useOrganizationStore.setState({ organizations: [existingOrg] });
+
+      const newOrg = createMockOrg({ id: 'new-org', name: 'New Org' });
+      mockCreate.mockResolvedValue(newOrg);
+
+      const result = await useOrganizationStore.getState().createOrganization({
+        name: 'New Org',
+      });
+
+      expect(result).toEqual(newOrg);
+      expect(useOrganizationStore.getState().organizations).toHaveLength(2);
+      // New org should be at the beginning
+      expect(useOrganizationStore.getState().organizations[0].id).toBe('new-org');
+    });
+
+    it('sets loading state during creation', async () => {
+      let resolveCreate: (value: Organization) => void;
+      mockCreate.mockReturnValue(
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        })
+      );
+
+      const createPromise = useOrganizationStore.getState().createOrganization({
+        name: 'New Org',
+      });
+
+      expect(useOrganizationStore.getState().isLoading).toBe(true);
+
+      resolveCreate!(createMockOrg());
+      await createPromise;
+
+      expect(useOrganizationStore.getState().isLoading).toBe(false);
+    });
+
+    it('sets error and throws on API failure', async () => {
+      mockCreate.mockRejectedValue(new Error('Create failed'));
+
+      await expect(
+        useOrganizationStore.getState().createOrganization({ name: 'New Org' })
+      ).rejects.toThrow('Create failed');
+
+      expect(useOrganizationStore.getState().error).toBe('Create failed');
+      expect(useOrganizationStore.getState().isLoading).toBe(false);
+    });
+
+    it('does not add org to list on failure', async () => {
+      const existingOrg = createMockOrg({ id: 'existing-org' });
+      useOrganizationStore.setState({ organizations: [existingOrg] });
+      mockCreate.mockRejectedValue(new Error('Create failed'));
+
+      try {
+        await useOrganizationStore.getState().createOrganization({ name: 'New Org' });
+      } catch {
+        // Expected to throw
+      }
+
+      expect(useOrganizationStore.getState().organizations).toHaveLength(1);
+      expect(useOrganizationStore.getState().organizations[0].id).toBe('existing-org');
+    });
+  });
 });

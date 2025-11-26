@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
-import type { Organization, OrganizationSubscription } from '@bhmhockey/shared';
+import type { Organization, OrganizationSubscription, CreateOrganizationRequest } from '@bhmhockey/shared';
 
 interface OrganizationState {
   organizations: Organization[];
@@ -11,6 +11,7 @@ interface OrganizationState {
   // Actions
   fetchOrganizations: () => Promise<void>;
   fetchMySubscriptions: () => Promise<void>;
+  createOrganization: (data: CreateOrganizationRequest) => Promise<Organization>;
   subscribe: (organizationId: string) => Promise<void>;
   unsubscribe: (organizationId: string) => Promise<void>;
   clearError: () => void;
@@ -45,6 +46,25 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
         error: error instanceof Error ? error.message : 'Failed to fetch subscriptions',
         isLoading: false
       });
+    }
+  },
+
+  createOrganization: async (data: CreateOrganizationRequest) => {
+    set({ isLoading: true, error: null });
+    try {
+      const newOrg = await organizationService.create(data);
+      // Add to organizations list
+      set((state) => ({
+        organizations: [newOrg, ...state.organizations],
+        isLoading: false
+      }));
+      return newOrg;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to create organization',
+        isLoading: false
+      });
+      throw error;
     }
   },
 

@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
 import type { Organization } from '@bhmhockey/shared';
 
 export default function DiscoverScreen() {
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const {
     organizations,
@@ -97,8 +99,20 @@ export default function DiscoverScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Discover</Text>
-        <Text style={styles.subtitle}>Find hockey organizations near you</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>Discover</Text>
+            <Text style={styles.subtitle}>Find hockey organizations near you</Text>
+          </View>
+          {isAuthenticated && (
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={() => router.push('/organizations/create')}
+            >
+              <Text style={styles.createButtonText}>+</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {error && (
@@ -168,6 +182,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -176,6 +195,20 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#666',
+  },
+  createButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  createButtonText: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '300',
+    marginTop: -2,
   },
   errorBanner: {
     backgroundColor: '#FFE5E5',
