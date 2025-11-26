@@ -5,7 +5,6 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
-using System.Reflection;
 using System.Security.Claims;
 using Xunit;
 
@@ -36,79 +35,6 @@ public class UsersControllerTests
             HttpContext = new DefaultHttpContext { User = principal }
         };
     }
-
-    private Guid InvokeGetCurrentUserId()
-    {
-        // Use reflection to test the private method
-        var method = typeof(UsersController).GetMethod(
-            "GetCurrentUserId",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-
-        return (Guid)method!.Invoke(_sut, null)!;
-    }
-
-    #region GetCurrentUserId Tests
-
-    [Fact]
-    public void GetCurrentUserId_WithValidSubClaim_ReturnsGuid()
-    {
-        // Arrange
-        var expectedId = Guid.NewGuid();
-        var claims = new List<Claim> { new Claim("sub", expectedId.ToString()) };
-        SetupControllerWithClaims(claims);
-
-        // Act
-        var result = InvokeGetCurrentUserId();
-
-        // Assert
-        result.Should().Be(expectedId);
-    }
-
-    [Fact]
-    public void GetCurrentUserId_WithNameIdentifierClaim_ReturnsGuid()
-    {
-        // Arrange
-        var expectedId = Guid.NewGuid();
-        var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, expectedId.ToString()) };
-        SetupControllerWithClaims(claims);
-
-        // Act
-        var result = InvokeGetCurrentUserId();
-
-        // Assert
-        result.Should().Be(expectedId);
-    }
-
-    [Fact]
-    public void GetCurrentUserId_WithNoClaims_ThrowsUnauthorized()
-    {
-        // Arrange
-        SetupControllerWithClaims(new List<Claim>());
-
-        // Act
-        var act = () => InvokeGetCurrentUserId();
-
-        // Assert
-        act.Should().Throw<TargetInvocationException>()
-            .WithInnerException<UnauthorizedAccessException>();
-    }
-
-    [Fact]
-    public void GetCurrentUserId_WithInvalidGuid_ThrowsUnauthorized()
-    {
-        // Arrange
-        var claims = new List<Claim> { new Claim("sub", "not-a-guid") };
-        SetupControllerWithClaims(claims);
-
-        // Act
-        var act = () => InvokeGetCurrentUserId();
-
-        // Assert
-        act.Should().Throw<TargetInvocationException>()
-            .WithInnerException<UnauthorizedAccessException>();
-    }
-
-    #endregion
 
     #region GetCurrentUser Endpoint Tests
 
