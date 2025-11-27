@@ -491,4 +491,139 @@ public class EventsControllerTests
     }
 
     #endregion
+
+    #region Payment Tests
+
+    [Fact]
+    public async Task MarkPayment_WithValidRegistration_ReturnsOk()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        _mockEventService.Setup(s => s.MarkPaymentAsync(_testEventId, _testUserId, null))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.MarkPayment(_testEventId, null);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task MarkPayment_WhenNotRegistered_Returns400()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        _mockEventService.Setup(s => s.MarkPaymentAsync(_testEventId, _testUserId, null))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.MarkPayment(_testEventId, null);
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task MarkPayment_ForFreeEvent_Returns400()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        // Service returns false for free events (Cost <= 0)
+        _mockEventService.Setup(s => s.MarkPaymentAsync(_testEventId, _testUserId, null))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.MarkPayment(_testEventId, null);
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task MarkPayment_WhenAlreadyMarkedPaid_Returns400()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        // Service returns false when PaymentStatus is not "Pending"
+        _mockEventService.Setup(s => s.MarkPaymentAsync(_testEventId, _testUserId, null))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.MarkPayment(_testEventId, null);
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatus_AsOrganizer_ToVerified_ReturnsOk()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var registrationId = Guid.NewGuid();
+        var request = new UpdatePaymentStatusRequest("Verified");
+        _mockEventService.Setup(s => s.UpdatePaymentStatusAsync(_testEventId, registrationId, "Verified", _testUserId))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.UpdatePaymentStatus(_testEventId, registrationId, request);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatus_AsOrganizer_ToPending_ReturnsOk()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var registrationId = Guid.NewGuid();
+        var request = new UpdatePaymentStatusRequest("Pending");
+        _mockEventService.Setup(s => s.UpdatePaymentStatusAsync(_testEventId, registrationId, "Pending", _testUserId))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.UpdatePaymentStatus(_testEventId, registrationId, request);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatus_AsNonOrganizer_Returns404()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var registrationId = Guid.NewGuid();
+        var request = new UpdatePaymentStatusRequest("Verified");
+        // Service returns false when user is not the event creator
+        _mockEventService.Setup(s => s.UpdatePaymentStatusAsync(_testEventId, registrationId, "Verified", _testUserId))
+            .ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.UpdatePaymentStatus(_testEventId, registrationId, request);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatus_WithInvalidStatus_Returns400()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var registrationId = Guid.NewGuid();
+        var request = new UpdatePaymentStatusRequest("InvalidStatus");
+        _mockEventService.Setup(s => s.UpdatePaymentStatusAsync(_testEventId, registrationId, "InvalidStatus", _testUserId))
+            .ThrowsAsync(new InvalidOperationException("Invalid payment status. Must be 'Verified' or 'Pending'"));
+
+        // Act
+        var result = await _controller.UpdatePaymentStatus(_testEventId, registrationId, request);
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    #endregion
 }

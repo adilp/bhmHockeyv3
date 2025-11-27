@@ -196,4 +196,56 @@ public class EventsController : ControllerBase
     }
 
     #endregion
+
+    #region Payment
+
+    /// <summary>
+    /// Mark payment as complete for current user's registration.
+    /// </summary>
+    [Authorize]
+    [HttpPost("{id:guid}/payment/mark-paid")]
+    public async Task<IActionResult> MarkPayment(Guid id, [FromBody] MarkPaymentRequest? request)
+    {
+        var userId = GetCurrentUserId();
+
+        var success = await _eventService.MarkPaymentAsync(id, userId, request?.PaymentReference);
+
+        if (!success)
+        {
+            return BadRequest(new { message = "Unable to mark payment. Registration not found, event is free, or payment already marked." });
+        }
+
+        return Ok(new { message = "Payment marked as complete. Awaiting organizer verification." });
+    }
+
+    /// <summary>
+    /// Update payment status for a registration (organizer only).
+    /// </summary>
+    [Authorize]
+    [HttpPut("{eventId:guid}/registrations/{registrationId:guid}/payment")]
+    public async Task<IActionResult> UpdatePaymentStatus(
+        Guid eventId,
+        Guid registrationId,
+        [FromBody] UpdatePaymentStatusRequest request)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var success = await _eventService.UpdatePaymentStatusAsync(eventId, registrationId, request.PaymentStatus, userId);
+
+            if (!success)
+            {
+                return NotFound(new { message = "Event or registration not found, or you are not the organizer." });
+            }
+
+            return Ok(new { message = $"Payment status updated to {request.PaymentStatus}" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    #endregion
 }
