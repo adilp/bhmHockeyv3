@@ -95,6 +95,15 @@ namespace BHMHockey.Api.Migrations
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("PaymentMarkedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentStatus")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PaymentVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("RegisteredAt")
                         .HasColumnType("timestamp with time zone");
 

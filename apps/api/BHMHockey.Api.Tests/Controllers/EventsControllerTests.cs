@@ -83,7 +83,9 @@ public class EventsControllerTests
             Visibility: visibility,
             IsRegistered: isRegistered,
             IsCreator: isCreator,
-            CreatedAt: DateTime.UtcNow
+            CreatedAt: DateTime.UtcNow,
+            CreatorVenmoHandle: null,    // Phase 4
+            MyPaymentStatus: null         // Phase 4
         );
     }
 
@@ -470,7 +472,10 @@ public class EventsControllerTests
                 EventId: _testEventId,
                 User: CreateUserDto(),
                 Status: "Registered",
-                RegisteredAt: DateTime.UtcNow
+                RegisteredAt: DateTime.UtcNow,
+                PaymentStatus: null,           // Phase 4
+                PaymentMarkedAt: null,         // Phase 4
+                PaymentVerifiedAt: null        // Phase 4
             )
         };
         _mockEventService.Setup(s => s.GetRegistrationsAsync(_testEventId))

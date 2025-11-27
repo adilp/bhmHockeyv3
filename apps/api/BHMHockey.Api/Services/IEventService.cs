@@ -14,4 +14,8 @@ public interface IEventService
     Task<bool> CancelRegistrationAsync(Guid eventId, Guid userId);
     Task<List<EventRegistrationDto>> GetRegistrationsAsync(Guid eventId);
     Task<List<EventDto>> GetUserRegistrationsAsync(Guid userId);
+
+    // Payment methods (Phase 4)
+    Task<bool> MarkPaymentAsync(Guid eventId, Guid userId, string? paymentReference);
+    Task<bool> UpdatePaymentStatusAsync(Guid eventId, Guid registrationId, string paymentStatus, Guid organizerId);
 }

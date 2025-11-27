@@ -91,6 +91,9 @@ export interface EventRegistration {
 
 export type RegistrationStatus = 'Registered' | 'Cancelled';
 
+// Payment status for event registrations (Phase 4)
+export type PaymentStatus = 'Pending' | 'MarkedPaid' | 'Verified';
+
 // EventDto - API response with computed fields
 export interface EventDto {
   id: string;
@@ -111,6 +114,9 @@ export interface EventDto {
   isRegistered: boolean;
   isCreator: boolean;            // True if current user created this event
   createdAt: string;
+  // Payment fields (Phase 4)
+  creatorVenmoHandle?: string;   // For "Pay with Venmo" button
+  myPaymentStatus?: PaymentStatus; // Current user's payment status
 }
 
 // EventRegistrationDto - API response for registration with user details
@@ -120,6 +126,10 @@ export interface EventRegistrationDto {
   user: User;
   status: RegistrationStatus;
   registeredAt: string;
+  // Payment fields (Phase 4)
+  paymentStatus?: PaymentStatus;
+  paymentMarkedAt?: string;
+  paymentVerifiedAt?: string;
 }
 
 // Event request types
@@ -147,6 +157,15 @@ export interface UpdateEventRequest {
   registrationDeadline?: string;
   status?: EventStatus;
   visibility?: EventVisibility;  // Can change visibility after creation
+}
+
+// Payment request types (Phase 4)
+export interface MarkPaymentRequest {
+  paymentReference?: string;
+}
+
+export interface UpdatePaymentStatusRequest {
+  paymentStatus: 'Verified' | 'Pending';
 }
 
 // Auth types

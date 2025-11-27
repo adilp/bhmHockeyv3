@@ -245,6 +245,10 @@ public class EventService : IEventService
             // Re-activate cancelled registration
             existingReg.Status = "Registered";
             existingReg.RegisteredAt = DateTime.UtcNow;
+            // Reset payment status for paid events
+            existingReg.PaymentStatus = evt.Cost > 0 ? "Pending" : null;
+            existingReg.PaymentMarkedAt = null;
+            existingReg.PaymentVerifiedAt = null;
         }
         else
         {
@@ -252,7 +256,9 @@ public class EventService : IEventService
             var registration = new EventRegistration
             {
                 EventId = eventId,
-                UserId = userId
+                UserId = userId,
+                // Set payment status based on event cost
+                PaymentStatus = evt.Cost > 0 ? "Pending" : null
             };
             _context.EventRegistrations.Add(registration);
         }
@@ -297,7 +303,10 @@ public class EventService : IEventService
                 r.User.CreatedAt
             ),
             r.Status,
-            r.RegisteredAt
+            r.RegisteredAt,
+            r.PaymentStatus,        // Phase 4
+            r.PaymentMarkedAt,      // Phase 4
+            r.PaymentVerifiedAt     // Phase 4
         )).ToList();
     }
 
@@ -336,6 +345,23 @@ public class EventService : IEventService
 
         var isCreator = currentUserId.HasValue && evt.CreatorId == currentUserId.Value;
 
+        // Get creator's Venmo handle for payment (Phase 4)
+        string? creatorVenmoHandle = null;
+        if (evt.Cost > 0)
+        {
+            var creator = await _context.Users.FindAsync(evt.CreatorId);
+            creatorVenmoHandle = creator?.VenmoHandle;
+        }
+
+        // Get current user's payment status (Phase 4)
+        string? myPaymentStatus = null;
+        if (currentUserId.HasValue && isRegistered && evt.Cost > 0)
+        {
+            var myRegistration = evt.Registrations?.FirstOrDefault(r => r.UserId == currentUserId.Value && r.Status == "Registered")
+                ?? await _context.EventRegistrations.FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && r.Status == "Registered");
+            myPaymentStatus = myRegistration?.PaymentStatus;
+        }
+
         return new EventDto(
             evt.Id,
             evt.OrganizationId,
@@ -354,7 +380,64 @@ public class EventService : IEventService
             evt.Visibility,
             isRegistered,
             isCreator,
-            evt.CreatedAt
+            evt.CreatedAt,
+            creatorVenmoHandle,  // Phase 4
+            myPaymentStatus      // Phase 4
         );
+    }
+
+    // Payment methods (Phase 4)
+    public async Task<bool> MarkPaymentAsync(Guid eventId, Guid userId, string? paymentReference)
+    {
+        var registration = await _context.EventRegistrations
+            .Include(r => r.Event)
+            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId && r.Status == "Registered");
+
+        if (registration == null) return false;
+
+        // Can't mark payment for free events
+        if (registration.Event.Cost <= 0) return false;
+
+        // Can only mark as paid if currently Pending
+        if (registration.PaymentStatus != "Pending") return false;
+
+        registration.PaymentStatus = "MarkedPaid";
+        registration.PaymentMarkedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> UpdatePaymentStatusAsync(Guid eventId, Guid registrationId, string paymentStatus, Guid organizerId)
+    {
+        // Verify the organizer owns this event
+        var evt = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId && e.CreatorId == organizerId);
+        if (evt == null) return false;
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId && r.Status == "Registered");
+
+        if (registration == null) return false;
+
+        // Validate status transition
+        if (paymentStatus != "Verified" && paymentStatus != "Pending")
+        {
+            throw new InvalidOperationException("Invalid payment status. Must be 'Verified' or 'Pending'");
+        }
+
+        registration.PaymentStatus = paymentStatus;
+
+        if (paymentStatus == "Verified")
+        {
+            registration.PaymentVerifiedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            // Reset if setting back to Pending
+            registration.PaymentVerifiedAt = null;
+        }
+
+        await _context.SaveChangesAsync();
+        return true;
     }
 }

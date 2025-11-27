@@ -1,4 +1,11 @@
-import type { EventDto, EventRegistrationDto, CreateEventRequest, UpdateEventRequest } from '@bhmhockey/shared';
+import type {
+  EventDto,
+  EventRegistrationDto,
+  CreateEventRequest,
+  UpdateEventRequest,
+  MarkPaymentRequest,
+  UpdatePaymentStatusRequest
+} from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
 /**
@@ -73,5 +80,28 @@ export const eventService = {
   async getMyRegistrations(): Promise<EventDto[]> {
     const response = await apiClient.instance.get<EventDto[]>('/users/me/registrations');
     return response.data;
+  },
+
+  // Payment methods (Phase 4)
+
+  /**
+   * Mark payment as complete
+   */
+  async markPayment(eventId: string, request?: MarkPaymentRequest): Promise<void> {
+    await apiClient.instance.post(`/events/${eventId}/payment/mark-paid`, request || {});
+  },
+
+  /**
+   * Update payment status (organizer only)
+   */
+  async updatePaymentStatus(
+    eventId: string,
+    registrationId: string,
+    request: UpdatePaymentStatusRequest
+  ): Promise<void> {
+    await apiClient.instance.put(
+      `/events/${eventId}/registrations/${registrationId}/payment`,
+      request
+    );
   },
 };

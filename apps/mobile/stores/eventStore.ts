@@ -21,6 +21,10 @@ interface EventState {
   cancelRegistration: (eventId: string) => Promise<boolean>;
   clearSelectedEvent: () => void;
   clearError: () => void;
+
+  // Payment actions (Phase 4)
+  markPayment: (eventId: string) => Promise<boolean>;
+  updatePaymentStatus: (eventId: string, registrationId: string, status: 'Verified' | 'Pending') => Promise<boolean>;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
@@ -102,6 +106,8 @@ export const useEventStore = create<EventState>((set, get) => ({
       ...event,
       isRegistered: true,
       registeredCount: event.registeredCount + 1,
+      // Set payment status to Pending for paid events
+      myPaymentStatus: event.cost > 0 ? 'Pending' : undefined,
     });
 
     // Optimistic update + track processing
@@ -173,4 +179,55 @@ export const useEventStore = create<EventState>((set, get) => ({
 
   clearSelectedEvent: () => set({ selectedEvent: null }),
   clearError: () => set({ error: null }),
+
+  // Payment actions (Phase 4)
+
+  // Mark payment as complete
+  markPayment: async (eventId: string) => {
+    const { events, selectedEvent, myRegistrations } = get();
+
+    // Optimistic update
+    const updateEvent = (event: EventDto): EventDto => ({
+      ...event,
+      myPaymentStatus: 'MarkedPaid',
+    });
+
+    set({
+      processingEventId: eventId,
+      events: events.map(e => e.id === eventId ? updateEvent(e) : e),
+      selectedEvent: selectedEvent?.id === eventId ? updateEvent(selectedEvent) : selectedEvent,
+      myRegistrations: myRegistrations.map(e => e.id === eventId ? updateEvent(e) : e),
+    });
+
+    try {
+      await eventService.markPayment(eventId);
+      set({ processingEventId: null });
+      return true;
+    } catch (error) {
+      // Rollback on failure
+      set({
+        events,
+        selectedEvent,
+        myRegistrations,
+        processingEventId: null,
+        error: error instanceof Error ? error.message : 'Failed to mark payment',
+      });
+      return false;
+    }
+  },
+
+  // Update payment status (for organizers)
+  updatePaymentStatus: async (eventId: string, registrationId: string, status: 'Verified' | 'Pending') => {
+    try {
+      await eventService.updatePaymentStatus(eventId, registrationId, { paymentStatus: status });
+      // Refresh event data to get updated registrations
+      await get().fetchEventById(eventId);
+      return true;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to update payment status',
+      });
+      return false;
+    }
+  },
 }));

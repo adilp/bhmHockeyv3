@@ -8,13 +8,15 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
-import { useEventStore } from '../../stores/eventStore';
-import { useAuthStore } from '../../stores/authStore';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useEventStore } from '../../../stores/eventStore';
+import { useAuthStore } from '../../../stores/authStore';
+import { openVenmoPayment, getPaymentStatusInfo } from '../../../utils/venmo';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const {
     selectedEvent,
@@ -25,6 +27,7 @@ export default function EventDetailScreen() {
     cancelRegistration,
     clearSelectedEvent,
     clearError,
+    markPayment,
   } = useEventStore();
 
   useEffect(() => {
@@ -87,6 +90,44 @@ export default function EventDetailScreen() {
             const success = await cancelRegistration(id);
             if (success) {
               Alert.alert('Cancelled', 'Your registration has been cancelled.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Payment handlers (Phase 4)
+  const handlePayWithVenmo = async () => {
+    if (!selectedEvent || !selectedEvent.creatorVenmoHandle) {
+      Alert.alert('Error', 'Organizer has not set up their Venmo handle.');
+      return;
+    }
+
+    await openVenmoPayment(
+      selectedEvent.creatorVenmoHandle,
+      selectedEvent.cost,
+      selectedEvent.name
+    );
+  };
+
+  const handleMarkAsPaid = async () => {
+    if (!id) return;
+
+    Alert.alert(
+      'Confirm Payment',
+      'Have you completed the Venmo payment to the organizer? They will verify receipt of payment.',
+      [
+        { text: 'Not Yet', style: 'cancel' },
+        {
+          text: "Yes, I've Paid",
+          onPress: async () => {
+            const success = await markPayment(id);
+            if (success) {
+              Alert.alert(
+                'Payment Marked',
+                'The organizer will verify your payment. You can check your Venmo app to confirm the transaction.'
+              );
             }
           },
         },
@@ -209,7 +250,75 @@ export default function EventDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Cost</Text>
           <Text style={styles.costText}>${selectedEvent.cost.toFixed(2)}</Text>
-          <Text style={styles.costNote}>Payment handled at event</Text>
+        </View>
+      )}
+
+      {/* Payment Section - only show for paid events when registered */}
+      {selectedEvent.isRegistered && selectedEvent.cost > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Payment</Text>
+
+          {/* Payment Status Badge */}
+          {selectedEvent.myPaymentStatus && (
+            <View style={[
+              styles.paymentStatusBadge,
+              { backgroundColor: getPaymentStatusInfo(selectedEvent.myPaymentStatus).backgroundColor }
+            ]}>
+              <Text style={[
+                styles.paymentStatusText,
+                { color: getPaymentStatusInfo(selectedEvent.myPaymentStatus).color }
+              ]}>
+                {getPaymentStatusInfo(selectedEvent.myPaymentStatus).label}
+              </Text>
+            </View>
+          )}
+
+          {/* Show Pay with Venmo button if payment is pending */}
+          {selectedEvent.myPaymentStatus === 'Pending' && (
+            <View style={styles.paymentActions}>
+              {selectedEvent.creatorVenmoHandle ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.venmoButton}
+                    onPress={handlePayWithVenmo}
+                  >
+                    <Text style={styles.venmoButtonText}>Pay with Venmo</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.markPaidButton}
+                    onPress={handleMarkAsPaid}
+                  >
+                    <Text style={styles.markPaidButtonText}>I've Already Paid</Text>
+                  </TouchableOpacity>
+
+                  {/* P2P Disclaimer */}
+                  <Text style={styles.paymentDisclaimer}>
+                    Payment goes directly to the organizer via Venmo. BHM Hockey does not
+                    process payments or mediate disputes.
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.noVenmoText}>
+                  Organizer hasn't set up Venmo. Contact them directly for payment.
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Show waiting message if marked as paid */}
+          {selectedEvent.myPaymentStatus === 'MarkedPaid' && (
+            <Text style={styles.waitingText}>
+              Your payment is awaiting verification by the organizer.
+            </Text>
+          )}
+
+          {/* Show verified message */}
+          {selectedEvent.myPaymentStatus === 'Verified' && (
+            <Text style={styles.verifiedText}>
+              Your payment has been verified. You're all set!
+            </Text>
+          )}
         </View>
       )}
 
@@ -252,6 +361,20 @@ export default function EventDetailScreen() {
           <Text style={styles.loginPromptText}>
             Log in to register for this event
           </Text>
+        </View>
+      )}
+
+      {/* Organizer Actions - View Registrations */}
+      {selectedEvent.isCreator && (
+        <View style={styles.organizerSection}>
+          <TouchableOpacity
+            style={styles.viewRegistrationsButton}
+            onPress={() => router.push(`/events/${id}/registrations`)}
+          >
+            <Text style={styles.viewRegistrationsButtonText}>
+              View Registrations ({selectedEvent.registeredCount})
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -472,5 +595,81 @@ const styles = StyleSheet.create({
   loginPromptText: {
     fontSize: 16,
     color: '#666',
+  },
+  // Payment styles (Phase 4)
+  paymentStatusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  paymentStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  paymentActions: {
+    gap: 12,
+  },
+  venmoButton: {
+    backgroundColor: '#008CFF',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  venmoButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  markPaidButton: {
+    backgroundColor: '#fff',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#008CFF',
+  },
+  markPaidButtonText: {
+    color: '#008CFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  noVenmoText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  waitingText: {
+    fontSize: 14,
+    color: '#0C5460',
+  },
+  verifiedText: {
+    fontSize: 14,
+    color: '#155724',
+    fontWeight: '500',
+  },
+  paymentDisclaimer: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  // Organizer styles (Phase 4)
+  organizerSection: {
+    padding: 20,
+    paddingTop: 0,
+  },
+  viewRegistrationsButton: {
+    backgroundColor: '#333',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  viewRegistrationsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

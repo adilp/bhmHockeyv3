@@ -18,7 +18,10 @@ public record EventDto(
     string Visibility,            // Public, OrganizationMembers, InviteOnly
     bool IsRegistered,
     bool IsCreator,               // True if current user is the creator
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    // Payment fields (Phase 4)
+    string? CreatorVenmoHandle,   // For "Pay with Venmo" button
+    string? MyPaymentStatus       // Current user's payment status (null if not registered or free event)
 );
 
 public record CreateEventRequest(
@@ -52,5 +55,18 @@ public record EventRegistrationDto(
     Guid EventId,
     UserDto User,
     string Status,
-    DateTime RegisteredAt
+    DateTime RegisteredAt,
+    // Payment fields (Phase 4)
+    string? PaymentStatus,       // Pending, MarkedPaid, Verified, or null (free)
+    DateTime? PaymentMarkedAt,
+    DateTime? PaymentVerifiedAt
+);
+
+// Payment request DTOs (Phase 4)
+public record MarkPaymentRequest(
+    string? PaymentReference     // Optional: Venmo transaction ID or note
+);
+
+public record UpdatePaymentStatusRequest(
+    string PaymentStatus         // "Verified" or "Pending" (to reset)
 );

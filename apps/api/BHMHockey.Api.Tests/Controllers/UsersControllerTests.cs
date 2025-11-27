@@ -267,7 +267,9 @@ public class UsersControllerTests
                 Visibility: "Public",
                 IsRegistered: true,
                 IsCreator: false,
-                CreatedAt: DateTime.UtcNow
+                CreatedAt: DateTime.UtcNow,
+                CreatorVenmoHandle: null,    // Phase 4
+                MyPaymentStatus: null         // Phase 4
             )
         };
 
