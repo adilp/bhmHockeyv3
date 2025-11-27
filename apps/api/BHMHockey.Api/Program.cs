@@ -82,6 +82,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+// HTTP Client for Expo Push Notifications
+builder.Services.AddHttpClient("ExpoPush", client =>
+{
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate");
+});
+
 // Register application services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();

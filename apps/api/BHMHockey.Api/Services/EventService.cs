@@ -222,6 +222,12 @@ public class EventService : IEventService
 
         if (evt == null) return false;
 
+        // Check registration deadline
+        if (evt.RegistrationDeadline.HasValue && evt.RegistrationDeadline.Value < DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("Registration deadline has passed");
+        }
+
         var existingReg = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
 
