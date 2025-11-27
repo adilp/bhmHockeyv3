@@ -2,13 +2,16 @@
 
 ## 📋 Project Status
 
-**Overall Status**: Phase 1 Complete ✅ | Ready for Phase 2
+**Overall Status**: Phase 3 Complete ✅ + Push Notifications ✅ | Ready for Phase 4 (Payments)
 - Full-stack monorepo operational
 - Mobile app (Expo SDK 54, React Native) successfully connects to .NET 8 API
 - Complete authentication flow working (register, login, logout)
-- User profile management with hockey-specific fields
+- Organizations with subscriptions working
+- Events with registration working
+- Push notifications for new events working
 - Database: PostgreSQL on port 5433 (OrbStack)
 - API running: `http://0.0.0.0:5001`
+- **114 backend tests passing**
 
 ## 📊 Completed Phases
 
@@ -19,6 +22,28 @@
 - Database auto-migrations on API startup
 - Route protection at app entry point with proper redirects
 - Zustand state management for authentication
+
+**Phase 2: Organizations & Subscriptions** ✅ DONE (2025-11-26)
+- Organization CRUD operations
+- Subscribe/unsubscribe to organizations
+- Discover screen to browse organizations
+- My Organizations section in profile
+- Organization detail screen
+
+**Phase 3: Events & Registration** ✅ DONE (2025-11-26)
+- Event CRUD operations (standalone or org-linked)
+- Event visibility (Public, OrganizationMembers, InviteOnly)
+- Registration and cancellation
+- Event creation screen with full form
+- Events tab and event detail screen
+- My Upcoming Events in profile
+
+**Push Notifications** ✅ DONE (2025-11-26)
+- Push notifications when org creates new event
+- Expo Push API integration in backend
+- Mobile app registers for push token on auth
+- Deep link navigation when notification tapped
+- Requires EAS project setup and physical device
 
 ---
 
@@ -140,6 +165,8 @@ Store updates state, component re-renders
 | **Shared Types** | `packages/shared/src/types/index.ts` | User interface, SkillLevel enum, Position type, DTOs |
 | **Shared Constants** | `packages/shared/src/constants/index.ts` | SKILL_LEVELS, POSITIONS, validation rules |
 | **API URL Config** | `apps/mobile/config/api.ts` | getApiUrl() - platform-specific URL detection |
+| **Notification Utils** | `apps/mobile/utils/notifications.ts` | Push notification registration and handlers |
+| **Notification Service** | `apps/api/.../Services/NotificationService.cs` | Sends push notifications via Expo API |
 | **Environment** | `.env` | Database password, JWT secret (NOT committed) |
 | **Env Template** | `.env.example` | Environment variables template |
 
@@ -322,6 +349,13 @@ setAuthUser(updatedUser);  // Sync store with API response
 - ⚠️ Changes to environment variables require API restart
 - ⚠️ Package.json changes require `yarn install` and full restart
 
+**Push Notifications:**
+- ⚠️ Requires EAS project setup (`eas init`) for valid projectId
+- ⚠️ Physical device required - simulator won't receive push notifications
+- ⚠️ Expo Go has limitations - use development build for production
+- ⚠️ User must be authenticated and push token saved before receiving notifications
+- ⚠️ OrganizationSubscription.NotificationEnabled must be true for user to receive org notifications
+
 **Don't Do:**
 
 - ❌ Call API directly in components (use Zustand store actions instead)
@@ -343,76 +377,77 @@ setAuthUser(updatedUser);  // Sync store with API response
 | Phase | Feature | Status | Est. Time |
 |-------|---------|--------|-----------|
 | 1 | Auth & User Profile | ✅ DONE | Completed |
-| 2 | Organizations & Subscriptions | ⏳ NEXT | 3-4 hours |
-| 3 | Events & Registration | Blocked on Phase 2 | 4-5 hours |
-| 4 | Venmo Payments | Blocked on Phase 3 | 3-4 hours |
+| 2 | Organizations & Subscriptions | ✅ DONE | Completed |
+| 3 | Events & Registration | ✅ DONE | Completed |
+| 4 | Venmo Payments | ⏳ NEXT | 3-4 hours |
 | 5 | Waitlist & Auto-Promotion | Blocked on Phase 4 | 2-3 hours |
-| 6 | Push Notifications | Can start after 2 | 2-3 hours |
+| 6 | Push Notifications | ✅ DONE (partial) | Completed |
 | 7 | Real-time Updates | Future phase | TBD |
 | 8 | Admin Features | Future phase | TBD |
 
 **MVP Definition:** Phases 1-4 complete
 - ✅ Phase 1: User authentication and profile
-- ⏳ Phase 2: Find organizations to join
-- ⏳ Phase 3: Find and join events
+- ✅ Phase 2: Find organizations to join
+- ✅ Phase 3: Find and join events
 - ⏳ Phase 4: Pay via Venmo
 
 **After MVP:** Phases 5-8 add polish and features
 
+**Push Notifications Status:**
+- ✅ New event notifications to org subscribers
+- ⏳ Payment reminders (Phase 8)
+- ⏳ Waitlist promotions (Phase 5)
+- ⏳ Registration confirmations
+
 ---
 
-## 🎯 Current Sprint: Phase 2 - Organizations & Subscriptions
+## 🎯 Current Sprint: Phase 4 - Venmo Payments
 
-**Before Starting Phase 2:**
+**Before Starting Phase 4:**
 
-1. **Test Phase 1 end-to-end** (5-10 min):
+1. **Test Phase 3 end-to-end** (5-10 min):
    ```bash
    # Terminal 1
    yarn api
-   
+
    # Terminal 2 (different terminal)
    cd apps/mobile && npx expo start
-   
+
    # On phone:
-   # - Register new user (email, password, name)
-   # - Fill out profile (skill level, position, Venmo handle)
-   # - Verify profile displays saved data
-   # - Logout
-   # - Login with same credentials
-   # - Verify profile still shows saved data
-   # - Check console for any errors
+   # - Browse organizations in Discover tab
+   # - Subscribe to an organization
+   # - Browse events in Events tab
+   # - Register for an event
+   # - Check Profile for "My Upcoming Events"
+   # - Create a new event (if org owner)
+   # - Verify subscribers receive push notification
    ```
 
-2. **Review Phase 2 requirements** in `docs/Implementation.md` lines 157-296
+2. **Review Phase 4 requirements** in `docs/Implementation.md`
 
-3. **Examine Organization model** in `apps/api/BHMHockey.Api/Models/Entities/Organization.cs`
+**Phase 4 Tasks (In Sequence):**
 
-**Phase 2 Tasks (In Sequence):**
-
-1. **Add OrganizationSubscription model**
-   - Track which users are subscribed to which organizations
-   - Fields: UserId, OrganizationId, SubscribedAt
+1. **Add PaymentStatus to EventRegistration**
+   - Fields: PaymentStatus (Pending, Completed, Refunded)
+   - PaymentReference (Venmo transaction ID)
    - Create migration
 
-2. **Extend OrganizationsController with:**
-   - GET `/api/organizations` - List all organizations (with search/filter)
-   - POST `/api/organizations/{id}/subscribe` - Subscribe to organization
-   - DELETE `/api/organizations/{id}/subscribe` - Unsubscribe
+2. **Add Venmo deep link integration**
+   - Venmo URL scheme: `venmo://paycharge?txn=pay&recipients={handle}&amount={cost}&note={eventName}`
+   - Open Venmo app with pre-filled payment details
 
-3. **Create OrganizationService** with business logic
-   - Get all organizations with user's subscription status
-   - Subscribe/unsubscribe methods
+3. **Add payment confirmation flow**
+   - Button to mark payment as complete
+   - Payment status display in registration
 
-4. **Build discovery screen in mobile app**
-   - `apps/mobile/app/(tabs)/discover.tsx`
-   - Show list of organizations
-   - Toggle button to subscribe/unsubscribe
-   - Show which ones user is subscribed to
+4. **Payment validation**
+   - Events with cost > 0 show payment status
+   - Option to require payment before registration confirmed
 
-5. **Test end-to-end**
-   - User can see organizations
-   - Can subscribe to organization
-   - Subscription persists
+**Key Files:**
+- `apps/api/.../Models/Entities/EventRegistration.cs` - Add PaymentStatus
+- `apps/api/.../Services/EventService.cs` - Payment-related methods
+- `apps/mobile/app/events/[id].tsx` - Add Venmo payment button
 
 **Estimated Time:** 3-4 hours
 
@@ -522,5 +557,5 @@ http://localhost:5001/swagger
 
 ---
 
-**Last Updated**: 2025-11-25
-**Next Session**: Test Phase 1 end-to-end, then begin Phase 2 Organizations & Subscriptions
+**Last Updated**: 2025-11-26
+**Next Session**: Begin Phase 4 Venmo Payments

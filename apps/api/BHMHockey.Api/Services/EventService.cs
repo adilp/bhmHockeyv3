@@ -8,10 +8,12 @@ namespace BHMHockey.Api.Services;
 public class EventService : IEventService
 {
     private readonly AppDbContext _context;
+    private readonly INotificationService _notificationService;
 
-    public EventService(AppDbContext context)
+    public EventService(AppDbContext context, INotificationService notificationService)
     {
         _context = context;
+        _notificationService = notificationService;
     }
 
     public async Task<EventDto> CreateAsync(CreateEventRequest request, Guid creatorId)
@@ -45,6 +47,15 @@ public class EventService : IEventService
         if (evt.OrganizationId.HasValue)
         {
             evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
+
+            // Notify organization subscribers about the new event
+            var orgName = evt.Organization?.Name ?? "An organization";
+            await _notificationService.NotifyOrganizationSubscribersAsync(
+                evt.OrganizationId.Value,
+                $"New Event: {evt.Name}",
+                $"{orgName} posted a new event on {evt.EventDate:MMM d} at {evt.Venue ?? "TBD"}",
+                new { eventId = evt.Id.ToString(), type = "new_event" }
+            );
         }
 
         return await MapToDto(evt, creatorId);

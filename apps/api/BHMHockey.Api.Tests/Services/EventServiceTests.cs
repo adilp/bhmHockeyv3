@@ -4,6 +4,7 @@ using BHMHockey.Api.Models.Entities;
 using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using Xunit;
 
 namespace BHMHockey.Api.Tests.Services;
@@ -19,6 +20,7 @@ namespace BHMHockey.Api.Tests.Services;
 public class EventServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
+    private readonly Mock<INotificationService> _mockNotificationService;
     private readonly EventService _sut;
 
     public EventServiceTests()
@@ -27,7 +29,8 @@ public class EventServiceTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _context = new AppDbContext(options);
-        _sut = new EventService(_context);
+        _mockNotificationService = new Mock<INotificationService>();
+        _sut = new EventService(_context, _mockNotificationService.Object);
     }
 
     public void Dispose()
