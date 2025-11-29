@@ -13,8 +13,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="discover"
         options={{
-          title: 'Discover',
-          tabBarLabel: 'Discover',
+          title: 'Organizations',
+          tabBarLabel: 'Orgs',
         }}
       />
       <Tabs.Screen

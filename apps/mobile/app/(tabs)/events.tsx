@@ -42,15 +42,6 @@ export default function EventsScreen() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleTimeString('en-US', {
@@ -62,15 +53,27 @@ export default function EventsScreen() {
   const renderEvent = ({ item }: { item: EventDto }) => {
     const spotsLeft = item.maxPlayers - item.registeredCount;
     const isFull = spotsLeft <= 0;
+    const isLowSpots = spotsLeft > 0 && spotsLeft <= 2;
     const isProcessing = processingEventId === item.id;
+    const isMyEvent = item.isCreator;
+
+    // Calculate paid count for organizer view
+    const paidCount = item.registeredCount - (item.unpaidCount ?? 0);
 
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, isMyEvent && styles.myEventCard]}
         onPress={() => router.push(`/events/${item.id}`)}
       >
+        {/* My Event Label */}
+        {isMyEvent && (
+          <View style={styles.myEventLabel}>
+            <Text style={styles.myEventLabelText}>My Event</Text>
+          </View>
+        )}
+
         <View style={styles.cardHeader}>
-          <View style={styles.dateBox}>
+          <View style={[styles.dateBox, isMyEvent && styles.myEventDateBox]}>
             <Text style={styles.dateDay}>
               {new Date(item.eventDate).getDate()}
             </Text>
@@ -94,7 +97,7 @@ export default function EventsScreen() {
               )}
             </View>
           </View>
-          {item.isRegistered && (
+          {item.isRegistered && !isMyEvent && (
             <View style={styles.registeredBadge}>
               <Text style={styles.registeredBadgeText}>Going</Text>
             </View>
@@ -106,19 +109,51 @@ export default function EventsScreen() {
         )}
 
         <View style={styles.cardFooter}>
-          <View style={styles.spotsContainer}>
-            <View style={[styles.spotsDot, isFull ? styles.spotsFull : styles.spotsAvailable]} />
-            <Text style={[styles.spotsText, isFull && styles.spotsTextFull]}>
-              {isFull ? 'Full' : `${spotsLeft} spots left`}
-            </Text>
-          </View>
+          {/* Left side - different content for my events vs others */}
+          {isMyEvent ? (
+            <View style={styles.organizerInfo}>
+              <Text style={styles.organizerSpots}>
+                {spotsLeft} spots left
+              </Text>
+              {item.cost > 0 ? (
+                <Text style={styles.organizerPayment}>
+                  <Text style={styles.paidCount}>{paidCount} paid</Text>
+                  {(item.unpaidCount ?? 0) > 0 && (
+                    <Text style={styles.unpaidCount}> · {item.unpaidCount} unpaid</Text>
+                  )}
+                </Text>
+              ) : (
+                <Text style={styles.organizerCount}>
+                  {item.registeredCount} registered
+                </Text>
+              )}
+            </View>
+          ) : (
+            <View style={styles.spotsContainer}>
+              {isFull ? (
+                <>
+                  <View style={[styles.spotsDot, styles.spotsFull]} />
+                  <Text style={[styles.spotsText, styles.spotsTextFull]}>Full</Text>
+                </>
+              ) : isLowSpots ? (
+                <>
+                  <View style={[styles.spotsDot, styles.spotsLow]} />
+                  <Text style={[styles.spotsText, styles.spotsTextLow]}>
+                    Only {spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left!
+                  </Text>
+                </>
+              ) : (
+                <View style={styles.spotsPlaceholder} />
+              )}
+            </View>
+          )}
 
           <View style={styles.footerRight}>
-            {item.cost > 0 && (
+            {item.cost > 0 && !isMyEvent && (
               <Text style={styles.cost}>${item.cost.toFixed(0)}</Text>
             )}
 
-            {isAuthenticated && (
+            {isAuthenticated && !isMyEvent && (
               <TouchableOpacity
                 style={[
                   styles.registerButton,
@@ -141,6 +176,10 @@ export default function EventsScreen() {
                 )}
               </TouchableOpacity>
             )}
+
+            {isMyEvent && item.cost > 0 && (
+              <Text style={styles.cost}>${item.cost.toFixed(0)}</Text>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -150,7 +189,7 @@ export default function EventsScreen() {
   if (isLoading && events.length === 0) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#003366" />
         <Text style={styles.loadingText}>Loading events...</Text>
       </View>
     );
@@ -190,14 +229,14 @@ export default function EventsScreen() {
           <RefreshControl
             refreshing={isLoading}
             onRefresh={() => fetchEvents()}
-            colors={['#007AFF']}
+            colors={['#003366']}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No Upcoming Events</Text>
             <Text style={styles.emptySubtitle}>
-              Subscribe to organizations in Discover to see their events
+              Join organizations in the Orgs tab to see their events
             </Text>
           </View>
         }
@@ -235,6 +274,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
+    color: '#003366',
     marginBottom: 4,
   },
   subtitle: {
@@ -245,7 +285,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#003366',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -279,6 +319,26 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  myEventCard: {
+    borderWidth: 2,
+    borderColor: '#003366',
+    backgroundColor: '#f8fafc',
+  },
+  myEventLabel: {
+    position: 'absolute',
+    top: -1,
+    right: 16,
+    backgroundColor: '#003366',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderBottomLeftRadius: 6,
+    borderBottomRightRadius: 6,
+  },
+  myEventLabelText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
   cardHeader: {
     flexDirection: 'row',
     marginBottom: 12,
@@ -286,11 +346,14 @@ const styles = StyleSheet.create({
   dateBox: {
     width: 50,
     height: 50,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#003366',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+  },
+  myEventDateBox: {
+    backgroundColor: '#003366',
   },
   dateDay: {
     color: '#fff',
@@ -366,6 +429,10 @@ const styles = StyleSheet.create({
   spotsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 20,
+  },
+  spotsPlaceholder: {
+    height: 20,
   },
   spotsDot: {
     width: 8,
@@ -379,13 +446,43 @@ const styles = StyleSheet.create({
   spotsFull: {
     backgroundColor: '#FF3B30',
   },
+  spotsLow: {
+    backgroundColor: '#ef4444',
+  },
   spotsText: {
     fontSize: 14,
-    color: '#4CAF50',
     fontWeight: '500',
   },
   spotsTextFull: {
     color: '#FF3B30',
+  },
+  spotsTextLow: {
+    color: '#ef4444',
+    fontWeight: '600',
+  },
+  organizerInfo: {
+    flexDirection: 'column',
+    gap: 2,
+  },
+  organizerSpots: {
+    fontSize: 14,
+    color: '#003366',
+    fontWeight: '500',
+  },
+  organizerPayment: {
+    fontSize: 13,
+  },
+  organizerCount: {
+    fontSize: 13,
+    color: '#666',
+  },
+  paidCount: {
+    color: '#22c55e',
+    fontWeight: '500',
+  },
+  unpaidCount: {
+    color: '#ef4444',
+    fontWeight: '500',
   },
   footerRight: {
     flexDirection: 'row',
@@ -398,7 +495,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   registerButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#003366',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,

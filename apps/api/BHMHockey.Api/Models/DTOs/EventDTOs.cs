@@ -21,7 +21,9 @@ public record EventDto(
     DateTime CreatedAt,
     // Payment fields (Phase 4)
     string? CreatorVenmoHandle,   // For "Pay with Venmo" button
-    string? MyPaymentStatus       // Current user's payment status (null if not registered or free event)
+    string? MyPaymentStatus,      // Current user's payment status (null if not registered or free event)
+    // Organizer fields (only populated when IsCreator = true)
+    int? UnpaidCount              // Count of registrations with PaymentStatus != "Verified" (only for paid events)
 );
 
 public record CreateEventRequest(

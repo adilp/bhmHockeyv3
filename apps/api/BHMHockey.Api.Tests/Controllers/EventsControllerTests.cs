@@ -85,7 +85,8 @@ public class EventsControllerTests
             IsCreator: isCreator,
             CreatedAt: DateTime.UtcNow,
             CreatorVenmoHandle: null,    // Phase 4
-            MyPaymentStatus: null         // Phase 4
+            MyPaymentStatus: null,       // Phase 4
+            UnpaidCount: null            // Organizer view
         );
     }
 

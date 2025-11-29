@@ -187,7 +187,7 @@ public class UsersControllerTests
         // Arrange
         var userId = Guid.NewGuid();
         var orgDto = new OrganizationDto(
-            Guid.NewGuid(), "Test Org", "Description", "Boston", "Gold", Guid.NewGuid(), 10, true, DateTime.UtcNow);
+            Guid.NewGuid(), "Test Org", "Description", "Boston", "Gold", Guid.NewGuid(), 10, true, false, DateTime.UtcNow);
         var subscriptions = new List<OrganizationSubscriptionDto>
         {
             new OrganizationSubscriptionDto(Guid.NewGuid(), orgDto, true, DateTime.UtcNow)
@@ -269,7 +269,8 @@ public class UsersControllerTests
                 IsCreator: false,
                 CreatedAt: DateTime.UtcNow,
                 CreatorVenmoHandle: null,    // Phase 4
-                MyPaymentStatus: null         // Phase 4
+                MyPaymentStatus: null,       // Phase 4
+                UnpaidCount: null            // Organizer view
             )
         };
 

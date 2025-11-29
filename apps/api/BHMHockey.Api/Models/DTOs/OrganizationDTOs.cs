@@ -9,7 +9,19 @@ public record OrganizationDto(
     Guid CreatorId,
     int SubscriberCount,
     bool IsSubscribed,
+    bool IsCreator,      // True if current user created this organization
     DateTime CreatedAt
+);
+
+// Member/subscriber info for admin view
+public record OrganizationMemberDto(
+    Guid Id,
+    string FirstName,
+    string LastName,
+    string Email,
+    string? SkillLevel,
+    string? Position,
+    DateTime SubscribedAt
 );
 
 public record CreateOrganizationRequest(

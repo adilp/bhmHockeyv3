@@ -28,7 +28,19 @@ export interface Organization {
   skillLevel?: SkillLevel;
   subscriberCount: number;
   isSubscribed: boolean;
+  isCreator: boolean;       // True if current user created this organization
   createdAt: string;
+}
+
+// Member/subscriber info for admin view
+export interface OrganizationMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  skillLevel?: SkillLevel;
+  position?: Position;
+  subscribedAt: string;
 }
 
 export type SkillLevel = 'Gold' | 'Silver' | 'Bronze' | 'D-League';
@@ -117,6 +129,8 @@ export interface EventDto {
   // Payment fields (Phase 4)
   creatorVenmoHandle?: string;   // For "Pay with Venmo" button
   myPaymentStatus?: PaymentStatus; // Current user's payment status
+  // Organizer fields (only populated when isCreator = true)
+  unpaidCount?: number;          // Count of registrations with PaymentStatus != "Verified"
 }
 
 // EventRegistrationDto - API response for registration with user details

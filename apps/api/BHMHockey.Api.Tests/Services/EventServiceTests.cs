@@ -858,6 +858,74 @@ public class EventServiceTests : IDisposable
 
     #endregion
 
+    #region UnpaidCount Tests
+
+    [Fact]
+    public async Task GetByIdAsync_AsCreator_ForPaidEvent_ReturnsUnpaidCount()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user1 = await CreateTestUser("user1@example.com");
+        var user2 = await CreateTestUser("user2@example.com");
+        var evt = await CreateTestEvent(creator.Id); // Cost = 25.00m
+
+        await CreateRegistration(evt.Id, user1.Id); // Default: PaymentStatus = null (unpaid)
+        await CreateRegistration(evt.Id, user2.Id);
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, creator.Id);
+
+        // Assert
+        result!.UnpaidCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_AsNonCreator_UnpaidCountIsNull()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+        await CreateRegistration(evt.Id, user.Id);
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, user.Id);
+
+        // Assert
+        result!.UnpaidCount.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ForFreeEvent_UnpaidCountIsNull()
+    {
+        // Arrange - Free event (Cost = 0), even creator shouldn't see UnpaidCount
+        var creator = await CreateTestUser();
+        var freeEvent = new Event
+        {
+            Id = Guid.NewGuid(),
+            CreatorId = creator.Id,
+            Name = "Free Event",
+            EventDate = DateTime.UtcNow.AddDays(7),
+            Duration = 60,
+            MaxPlayers = 10,
+            Cost = 0, // Free!
+            Status = "Published",
+            Visibility = "Public",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _context.Events.Add(freeEvent);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetByIdAsync(freeEvent.Id, creator.Id);
+
+        // Assert
+        result!.UnpaidCount.Should().BeNull();
+    }
+
+    #endregion
+
     #region Concurrency Tests
 
     [Fact]

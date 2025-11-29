@@ -159,6 +159,33 @@ public class OrganizationService : IOrganizationService
         return dtos;
     }
 
+    public async Task<List<OrganizationMemberDto>> GetMembersAsync(Guid organizationId, Guid requesterId)
+    {
+        // Verify requester is the organization creator
+        var org = await _context.Organizations.FirstOrDefaultAsync(o => o.Id == organizationId);
+        if (org == null || org.CreatorId != requesterId)
+        {
+            return new List<OrganizationMemberDto>();
+        }
+
+        var subscriptions = await _context.OrganizationSubscriptions
+            .Include(s => s.User)
+            .Where(s => s.OrganizationId == organizationId)
+            .OrderBy(s => s.User.LastName)
+            .ThenBy(s => s.User.FirstName)
+            .ToListAsync();
+
+        return subscriptions.Select(s => new OrganizationMemberDto(
+            s.User.Id,
+            s.User.FirstName,
+            s.User.LastName,
+            s.User.Email,
+            s.User.SkillLevel,
+            s.User.Position,
+            s.SubscribedAt
+        )).ToList();
+    }
+
     private async Task<OrganizationDto> MapToDto(Organization org, Guid? currentUserId)
     {
         var subscriberCount = org.Subscriptions?.Count ??
@@ -167,6 +194,8 @@ public class OrganizationService : IOrganizationService
         var isSubscribed = currentUserId.HasValue &&
             (org.Subscriptions?.Any(s => s.UserId == currentUserId.Value) ??
              await _context.OrganizationSubscriptions.AnyAsync(s => s.OrganizationId == org.Id && s.UserId == currentUserId.Value));
+
+        var isCreator = currentUserId.HasValue && org.CreatorId == currentUserId.Value;
 
         return new OrganizationDto(
             org.Id,
@@ -177,6 +206,7 @@ public class OrganizationService : IOrganizationService
             org.CreatorId,
             subscriberCount,
             isSubscribed,
+            isCreator,
             org.CreatedAt
         );
     }

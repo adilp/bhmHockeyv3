@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
 import type { Organization } from '@bhmhockey/shared';
 
-export default function DiscoverScreen() {
+export default function OrganizationsScreen() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const {
@@ -29,7 +29,15 @@ export default function DiscoverScreen() {
     fetchOrganizations();
   }, []);
 
-  const handleSubscribeToggle = async (org: Organization) => {
+  // Split organizations into "My Organizations" (creator) and "Other Organizations"
+  const { myOrganizations, otherOrganizations } = useMemo(() => {
+    const myOrgs = organizations.filter(org => org.isCreator);
+    const otherOrgs = organizations.filter(org => !org.isCreator);
+    return { myOrganizations: myOrgs, otherOrganizations: otherOrgs };
+  }, [organizations]);
+
+  const handleSubscribeToggle = async (org: Organization, e: any) => {
+    e.stopPropagation();
     if (!isAuthenticated) {
       return;
     }
@@ -41,10 +49,21 @@ export default function DiscoverScreen() {
     }
   };
 
-  const renderOrganization = ({ item }: { item: Organization }) => (
-    <View style={styles.card}>
+  const handleOrgPress = (org: Organization) => {
+    router.push(`/organizations/${org.id}`);
+  };
+
+  const renderOrganization = ({ item, isMyOrg = false }: { item: Organization; isMyOrg?: boolean }) => (
+    <TouchableOpacity style={styles.card} onPress={() => handleOrgPress(item)}>
       <View style={styles.cardHeader}>
-        <Text style={styles.orgName}>{item.name}</Text>
+        <View style={styles.cardTitleRow}>
+          <Text style={styles.orgName}>{item.name}</Text>
+          {isMyOrg && (
+            <View style={styles.adminBadge}>
+              <Text style={styles.adminBadgeText}>Admin</Text>
+            </View>
+          )}
+        </View>
         {item.skillLevel && (
           <View style={[styles.badge, getBadgeStyle(item.skillLevel)]}>
             <Text style={styles.badgeText}>{item.skillLevel}</Text>
@@ -64,33 +83,33 @@ export default function DiscoverScreen() {
 
       <View style={styles.cardFooter}>
         <Text style={styles.subscriberCount}>
-          {item.subscriberCount} {item.subscriberCount === 1 ? 'subscriber' : 'subscribers'}
+          {item.subscriberCount} {item.subscriberCount === 1 ? 'member' : 'members'}
         </Text>
 
-        {isAuthenticated && (
+        {isAuthenticated && !isMyOrg && (
           <TouchableOpacity
             style={[
               styles.subscribeButton,
               item.isSubscribed && styles.subscribedButton
             ]}
-            onPress={() => handleSubscribeToggle(item)}
+            onPress={(e) => handleSubscribeToggle(item, e)}
           >
             <Text style={[
               styles.subscribeButtonText,
               item.isSubscribed && styles.subscribedButtonText
             ]}>
-              {item.isSubscribed ? 'Subscribed' : 'Subscribe'}
+              {item.isSubscribed ? 'Joined' : 'Join'}
             </Text>
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (isLoading && organizations.length === 0) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#003366" />
         <Text style={styles.loadingText}>Loading organizations...</Text>
       </View>
     );
@@ -101,8 +120,8 @@ export default function DiscoverScreen() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.title}>Discover</Text>
-            <Text style={styles.subtitle}>Find hockey organizations near you</Text>
+            <Text style={styles.title}>Organizations</Text>
+            <Text style={styles.subtitle}>Find hockey groups near you</Text>
           </View>
           {isAuthenticated && (
             <TouchableOpacity
@@ -122,25 +141,51 @@ export default function DiscoverScreen() {
       )}
 
       <FlatList
-        data={organizations}
-        renderItem={renderOrganization}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        data={[]}
+        renderItem={() => null}
+        ListHeaderComponent={
+          <>
+            {/* My Organizations Section */}
+            {myOrganizations.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>My Organizations</Text>
+                {myOrganizations.map(org => (
+                  <View key={org.id}>
+                    {renderOrganization({ item: org, isMyOrg: true })}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* All Organizations Section */}
+            <View style={styles.section}>
+              {myOrganizations.length > 0 && (
+                <Text style={styles.sectionTitle}>All Organizations</Text>
+              )}
+              {otherOrganizations.map(org => (
+                <View key={org.id}>
+                  {renderOrganization({ item: org })}
+                </View>
+              ))}
+              {otherOrganizations.length === 0 && myOrganizations.length === 0 && (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No Organizations</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Check back later or create your own!
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        }
         refreshControl={
           <RefreshControl
             refreshing={isLoading}
             onRefresh={fetchOrganizations}
-            colors={['#007AFF']}
+            colors={['#003366']}
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No Organizations</Text>
-            <Text style={styles.emptySubtitle}>
-              Check back later for new hockey organizations
-            </Text>
-          </View>
-        }
+        contentContainerStyle={styles.list}
       />
     </View>
   );
@@ -190,6 +235,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
+    color: '#003366',
     marginBottom: 4,
   },
   subtitle: {
@@ -200,7 +246,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#003366',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -223,6 +269,15 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
   },
+  section: {
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -237,14 +292,30 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
   },
   orgName: {
     fontSize: 18,
     fontWeight: '600',
-    flex: 1,
     marginRight: 8,
+  },
+  adminBadge: {
+    backgroundColor: '#003366',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adminBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
   },
   badge: {
     paddingHorizontal: 10,
@@ -280,7 +351,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   subscribeButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#003366',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -288,7 +359,7 @@ const styles = StyleSheet.create({
   subscribedButton: {
     backgroundColor: '#E8F4FF',
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: '#003366',
   },
   subscribeButtonText: {
     color: '#fff',
@@ -296,7 +367,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subscribedButtonText: {
-    color: '#007AFF',
+    color: '#003366',
   },
   emptyState: {
     alignItems: 'center',

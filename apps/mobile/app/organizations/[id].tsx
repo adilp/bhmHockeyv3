@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { organizationService } from '@bhmhockey/api-client';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
-import type { Organization } from '@bhmhockey/shared';
+import type { Organization, OrganizationMember } from '@bhmhockey/shared';
 
 export default function OrganizationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,8 +21,11 @@ export default function OrganizationDetailScreen() {
   const { subscribe, unsubscribe } = useOrganizationStore();
 
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
 
   useEffect(() => {
     loadOrganization();
@@ -35,11 +38,30 @@ export default function OrganizationDetailScreen() {
     try {
       const org = await organizationService.getById(id);
       setOrganization(org);
+
+      // If user is creator, load members automatically
+      if (org.isCreator) {
+        loadMembers();
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to load organization');
       router.back();
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMembers = async () => {
+    if (!id) return;
+
+    setIsLoadingMembers(true);
+    try {
+      const membersList = await organizationService.getMembers(id);
+      setMembers(membersList);
+    } catch (error) {
+      console.log('Failed to load members:', error);
+    } finally {
+      setIsLoadingMembers(false);
     }
   };
 
@@ -82,7 +104,7 @@ export default function OrganizationDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#003366" />
       </View>
     );
   }
@@ -95,13 +117,22 @@ export default function OrganizationDetailScreen() {
     );
   }
 
+  const isAdmin = organization.isCreator;
+
   return (
     <>
       <Stack.Screen options={{ title: organization.name }} />
 
       <ScrollView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>{organization.name}</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{organization.name}</Text>
+            {isAdmin && (
+              <View style={styles.adminBadge}>
+                <Text style={styles.adminBadgeText}>Admin</Text>
+              </View>
+            )}
+          </View>
 
           {organization.skillLevel && (
             <View style={[styles.skillBadge, getSkillBadgeStyle(organization.skillLevel)]}>
@@ -128,12 +159,55 @@ export default function OrganizationDetailScreen() {
           <View style={styles.stat}>
             <Text style={styles.statValue}>{organization.subscriberCount}</Text>
             <Text style={styles.statLabel}>
-              {organization.subscriberCount === 1 ? 'Subscriber' : 'Subscribers'}
+              {organization.subscriberCount === 1 ? 'Member' : 'Members'}
             </Text>
           </View>
         </View>
 
-        {user && (
+        {/* Admin Section - Members List */}
+        {isAdmin && (
+          <View style={styles.adminSection}>
+            <TouchableOpacity
+              style={styles.membersHeader}
+              onPress={() => setShowMembers(!showMembers)}
+            >
+              <Text style={styles.membersTitle}>Members</Text>
+              <Text style={styles.membersToggle}>{showMembers ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+
+            {showMembers && (
+              <View style={styles.membersList}>
+                {isLoadingMembers ? (
+                  <ActivityIndicator size="small" color="#003366" style={{ padding: 20 }} />
+                ) : members.length === 0 ? (
+                  <Text style={styles.noMembers}>No members yet</Text>
+                ) : (
+                  members.map((member) => (
+                    <View key={member.id} style={styles.memberCard}>
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName}>
+                          {member.firstName} {member.lastName}
+                        </Text>
+                        <Text style={styles.memberEmail}>{member.email}</Text>
+                      </View>
+                      <View style={styles.memberDetails}>
+                        {member.skillLevel && (
+                          <Text style={styles.memberDetail}>{member.skillLevel}</Text>
+                        )}
+                        {member.position && (
+                          <Text style={styles.memberDetail}>{member.position}</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Subscribe Button - Only show if not admin */}
+        {user && !isAdmin && (
           <TouchableOpacity
             style={[
               styles.subscribeButton,
@@ -144,7 +218,7 @@ export default function OrganizationDetailScreen() {
             disabled={isProcessing}
           >
             {isProcessing ? (
-              <ActivityIndicator color={organization.isSubscribed ? '#007AFF' : '#FFFFFF'} />
+              <ActivityIndicator color={organization.isSubscribed ? '#003366' : '#FFFFFF'} />
             ) : (
               <Text
                 style={[
@@ -152,17 +226,21 @@ export default function OrganizationDetailScreen() {
                   organization.isSubscribed && styles.subscribedButtonText,
                 ]}
               >
-                {organization.isSubscribed ? 'Subscribed' : 'Subscribe for Notifications'}
+                {organization.isSubscribed ? 'Joined' : 'Join Organization'}
               </Text>
             )}
           </TouchableOpacity>
         )}
 
-        <Text style={styles.hint}>
-          {organization.isSubscribed
-            ? "You'll be notified when new events are posted"
-            : 'Subscribe to get notified about new events'}
-        </Text>
+        {!isAdmin && (
+          <Text style={styles.hint}>
+            {organization.isSubscribed
+              ? "You'll be notified when new events are posted"
+              : 'Join to get notified about new events'}
+          </Text>
+        )}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </>
   );
@@ -198,10 +276,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEE',
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginRight: 12,
+  },
+  adminBadge: {
+    backgroundColor: '#003366',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  adminBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   skillBadge: {
     alignSelf: 'flex-start',
@@ -247,15 +341,75 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#003366',
   },
   statLabel: {
     fontSize: 14,
     color: '#666',
     marginTop: 4,
   },
+  adminSection: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  membersHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+  },
+  membersTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  membersToggle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  membersList: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  noMembers: {
+    color: '#888',
+    fontStyle: 'italic',
+  },
+  memberCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  memberEmail: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  memberDetails: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  memberDetail: {
+    fontSize: 12,
+    color: '#888',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
   subscribeButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#003366',
     marginHorizontal: 20,
     marginTop: 24,
     paddingVertical: 16,
@@ -265,7 +419,7 @@ const styles = StyleSheet.create({
   subscribedButton: {
     backgroundColor: '#E8F4FF',
     borderWidth: 2,
-    borderColor: '#007AFF',
+    borderColor: '#003366',
   },
   disabledButton: {
     opacity: 0.7,
@@ -276,7 +430,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subscribedButtonText: {
-    color: '#007AFF',
+    color: '#003366',
   },
   hint: {
     textAlign: 'center',

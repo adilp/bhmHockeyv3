@@ -284,7 +284,7 @@ public class OrganizationsControllerTests
         };
     }
 
-    private OrganizationDto CreateOrgDto(string name, bool isSubscribed = false)
+    private OrganizationDto CreateOrgDto(string name, bool isSubscribed = false, bool isCreator = false)
     {
         return new OrganizationDto(
             Guid.NewGuid(),
@@ -295,6 +295,7 @@ public class OrganizationsControllerTests
             Guid.NewGuid(),
             10,
             isSubscribed,
+            isCreator,
             DateTime.UtcNow
         );
     }

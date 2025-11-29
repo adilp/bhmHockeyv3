@@ -362,6 +362,14 @@ public class EventService : IEventService
             myPaymentStatus = myRegistration?.PaymentStatus;
         }
 
+        // Calculate unpaid count for organizers (paid events only)
+        int? unpaidCount = null;
+        if (isCreator && evt.Cost > 0)
+        {
+            unpaidCount = evt.Registrations?.Count(r => r.Status == "Registered" && r.PaymentStatus != "Verified") ??
+                await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id && r.Status == "Registered" && r.PaymentStatus != "Verified");
+        }
+
         return new EventDto(
             evt.Id,
             evt.OrganizationId,
@@ -382,7 +390,8 @@ public class EventService : IEventService
             isCreator,
             evt.CreatedAt,
             creatorVenmoHandle,  // Phase 4
-            myPaymentStatus      // Phase 4
+            myPaymentStatus,     // Phase 4
+            unpaidCount          // Organizer view
         );
     }
 

@@ -156,4 +156,16 @@ public class OrganizationsController : ControllerBase
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Get all members (subscribers) of an organization. Only creator can access.
+    /// </summary>
+    [HttpGet("{id:guid}/members")]
+    [Authorize]
+    public async Task<ActionResult<List<OrganizationMemberDto>>> GetMembers(Guid id)
+    {
+        var userId = GetCurrentUserId();
+        var members = await _organizationService.GetMembersAsync(id, userId);
+        return Ok(members);
+    }
 }

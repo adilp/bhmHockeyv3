@@ -394,6 +394,45 @@ public class OrganizationServiceTests : IDisposable
 
     #endregion
 
+    #region GetMembers Tests
+
+    [Fact]
+    public async Task GetMembersAsync_AsCreator_ReturnsMembers()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var member1 = await CreateTestUser("member1@example.com");
+        var member2 = await CreateTestUser("member2@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member1.Id);
+        await CreateSubscription(org.Id, member2.Id);
+
+        // Act
+        var result = await _sut.GetMembersAsync(org.Id, creator.Id);
+
+        // Assert
+        result.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetMembersAsync_AsNonCreator_ReturnsEmptyList()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var attacker = await CreateTestUser("attacker@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+
+        // Act
+        var result = await _sut.GetMembersAsync(org.Id, attacker.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    #endregion
+
     #region GetUserSubscriptions Tests
 
     [Fact]

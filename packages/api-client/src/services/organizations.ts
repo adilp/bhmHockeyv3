@@ -1,6 +1,7 @@
 import type {
   Organization,
   OrganizationSubscription,
+  OrganizationMember,
   CreateOrganizationRequest,
   UpdateOrganizationRequest
 } from '@bhmhockey/shared';
@@ -69,6 +70,14 @@ export const organizationService = {
    */
   async getMyOrganizations(): Promise<Organization[]> {
     const response = await apiClient.instance.get<Organization[]>('/users/me/organizations');
+    return response.data;
+  },
+
+  /**
+   * Get members of an organization (admin only)
+   */
+  async getMembers(organizationId: string): Promise<OrganizationMember[]> {
+    const response = await apiClient.instance.get<OrganizationMember[]>(`/organizations/${organizationId}/members`);
     return response.data;
   },
 };
