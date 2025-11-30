@@ -55,7 +55,7 @@ export default function EventsScreen() {
     const isFull = spotsLeft <= 0;
     const isLowSpots = spotsLeft > 0 && spotsLeft <= 2;
     const isProcessing = processingEventId === item.id;
-    const isMyEvent = item.isCreator;
+    const isMyEvent = item.canManage;
 
     // Calculate paid count for organizer view
     const paidCount = item.registeredCount - (item.unpaidCount ?? 0);

@@ -32,6 +32,7 @@ const createMockOrg = (overrides: Partial<Organization> = {}): Organization => (
   creatorId: 'creator-1',
   subscriberCount: 5,
   isSubscribed: false,
+  isAdmin: false,
   createdAt: new Date().toISOString(),
   ...overrides,
 });

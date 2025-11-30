@@ -160,7 +160,7 @@ export default function HomeScreen() {
   );
 
   const myOrganizedGames = useMemo(() =>
-    events.filter(e => e.isCreator),
+    events.filter(e => e.canManage),
     [events]
   );
 

@@ -2,8 +2,10 @@ import type {
   Organization,
   OrganizationSubscription,
   OrganizationMember,
+  OrganizationAdmin,
   CreateOrganizationRequest,
-  UpdateOrganizationRequest
+  UpdateOrganizationRequest,
+  AddAdminRequest
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -79,5 +81,36 @@ export const organizationService = {
   async getMembers(organizationId: string): Promise<OrganizationMember[]> {
     const response = await apiClient.instance.get<OrganizationMember[]>(`/organizations/${organizationId}/members`);
     return response.data;
+  },
+
+  /**
+   * Remove a member from an organization (admin only)
+   */
+  async removeMember(organizationId: string, userId: string): Promise<void> {
+    await apiClient.instance.delete(`/organizations/${organizationId}/members/${userId}`);
+  },
+
+  // Admin management methods
+
+  /**
+   * Get all admins of an organization (admin only)
+   */
+  async getAdmins(organizationId: string): Promise<OrganizationAdmin[]> {
+    const response = await apiClient.instance.get<OrganizationAdmin[]>(`/organizations/${organizationId}/admins`);
+    return response.data;
+  },
+
+  /**
+   * Add an admin to an organization (admin only)
+   */
+  async addAdmin(organizationId: string, data: AddAdminRequest): Promise<void> {
+    await apiClient.instance.post(`/organizations/${organizationId}/admins`, data);
+  },
+
+  /**
+   * Remove an admin from an organization (admin only)
+   */
+  async removeAdmin(organizationId: string, userId: string): Promise<void> {
+    await apiClient.instance.delete(`/organizations/${organizationId}/admins/${userId}`);
   },
 };

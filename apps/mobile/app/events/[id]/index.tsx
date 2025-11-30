@@ -365,7 +365,7 @@ export default function EventDetailScreen() {
       )}
 
       {/* Organizer Actions - View Registrations */}
-      {selectedEvent.isCreator && (
+      {selectedEvent.canManage && (
         <View style={styles.organizerSection}>
           <TouchableOpacity
             style={styles.viewRegistrationsButton}

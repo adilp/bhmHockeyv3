@@ -17,12 +17,12 @@ public record EventDto(
     string Status,
     string Visibility,            // Public, OrganizationMembers, InviteOnly
     bool IsRegistered,
-    bool IsCreator,               // True if current user is the creator
+    bool CanManage,               // True if current user can manage this event (creator for standalone, org admin for org events)
     DateTime CreatedAt,
     // Payment fields (Phase 4)
     string? CreatorVenmoHandle,   // For "Pay with Venmo" button
     string? MyPaymentStatus,      // Current user's payment status (null if not registered or free event)
-    // Organizer fields (only populated when IsCreator = true)
+    // Organizer fields (only populated when CanManage = true)
     int? UnpaidCount              // Count of registrations with PaymentStatus != "Verified" (only for paid events)
 );
 

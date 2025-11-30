@@ -130,7 +130,7 @@ public class UsersController : ControllerBase
         try
         {
             var userId = GetCurrentUserId();
-            var organizations = await _organizationService.GetUserCreatedOrganizationsAsync(userId);
+            var organizations = await _organizationService.GetUserAdminOrganizationsAsync(userId);
             return Ok(organizations);
         }
         catch (UnauthorizedAccessException ex)

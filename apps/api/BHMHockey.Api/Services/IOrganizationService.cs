@@ -12,6 +12,7 @@ public interface IOrganizationService
     Task<bool> SubscribeAsync(Guid organizationId, Guid userId);
     Task<bool> UnsubscribeAsync(Guid organizationId, Guid userId);
     Task<List<OrganizationSubscriptionDto>> GetUserSubscriptionsAsync(Guid userId);
-    Task<List<OrganizationDto>> GetUserCreatedOrganizationsAsync(Guid userId);
+    Task<List<OrganizationDto>> GetUserAdminOrganizationsAsync(Guid userId);
     Task<List<OrganizationMemberDto>> GetMembersAsync(Guid organizationId, Guid requesterId);
+    Task<bool> RemoveMemberAsync(Guid organizationId, Guid memberUserId, Guid requesterId);
 }

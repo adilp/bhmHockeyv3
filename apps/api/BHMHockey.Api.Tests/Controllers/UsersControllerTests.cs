@@ -266,7 +266,7 @@ public class UsersControllerTests
                 Status: "Published",
                 Visibility: "Public",
                 IsRegistered: true,
-                IsCreator: false,
+                CanManage: false,
                 CreatedAt: DateTime.UtcNow,
                 CreatorVenmoHandle: null,    // Phase 4
                 MyPaymentStatus: null,       // Phase 4

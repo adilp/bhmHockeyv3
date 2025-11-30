@@ -17,13 +17,15 @@ namespace BHMHockey.Api.Tests.Controllers;
 public class OrganizationsControllerTests
 {
     private readonly Mock<IOrganizationService> _mockOrgService;
+    private readonly Mock<IOrganizationAdminService> _mockAdminService;
     private readonly OrganizationsController _controller;
     private readonly Guid _testUserId = Guid.NewGuid();
 
     public OrganizationsControllerTests()
     {
         _mockOrgService = new Mock<IOrganizationService>();
-        _controller = new OrganizationsController(_mockOrgService.Object);
+        _mockAdminService = new Mock<IOrganizationAdminService>();
+        _controller = new OrganizationsController(_mockOrgService.Object, _mockAdminService.Object);
     }
 
     #region GetAll Tests

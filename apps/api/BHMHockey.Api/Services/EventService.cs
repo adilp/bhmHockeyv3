@@ -9,11 +9,32 @@ public class EventService : IEventService
 {
     private readonly AppDbContext _context;
     private readonly INotificationService _notificationService;
+    private readonly IOrganizationAdminService _adminService;
 
-    public EventService(AppDbContext context, INotificationService notificationService)
+    public EventService(AppDbContext context, INotificationService notificationService, IOrganizationAdminService adminService)
     {
         _context = context;
         _notificationService = notificationService;
+        _adminService = adminService;
+    }
+
+    /// <summary>
+    /// Check if user can manage an event.
+    /// For standalone events: only the creator can manage.
+    /// For org-linked events: any org admin can manage.
+    /// </summary>
+    private async Task<bool> CanUserManageEventAsync(Event evt, Guid userId)
+    {
+        if (evt.OrganizationId.HasValue)
+        {
+            // Org-linked event: check if user is org admin
+            return await _adminService.IsUserAdminAsync(evt.OrganizationId.Value, userId);
+        }
+        else
+        {
+            // Standalone event: only creator can manage
+            return evt.CreatorId == userId;
+        }
     }
 
     public async Task<EventDto> CreateAsync(CreateEventRequest request, Guid creatorId)
@@ -79,7 +100,14 @@ public class EventService : IEventService
             .ToListAsync();
 
         // Filter by visibility
-        var visibleEvents = events.Where(e => CanUserSeeEvent(e, currentUserId, userSubscribedOrgIds)).ToList();
+        var visibleEvents = new List<Event>();
+        foreach (var evt in events)
+        {
+            if (await CanUserSeeEventAsync(evt, currentUserId, userSubscribedOrgIds))
+            {
+                visibleEvents.Add(evt);
+            }
+        }
 
         var dtos = new List<EventDto>();
         foreach (var evt in visibleEvents)
@@ -94,12 +122,22 @@ public class EventService : IEventService
     /// Determines if a user can see an event based on visibility rules.
     /// Phase B: Will add InviteOnly check against EventInvitation table.
     /// </summary>
-    private bool CanUserSeeEvent(Event evt, Guid? currentUserId, List<Guid> userSubscribedOrgIds)
+    private async Task<bool> CanUserSeeEventAsync(Event evt, Guid? currentUserId, List<Guid> userSubscribedOrgIds)
     {
         // Creator can always see their own events
         if (currentUserId.HasValue && evt.CreatorId == currentUserId.Value)
         {
             return true;
+        }
+
+        // Org admins can always see their org's events
+        if (currentUserId.HasValue && evt.OrganizationId.HasValue)
+        {
+            var isOrgAdmin = await _adminService.IsUserAdminAsync(evt.OrganizationId.Value, currentUserId.Value);
+            if (isOrgAdmin)
+            {
+                return true;
+            }
         }
 
         return evt.Visibility switch
@@ -128,7 +166,14 @@ public class EventService : IEventService
             .ToListAsync();
 
         // Filter by visibility
-        var visibleEvents = events.Where(e => CanUserSeeEvent(e, currentUserId, userSubscribedOrgIds)).ToList();
+        var visibleEvents = new List<Event>();
+        foreach (var evt in events)
+        {
+            if (await CanUserSeeEventAsync(evt, currentUserId, userSubscribedOrgIds))
+            {
+                visibleEvents.Add(evt);
+            }
+        }
 
         var dtos = new List<EventDto>();
         foreach (var evt in visibleEvents)
@@ -156,7 +201,7 @@ public class EventService : IEventService
                 .ToListAsync()
             : new List<Guid>();
 
-        if (!CanUserSeeEvent(evt, currentUserId, userSubscribedOrgIds))
+        if (!await CanUserSeeEventAsync(evt, currentUserId, userSubscribedOrgIds))
         {
             return null; // User cannot see this event
         }
@@ -169,9 +214,12 @@ public class EventService : IEventService
         var evt = await _context.Events
             .Include(e => e.Organization)
             .Include(e => e.Registrations)
-            .FirstOrDefaultAsync(e => e.Id == id && e.CreatorId == userId);
+            .FirstOrDefaultAsync(e => e.Id == id);
 
         if (evt == null) return null;
+
+        // Check if user can manage this event
+        if (!await CanUserManageEventAsync(evt, userId)) return null;
 
         if (request.Name != null) evt.Name = request.Name;
         if (request.Description != null) evt.Description = request.Description;
@@ -204,9 +252,12 @@ public class EventService : IEventService
     public async Task<bool> DeleteAsync(Guid id, Guid userId)
     {
         var evt = await _context.Events
-            .FirstOrDefaultAsync(e => e.Id == id && e.CreatorId == userId);
+            .FirstOrDefaultAsync(e => e.Id == id);
 
         if (evt == null) return false;
+
+        // Check if user can manage this event
+        if (!await CanUserManageEventAsync(evt, userId)) return false;
 
         evt.Status = "Cancelled";
         await _context.SaveChangesAsync();
@@ -343,7 +394,8 @@ public class EventService : IEventService
         // Note: Callers should ensure Organization is included when OrganizationId is set
         string? orgName = evt.OrganizationId.HasValue ? evt.Organization?.Name : null;
 
-        var isCreator = currentUserId.HasValue && evt.CreatorId == currentUserId.Value;
+        // Check if user can manage this event (creator for standalone, org admin for org events)
+        var canManage = currentUserId.HasValue && await CanUserManageEventAsync(evt, currentUserId.Value);
 
         // Get creator's Venmo handle for payment (Phase 4)
         string? creatorVenmoHandle = null;
@@ -364,7 +416,7 @@ public class EventService : IEventService
 
         // Calculate unpaid count for organizers (paid events only)
         int? unpaidCount = null;
-        if (isCreator && evt.Cost > 0)
+        if (canManage && evt.Cost > 0)
         {
             unpaidCount = evt.Registrations?.Count(r => r.Status == "Registered" && r.PaymentStatus != "Verified") ??
                 await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id && r.Status == "Registered" && r.PaymentStatus != "Verified");
@@ -387,7 +439,7 @@ public class EventService : IEventService
             evt.Status,
             evt.Visibility,
             isRegistered,
-            isCreator,
+            canManage,
             evt.CreatedAt,
             creatorVenmoHandle,  // Phase 4
             myPaymentStatus,     // Phase 4
@@ -419,9 +471,11 @@ public class EventService : IEventService
 
     public async Task<bool> UpdatePaymentStatusAsync(Guid eventId, Guid registrationId, string paymentStatus, Guid organizerId)
     {
-        // Verify the organizer owns this event
-        var evt = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId && e.CreatorId == organizerId);
+        // Verify the organizer can manage this event
+        var evt = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId);
         if (evt == null) return false;
+
+        if (!await CanUserManageEventAsync(evt, organizerId)) return false;
 
         var registration = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId && r.Status == "Registered");

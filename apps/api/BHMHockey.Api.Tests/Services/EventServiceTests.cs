@@ -22,6 +22,7 @@ public class EventServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
     private readonly Mock<INotificationService> _mockNotificationService;
+    private readonly OrganizationAdminService _adminService;
     private readonly EventService _sut;
 
     public EventServiceTests()
@@ -31,7 +32,8 @@ public class EventServiceTests : IDisposable
             .Options;
         _context = new AppDbContext(options);
         _mockNotificationService = new Mock<INotificationService>();
-        _sut = new EventService(_context, _mockNotificationService.Object);
+        _adminService = new OrganizationAdminService(_context);
+        _sut = new EventService(_context, _mockNotificationService.Object, _adminService);
     }
 
     public void Dispose()
@@ -73,6 +75,18 @@ public class EventServiceTests : IDisposable
         };
 
         _context.Organizations.Add(org);
+
+        // Add creator as admin (multi-admin support)
+        var admin = new OrganizationAdmin
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = org.Id,
+            UserId = creatorId,
+            AddedAt = DateTime.UtcNow,
+            AddedByUserId = null
+        };
+        _context.OrganizationAdmins.Add(admin);
+
         await _context.SaveChangesAsync();
         return org;
     }
@@ -922,6 +936,218 @@ public class EventServiceTests : IDisposable
 
         // Assert
         result!.UnpaidCount.Should().BeNull();
+    }
+
+    #endregion
+
+    #region Multi-Admin Event Management Tests
+
+    /// <summary>
+    /// Helper to add a user as admin to an organization.
+    /// </summary>
+    private async Task AddAdminToOrganization(Guid orgId, Guid userId, Guid? addedByUserId = null)
+    {
+        var admin = new OrganizationAdmin
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = orgId,
+            UserId = userId,
+            AddedAt = DateTime.UtcNow,
+            AddedByUserId = addedByUserId
+        };
+        _context.OrganizationAdmins.Add(admin);
+        await _context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AsOrgAdmin_ForOrgLinkedEvent_UpdatesEvent()
+    {
+        // Arrange - Org admin (not event creator) should be able to update org event
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id, name: "Original Name");
+
+        var request = new UpdateEventRequest(
+            Name: "Updated By Org Admin",
+            Description: null,
+            EventDate: null,
+            Duration: null,
+            Venue: null,
+            MaxPlayers: null,
+            Cost: null,
+            RegistrationDeadline: null,
+            Status: null,
+            Visibility: null
+        );
+
+        // Act - Org admin (who is NOT the event creator) updates the event
+        var result = await _sut.UpdateAsync(evt.Id, request, orgAdmin.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("Updated By Org Admin");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AsNonAdmin_ForOrgLinkedEvent_ReturnsNull()
+    {
+        // Arrange - Non-admin should NOT be able to update org event
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var subscriber = await CreateTestUser("subscriber@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await CreateSubscription(org.Id, subscriber.Id); // Subscriber but NOT admin
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id, name: "Original Name");
+
+        var request = new UpdateEventRequest(
+            Name: "Attempted Hack",
+            Description: null,
+            EventDate: null,
+            Duration: null,
+            Venue: null,
+            MaxPlayers: null,
+            Cost: null,
+            RegistrationDeadline: null,
+            Status: null,
+            Visibility: null
+        );
+
+        // Act
+        var result = await _sut.UpdateAsync(evt.Id, request, subscriber.Id);
+
+        // Assert
+        result.Should().BeNull();
+
+        // Verify event wasn't modified
+        var unchanged = await _context.Events.FindAsync(evt.Id);
+        unchanged!.Name.Should().Be("Original Name");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AsOrgAdmin_ForOrgLinkedEvent_DeletesEvent()
+    {
+        // Arrange - Org admin (not event creator) should be able to delete org event
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id);
+
+        // Act - Org admin (who is NOT the event creator) deletes the event
+        var result = await _sut.DeleteAsync(evt.Id, orgAdmin.Id);
+
+        // Assert
+        result.Should().BeTrue();
+        var deleted = await _context.Events.FindAsync(evt.Id);
+        deleted!.Status.Should().Be("Cancelled");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_AsOrgAdmin_ReturnsCanManageTrue()
+    {
+        // Arrange - Org admin should see CanManage=true for org events
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id);
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, orgAdmin.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.CanManage.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_AsNonAdmin_ReturnsCanManageFalse()
+    {
+        // Arrange - Non-admin should see CanManage=false
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var subscriber = await CreateTestUser("subscriber@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await CreateSubscription(org.Id, subscriber.Id); // Subscriber but NOT admin
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id, visibility: "OrganizationMembers");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, subscriber.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.CanManage.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_OrgAdminCanSeeOrgEventsRegardlessOfVisibility()
+    {
+        // Arrange - Org admin should see InviteOnly org events they didn't create
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        // Create an InviteOnly event that orgAdmin didn't create
+        await CreateTestEvent(eventCreator.Id, organizationId: org.Id, visibility: "InviteOnly", name: "Private Event");
+
+        // Act
+        var result = await _sut.GetAllAsync(orgAdmin.Id);
+
+        // Assert - Org admin should see the InviteOnly event
+        result.Should().HaveCount(1);
+        result.First().Name.Should().Be("Private Event");
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_AsOrgAdmin_Succeeds()
+    {
+        // Arrange - Org admin should be able to verify payments for org events
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id);
+        var registration = await CreateRegistration(evt.Id, registeredUser.Id);
+
+        // Act - Org admin (not event creator) verifies payment
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", orgAdmin.Id);
+
+        // Assert
+        result.Should().BeTrue();
+
+        var updated = await _context.EventRegistrations.FindAsync(registration.Id);
+        updated!.PaymentStatus.Should().Be("Verified");
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_AsNonAdmin_ReturnsFalse()
+    {
+        // Arrange - Non-admin should NOT be able to verify payments
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var subscriber = await CreateTestUser("subscriber@example.com");
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await CreateSubscription(org.Id, subscriber.Id); // Subscriber but NOT admin
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id);
+        var registration = await CreateRegistration(evt.Id, registeredUser.Id);
+
+        // Act
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", subscriber.Id);
+
+        // Assert
+        result.Should().BeFalse();
+
+        var unchanged = await _context.EventRegistrations.FindAsync(registration.Id);
+        unchanged!.PaymentStatus.Should().BeNull();
     }
 
     #endregion

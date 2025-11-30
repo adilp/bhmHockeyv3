@@ -11,10 +11,12 @@ namespace BHMHockey.Api.Controllers;
 public class OrganizationsController : ControllerBase
 {
     private readonly IOrganizationService _organizationService;
+    private readonly IOrganizationAdminService _adminService;
 
-    public OrganizationsController(IOrganizationService organizationService)
+    public OrganizationsController(IOrganizationService organizationService, IOrganizationAdminService adminService)
     {
         _organizationService = organizationService;
+        _adminService = adminService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -86,7 +88,7 @@ public class OrganizationsController : ControllerBase
     }
 
     /// <summary>
-    /// Update an organization. Only the creator can update.
+    /// Update an organization. Only admins can update.
     /// </summary>
     [HttpPut("{id:guid}")]
     [Authorize]
@@ -104,7 +106,7 @@ public class OrganizationsController : ControllerBase
     }
 
     /// <summary>
-    /// Delete an organization. Only the creator can delete.
+    /// Delete an organization. Only admins can delete.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [Authorize]
@@ -158,7 +160,7 @@ public class OrganizationsController : ControllerBase
     }
 
     /// <summary>
-    /// Get all members (subscribers) of an organization. Only creator can access.
+    /// Get all members (subscribers) of an organization. Only admins can access.
     /// </summary>
     [HttpGet("{id:guid}/members")]
     [Authorize]
@@ -167,5 +169,81 @@ public class OrganizationsController : ControllerBase
         var userId = GetCurrentUserId();
         var members = await _organizationService.GetMembersAsync(id, userId);
         return Ok(members);
+    }
+
+    /// <summary>
+    /// Remove a member from an organization. Only admins can remove members.
+    /// </summary>
+    [HttpDelete("{id:guid}/members/{memberUserId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> RemoveMember(Guid id, Guid memberUserId)
+    {
+        var userId = GetCurrentUserId();
+        var success = await _organizationService.RemoveMemberAsync(id, memberUserId, userId);
+
+        if (!success)
+        {
+            return BadRequest(new { message = "Failed to remove member. Member may not exist or you may not have permission." });
+        }
+
+        return NoContent();
+    }
+
+    // Admin management endpoints
+
+    /// <summary>
+    /// Get all admins of an organization. Only admins can access.
+    /// </summary>
+    [HttpGet("{id:guid}/admins")]
+    [Authorize]
+    public async Task<ActionResult<List<OrganizationAdminDto>>> GetAdmins(Guid id)
+    {
+        var userId = GetCurrentUserId();
+        var admins = await _adminService.GetAdminsAsync(id, userId);
+        return Ok(admins);
+    }
+
+    /// <summary>
+    /// Add an admin to an organization. Only existing admins can add new admins.
+    /// </summary>
+    [HttpPost("{id:guid}/admins")]
+    [Authorize]
+    public async Task<IActionResult> AddAdmin(Guid id, [FromBody] AddAdminRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var success = await _adminService.AddAdminAsync(id, request.UserId, userId);
+
+        if (!success)
+        {
+            return BadRequest(new { message = "Failed to add admin. User may already be an admin or you may not have permission." });
+        }
+
+        return Ok(new { message = "Successfully added admin" });
+    }
+
+    /// <summary>
+    /// Remove an admin from an organization. Only admins can remove other admins.
+    /// Cannot remove the last admin.
+    /// </summary>
+    [HttpDelete("{id:guid}/admins/{adminUserId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> RemoveAdmin(Guid id, Guid adminUserId)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var success = await _adminService.RemoveAdminAsync(id, adminUserId, userId);
+
+            if (!success)
+            {
+                return BadRequest(new { message = "Failed to remove admin. User may not be an admin or you may not have permission." });
+            }
+
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

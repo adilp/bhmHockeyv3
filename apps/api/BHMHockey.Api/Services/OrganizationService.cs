@@ -8,10 +8,12 @@ namespace BHMHockey.Api.Services;
 public class OrganizationService : IOrganizationService
 {
     private readonly AppDbContext _context;
+    private readonly IOrganizationAdminService _adminService;
 
-    public OrganizationService(AppDbContext context)
+    public OrganizationService(AppDbContext context, IOrganizationAdminService adminService)
     {
         _context = context;
+        _adminService = adminService;
     }
 
     public async Task<OrganizationDto> CreateAsync(CreateOrganizationRequest request, Guid creatorId)
@@ -26,6 +28,16 @@ public class OrganizationService : IOrganizationService
         };
 
         _context.Organizations.Add(organization);
+
+        // Add creator as the first admin
+        var admin = new OrganizationAdmin
+        {
+            OrganizationId = organization.Id,
+            UserId = creatorId,
+            AddedByUserId = null  // Original creator has no AddedBy
+        };
+        _context.OrganizationAdmins.Add(admin);
+
         await _context.SaveChangesAsync();
 
         return await MapToDto(organization, creatorId);
@@ -59,9 +71,13 @@ public class OrganizationService : IOrganizationService
     public async Task<OrganizationDto?> UpdateAsync(Guid id, UpdateOrganizationRequest request, Guid userId)
     {
         var organization = await _context.Organizations
-            .FirstOrDefaultAsync(o => o.Id == id && o.CreatorId == userId);
+            .FirstOrDefaultAsync(o => o.Id == id);
 
         if (organization == null) return null;
+
+        // Check if user is an admin
+        var isAdmin = await _adminService.IsUserAdminAsync(id, userId);
+        if (!isAdmin) return null;
 
         if (request.Name != null) organization.Name = request.Name;
         if (request.Description != null) organization.Description = request.Description;
@@ -78,9 +94,13 @@ public class OrganizationService : IOrganizationService
     public async Task<bool> DeleteAsync(Guid id, Guid userId)
     {
         var organization = await _context.Organizations
-            .FirstOrDefaultAsync(o => o.Id == id && o.CreatorId == userId);
+            .FirstOrDefaultAsync(o => o.Id == id);
 
         if (organization == null) return false;
+
+        // Check if user is an admin
+        var isAdmin = await _adminService.IsUserAdminAsync(id, userId);
+        if (!isAdmin) return false;
 
         organization.IsActive = false;
         await _context.SaveChangesAsync();
@@ -142,11 +162,17 @@ public class OrganizationService : IOrganizationService
         return dtos;
     }
 
-    public async Task<List<OrganizationDto>> GetUserCreatedOrganizationsAsync(Guid userId)
+    public async Task<List<OrganizationDto>> GetUserAdminOrganizationsAsync(Guid userId)
     {
+        // Get organization IDs where user is an admin
+        var adminOrgIds = await _context.OrganizationAdmins
+            .Where(a => a.UserId == userId)
+            .Select(a => a.OrganizationId)
+            .ToListAsync();
+
         var organizations = await _context.Organizations
             .Include(o => o.Subscriptions)
-            .Where(o => o.CreatorId == userId && o.IsActive)
+            .Where(o => adminOrgIds.Contains(o.Id) && o.IsActive)
             .OrderBy(o => o.Name)
             .ToListAsync();
 
@@ -161,12 +187,18 @@ public class OrganizationService : IOrganizationService
 
     public async Task<List<OrganizationMemberDto>> GetMembersAsync(Guid organizationId, Guid requesterId)
     {
-        // Verify requester is the organization creator
-        var org = await _context.Organizations.FirstOrDefaultAsync(o => o.Id == organizationId);
-        if (org == null || org.CreatorId != requesterId)
+        // Verify requester is an organization admin
+        var isAdmin = await _adminService.IsUserAdminAsync(organizationId, requesterId);
+        if (!isAdmin)
         {
             return new List<OrganizationMemberDto>();
         }
+
+        // Get all admin user IDs for this organization
+        var adminUserIds = await _context.OrganizationAdmins
+            .Where(a => a.OrganizationId == organizationId)
+            .Select(a => a.UserId)
+            .ToListAsync();
 
         var subscriptions = await _context.OrganizationSubscriptions
             .Include(s => s.User)
@@ -182,8 +214,34 @@ public class OrganizationService : IOrganizationService
             s.User.Email,
             s.User.SkillLevel,
             s.User.Position,
-            s.SubscribedAt
+            s.SubscribedAt,
+            adminUserIds.Contains(s.User.Id)
         )).ToList();
+    }
+
+    public async Task<bool> RemoveMemberAsync(Guid organizationId, Guid memberUserId, Guid requesterId)
+    {
+        // Verify requester is an organization admin
+        var isAdmin = await _adminService.IsUserAdminAsync(organizationId, requesterId);
+        if (!isAdmin)
+        {
+            return false;
+        }
+
+        // Find the subscription
+        var subscription = await _context.OrganizationSubscriptions
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId && s.UserId == memberUserId);
+
+        if (subscription == null)
+        {
+            return false;
+        }
+
+        // Remove the subscription
+        _context.OrganizationSubscriptions.Remove(subscription);
+        await _context.SaveChangesAsync();
+
+        return true;
     }
 
     private async Task<OrganizationDto> MapToDto(Organization org, Guid? currentUserId)
@@ -195,7 +253,8 @@ public class OrganizationService : IOrganizationService
             (org.Subscriptions?.Any(s => s.UserId == currentUserId.Value) ??
              await _context.OrganizationSubscriptions.AnyAsync(s => s.OrganizationId == org.Id && s.UserId == currentUserId.Value));
 
-        var isCreator = currentUserId.HasValue && org.CreatorId == currentUserId.Value;
+        var isAdmin = currentUserId.HasValue &&
+            await _adminService.IsUserAdminAsync(org.Id, currentUserId.Value);
 
         return new OrganizationDto(
             org.Id,
@@ -206,7 +265,7 @@ public class OrganizationService : IOrganizationService
             org.CreatorId,
             subscriberCount,
             isSubscribed,
-            isCreator,
+            isAdmin,
             org.CreatedAt
         );
     }

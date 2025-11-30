@@ -29,10 +29,10 @@ export default function OrganizationsScreen() {
     fetchOrganizations();
   }, []);
 
-  // Split organizations into "My Organizations" (creator) and "Other Organizations"
+  // Split organizations into "My Organizations" (admin) and "Other Organizations"
   const { myOrganizations, otherOrganizations } = useMemo(() => {
-    const myOrgs = organizations.filter(org => org.isCreator);
-    const otherOrgs = organizations.filter(org => !org.isCreator);
+    const myOrgs = organizations.filter(org => org.isAdmin);
+    const otherOrgs = organizations.filter(org => !org.isAdmin);
     return { myOrganizations: myOrgs, otherOrganizations: otherOrgs };
   }, [organizations]);
 

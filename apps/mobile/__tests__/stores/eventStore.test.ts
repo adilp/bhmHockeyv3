@@ -47,7 +47,7 @@ const createMockEvent = (overrides: Partial<EventDto> = {}): EventDto => ({
   status: 'Published',
   visibility: 'Public',
   isRegistered: false,
-  isCreator: false,
+  canManage: false,
   createdAt: new Date().toISOString(),
   ...overrides,
 });

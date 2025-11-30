@@ -16,6 +16,7 @@ namespace BHMHockey.Api.Tests.Services;
 public class OrganizationServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
+    private readonly OrganizationAdminService _adminService;
     private readonly OrganizationService _sut;
 
     public OrganizationServiceTests()
@@ -24,7 +25,8 @@ public class OrganizationServiceTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _context = new AppDbContext(options);
-        _sut = new OrganizationService(_context);
+        _adminService = new OrganizationAdminService(_context);
+        _sut = new OrganizationService(_context, _adminService);
     }
 
     public void Dispose()
@@ -75,6 +77,18 @@ public class OrganizationServiceTests : IDisposable
         };
 
         _context.Organizations.Add(org);
+
+        // Add creator as admin (multi-admin support)
+        var admin = new OrganizationAdmin
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = org.Id,
+            UserId = creatorId,
+            AddedAt = DateTime.UtcNow,
+            AddedByUserId = null
+        };
+        _context.OrganizationAdmins.Add(admin);
+
         await _context.SaveChangesAsync();
         return org;
     }
@@ -429,6 +443,229 @@ public class OrganizationServiceTests : IDisposable
 
         // Assert
         result.Should().BeEmpty();
+    }
+
+    #endregion
+
+    #region RemoveMember Tests
+
+    [Fact]
+    public async Task RemoveMemberAsync_AsAdmin_RemovesMember()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+
+        // Verify member exists
+        var membersBefore = await _context.OrganizationSubscriptions
+            .Where(s => s.OrganizationId == org.Id)
+            .CountAsync();
+        membersBefore.Should().Be(1);
+
+        // Act
+        var result = await _sut.RemoveMemberAsync(org.Id, member.Id, creator.Id);
+
+        // Assert
+        result.Should().BeTrue();
+        var membersAfter = await _context.OrganizationSubscriptions
+            .Where(s => s.OrganizationId == org.Id)
+            .CountAsync();
+        membersAfter.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RemoveMemberAsync_AsNonAdmin_ReturnsFalse()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var attacker = await CreateTestUser("attacker@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+
+        // Act
+        var result = await _sut.RemoveMemberAsync(org.Id, member.Id, attacker.Id);
+
+        // Assert
+        result.Should().BeFalse();
+        // Member should still exist
+        var memberStillExists = await _context.OrganizationSubscriptions
+            .AnyAsync(s => s.OrganizationId == org.Id && s.UserId == member.Id);
+        memberStillExists.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RemoveMemberAsync_NonExistentMember_ReturnsFalse()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var nonExistentUserId = Guid.NewGuid();
+
+        // Act
+        var result = await _sut.RemoveMemberAsync(org.Id, nonExistentUserId, creator.Id);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RemoveMemberAsync_AsNonCreatorAdmin_RemovesMember()
+    {
+        // Arrange - User is admin but NOT the original creator
+        var creator = await CreateTestUser("creator@example.com");
+        var nonCreatorAdmin = await CreateTestUser("admin@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await AddAdminToOrganization(org.Id, nonCreatorAdmin.Id, creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+
+        // Act
+        var result = await _sut.RemoveMemberAsync(org.Id, member.Id, nonCreatorAdmin.Id);
+
+        // Assert
+        result.Should().BeTrue();
+        var memberStillExists = await _context.OrganizationSubscriptions
+            .AnyAsync(s => s.OrganizationId == org.Id && s.UserId == member.Id);
+        memberStillExists.Should().BeFalse();
+    }
+
+    #endregion
+
+    #region Multi-Admin Tests
+
+    /// <summary>
+    /// Helper to add a non-creator as admin to an organization.
+    /// </summary>
+    private async Task AddAdminToOrganization(Guid orgId, Guid userId, Guid? addedByUserId = null)
+    {
+        var admin = new OrganizationAdmin
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = orgId,
+            UserId = userId,
+            AddedAt = DateTime.UtcNow,
+            AddedByUserId = addedByUserId
+        };
+        _context.OrganizationAdmins.Add(admin);
+        await _context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AsNonCreatorAdmin_UpdatesOrganization()
+    {
+        // Arrange - User is admin but NOT the original creator
+        var creator = await CreateTestUser("creator@example.com");
+        var nonCreatorAdmin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(creator.Id, "Original Name");
+        await AddAdminToOrganization(org.Id, nonCreatorAdmin.Id, creator.Id);
+
+        var request = new UpdateOrganizationRequest("Updated By Non-Creator Admin", null, null, null);
+
+        // Act
+        var result = await _sut.UpdateAsync(org.Id, request, nonCreatorAdmin.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("Updated By Non-Creator Admin");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_AsNonCreatorAdmin_SoftDeletesOrganization()
+    {
+        // Arrange - User is admin but NOT the original creator
+        var creator = await CreateTestUser("creator@example.com");
+        var nonCreatorAdmin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await AddAdminToOrganization(org.Id, nonCreatorAdmin.Id, creator.Id);
+
+        // Act
+        var result = await _sut.DeleteAsync(org.Id, nonCreatorAdmin.Id);
+
+        // Assert
+        result.Should().BeTrue();
+        var deleted = await _context.Organizations.FindAsync(org.Id);
+        deleted!.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetMembersAsync_AsNonCreatorAdmin_ReturnsMembers()
+    {
+        // Arrange - User is admin but NOT the original creator
+        var creator = await CreateTestUser("creator@example.com");
+        var nonCreatorAdmin = await CreateTestUser("admin@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await AddAdminToOrganization(org.Id, nonCreatorAdmin.Id, creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+
+        // Act
+        var result = await _sut.GetMembersAsync(org.Id, nonCreatorAdmin.Id);
+
+        // Assert
+        result.Should().HaveCount(1);
+        result.First().Email.Should().Be("member@example.com");
+    }
+
+    [Fact]
+    public async Task CreateAsync_AddsCreatorAsFirstAdmin()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest("New Org", "Description", "Location", "Silver");
+
+        // Act
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+
+        // Verify an admin record was created for the creator
+        var adminRecord = await _context.OrganizationAdmins
+            .FirstOrDefaultAsync(a => a.OrganizationId == result.Id && a.UserId == creator.Id);
+        adminRecord.Should().NotBeNull();
+        adminRecord!.AddedByUserId.Should().BeNull(); // Original creator has no AddedBy
+    }
+
+    [Fact]
+    public async Task GetUserAdminOrganizationsAsync_ReturnsOrgsWhereUserIsAdmin()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var admin = await CreateTestUser("admin@example.com");
+
+        // Create orgs - admin is only admin of org1, not org2
+        var org1 = await CreateTestOrganization(creator.Id, "Org Where Admin");
+        var org2 = await CreateTestOrganization(creator.Id, "Org Not Admin");
+
+        // Add admin to org1 only
+        await AddAdminToOrganization(org1.Id, admin.Id, creator.Id);
+
+        // Act
+        var result = await _sut.GetUserAdminOrganizationsAsync(admin.Id);
+
+        // Assert
+        result.Should().HaveCount(1);
+        result.First().Name.Should().Be("Org Where Admin");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_SetsIsAdminTrueForNonCreatorAdmin()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var nonCreatorAdmin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(creator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, nonCreatorAdmin.Id, creator.Id);
+
+        // Act
+        var result = await _sut.GetByIdAsync(org.Id, nonCreatorAdmin.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.IsAdmin.Should().BeTrue();
     }
 
     #endregion

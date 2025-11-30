@@ -82,7 +82,7 @@ public class EventsControllerTests
             Status: "Published",
             Visibility: visibility,
             IsRegistered: isRegistered,
-            IsCreator: isCreator,
+            CanManage: isCreator,
             CreatedAt: DateTime.UtcNow,
             CreatorVenmoHandle: null,    // Phase 4
             MyPaymentStatus: null,       // Phase 4

@@ -9,7 +9,7 @@ public record OrganizationDto(
     Guid CreatorId,
     int SubscriberCount,
     bool IsSubscribed,
-    bool IsCreator,      // True if current user created this organization
+    bool IsAdmin,      // True if current user is an admin of this organization
     DateTime CreatedAt
 );
 
@@ -21,7 +21,8 @@ public record OrganizationMemberDto(
     string Email,
     string? SkillLevel,
     string? Position,
-    DateTime SubscribedAt
+    DateTime SubscribedAt,
+    bool IsAdmin  // True if this member is an admin of the organization
 );
 
 public record CreateOrganizationRequest(
@@ -43,4 +44,20 @@ public record OrganizationSubscriptionDto(
     OrganizationDto Organization,
     bool NotificationEnabled,
     DateTime SubscribedAt
+);
+
+// Admin management DTOs
+public record OrganizationAdminDto(
+    Guid Id,
+    Guid UserId,
+    string FirstName,
+    string LastName,
+    string Email,
+    DateTime AddedAt,
+    Guid? AddedByUserId,
+    string? AddedByName  // "FirstName LastName" of who added them, null for original creator
+);
+
+public record AddAdminRequest(
+    Guid UserId
 );

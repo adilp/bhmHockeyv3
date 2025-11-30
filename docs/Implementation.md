@@ -580,12 +580,91 @@ export default function PaymentScreen() {
 ```
 
 ### Demo Checklist
-- [ ] User registers for event
-- [ ] User taps "Pay with Venmo"
-- [ ] Venmo app opens with pre-filled info
-- [ ] User returns and marks as paid
-- [ ] Organizer sees payment as "MarkedPaid"
-- [ ] Organizer verifies payment
+- [x] User registers for event
+- [x] User taps "Pay with Venmo"
+- [x] Venmo app opens with pre-filled info
+- [x] User returns and marks as paid
+- [x] Organizer sees payment as "MarkedPaid"
+- [x] Organizer verifies payment
+
+---
+
+## Phase 4.5: Multi-Admin Organizations ✅ COMPLETED (2025-11-30)
+**Goal**: Allow organizations to have multiple admins with equal permissions
+**Demo**: Multiple users can manage the same organization and its events
+
+### Overview
+
+This phase refactored from single-creator to multi-admin model:
+- **Equal admins**: Any admin can add/remove other admins (no owner hierarchy)
+- **Org admins → Event admins**: Org admins automatically have admin rights on org-linked events
+- **Keep CreatorId**: Retained for audit trail, but NOT used for authorization
+- **Event.CreatorId**: Still used for standalone events, but org-linked events defer to org admins
+
+### Backend Implementation (Completed)
+
+#### New Files Created
+| File | Purpose |
+|------|---------|
+| `Models/Entities/OrganizationAdmin.cs` | Entity: OrganizationId, UserId, AddedAt, AddedByUserId |
+| `Services/IOrganizationAdminService.cs` | Interface for admin operations |
+| `Services/OrganizationAdminService.cs` | Implementation with last-admin protection |
+
+#### Files Modified
+| File | Change |
+|------|--------|
+| `Services/OrganizationService.cs` | Uses `IsUserAdminAsync()` instead of `CreatorId == userId` |
+| `Services/EventService.cs` | Added `CanUserManageEventAsync()` helper for org-linked events |
+| `Models/DTOs/OrganizationDTOs.cs` | `IsCreator` → `IsAdmin`, added `OrganizationAdminDto`, `AddAdminRequest` |
+| `Models/DTOs/EventDTOs.cs` | `IsCreator` → `CanManage` |
+| `Controllers/OrganizationsController.cs` | Added 3 admin management endpoints |
+| `Data/AppDbContext.cs` | Added `DbSet<OrganizationAdmin>` with unique constraint |
+
+#### New API Endpoints
+```
+GET    /api/organizations/{id}/admins           - List all admins (admin only)
+POST   /api/organizations/{id}/admins           - Add admin (admin only)
+DELETE /api/organizations/{id}/admins/{userId}  - Remove admin (admin only, can't remove last)
+```
+
+#### Authorization Logic
+- **Standalone events**: `CreatorId == userId` (unchanged)
+- **Org-linked events**: `IsUserAdminAsync(orgId, userId)` (NEW)
+- **Organization operations**: `IsUserAdminAsync(orgId, userId)` (changed from `CreatorId == userId`)
+
+### Frontend Implementation (Completed)
+
+#### Files Modified
+| File | Change |
+|------|--------|
+| `packages/shared/src/types/index.ts` | `Organization.isCreator` → `isAdmin`, `EventDto.isCreator` → `canManage` |
+| `packages/api-client/src/services/organizations.ts` | Added `getAdmins()`, `addAdmin()`, `removeAdmin()` methods |
+| `apps/mobile/app/(tabs)/discover.tsx` | Use `org.isAdmin` instead of `org.isCreator` |
+| `apps/mobile/app/events/[id]/index.tsx` | Use `event.canManage` instead of `event.isCreator` |
+
+### Test Coverage (33 new tests)
+
+| Test File | Tests Added |
+|-----------|-------------|
+| `OrganizationAdminServiceTests.cs` | 17 tests - admin CRUD, last-admin protection |
+| `OrganizationServiceTests.cs` | 7 tests - non-creator admin scenarios |
+| `EventServiceTests.cs` | 9 tests - org admin event management |
+
+### Demo Checklist
+- [x] Create organization (creator becomes first admin)
+- [x] Add another user as admin via API
+- [x] Both admins can edit organization
+- [x] Both admins can create/edit/delete org events
+- [x] Non-admin cannot manage organization or events
+- [x] Cannot remove last admin (throws error)
+- [x] `IsAdmin` and `CanManage` flags work correctly in UI
+
+### Key Design Decisions
+
+1. **Equal admins - no owner hierarchy**: Simpler model, any admin can do anything
+2. **Business rule**: Cannot remove last admin (throws `InvalidOperationException`)
+3. **Audit trail**: `CreatorId` kept for historical reference, `AddedByUserId` tracks who added each admin
+4. **DTO naming**: `IsAdmin` for orgs (clearer), `CanManage` for events (covers both creator and admin cases)
 
 ---
 

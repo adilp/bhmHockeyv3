@@ -28,8 +28,24 @@ export interface Organization {
   skillLevel?: SkillLevel;
   subscriberCount: number;
   isSubscribed: boolean;
-  isCreator: boolean;       // True if current user created this organization
+  isAdmin: boolean;       // True if current user is an admin of this organization
   createdAt: string;
+}
+
+// Organization admin info
+export interface OrganizationAdmin {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  addedAt: string;
+  addedByUserId?: string;
+  addedByName?: string;
+}
+
+export interface AddAdminRequest {
+  userId: string;
 }
 
 // Member/subscriber info for admin view
@@ -41,6 +57,7 @@ export interface OrganizationMember {
   skillLevel?: SkillLevel;
   position?: Position;
   subscribedAt: string;
+  isAdmin: boolean;  // True if this member is an admin of the organization
 }
 
 export type SkillLevel = 'Gold' | 'Silver' | 'Bronze' | 'D-League';
@@ -124,12 +141,12 @@ export interface EventDto {
   status: EventStatus;
   visibility: EventVisibility;   // Public, OrganizationMembers, InviteOnly
   isRegistered: boolean;
-  isCreator: boolean;            // True if current user created this event
+  canManage: boolean;            // True if current user can manage this event (creator for standalone, org admin for org events)
   createdAt: string;
   // Payment fields (Phase 4)
   creatorVenmoHandle?: string;   // For "Pay with Venmo" button
   myPaymentStatus?: PaymentStatus; // Current user's payment status
-  // Organizer fields (only populated when isCreator = true)
+  // Organizer fields (only populated when canManage = true)
   unpaidCount?: number;          // Count of registrations with PaymentStatus != "Verified"
 }
 

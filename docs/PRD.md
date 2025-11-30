@@ -6,6 +6,13 @@ Excellent! Based on your answers, let me create a comprehensive PRD for your hoc
 ### 1. Executive Summary
 A community-focused mobile application for organizing, managing, and participating in hockey pickup games at a local rink. The app streamlines the current manual process of organizing games via messaging and Venmo payments, providing a centralized platform for game management, team balancing, and payment coordination.
 
+**Current Status (2025-11-30):** MVP Complete ✅
+- User authentication & profiles
+- Organizations with multi-admin support
+- Events with registration
+- Venmo payment coordination
+- Push notifications
+
 ### 2. Product Overview
 
 **Vision:** Create a frictionless experience for hockey players to find, join, and pay for pickup games while giving organizers powerful tools to manage their groups and games.
@@ -61,11 +68,14 @@ A community-focused mobile application for organizing, managing, and participati
   - Organizer details
 
 - **Membership Management**
-  - Request to join system
-  - Approval workflow with in-app chat between organizer and applicant
-  - Member list management
-  - Admin appointment functionality
-  - Member removal capability
+  - Subscribe/unsubscribe to organizations ✅
+  - Member list management ✅
+  - **Multi-Admin System** ✅ (Implemented 2025-11-30)
+    - Any admin can add/remove other admins
+    - All admins have equal permissions (no owner hierarchy)
+    - Cannot remove the last admin (business rule)
+    - Org admins can manage all events under their organization
+  - Future: Request to join with approval workflow
 
 #### 4.3 Game Management
 - **Game Creation**
@@ -135,28 +145,40 @@ User {
   createdAt, updatedAt
 }
 
-Group {
+Organization {
   id, name, description,
-  isPublic, organizerId,
-  adminIds[], memberIds[],
-  pendingMemberIds[],
+  location, skillLevel,
+  creatorId, isActive,
   createdAt, updatedAt
 }
 
-Game {
-  id, groupId, organizerId,
-  dateTime, duration, location,
-  costPerPlayer, maxPlayers,
-  registrationDeadline,
-  isOpenToPublic, recurringId,
-  status, createdAt, updatedAt
+OrganizationAdmin {  // Multi-admin support ✅
+  id, organizationId, userId,
+  addedAt, addedByUserId
 }
 
-Registration {
-  id, gameId, userId,
-  status (confirmed/waitlist/cancelled),
-  paymentStatus, teamAssignment,
-  registeredAt, updatedAt
+OrganizationSubscription {
+  id, organizationId, userId,
+  notificationEnabled, subscribedAt
+}
+
+Event {
+  id, organizationId (optional),
+  creatorId, name, description,
+  eventDate, duration, venue,
+  maxPlayers, cost,
+  registrationDeadline,
+  status, visibility,
+  createdAt, updatedAt
+}
+
+EventRegistration {
+  id, eventId, userId,
+  status (Registered/Cancelled),
+  paymentStatus (Pending/MarkedPaid/Verified),
+  paymentMarkedAt, paymentVerifiedAt,
+  registeredAt
+  // Future: waitlistPosition, promotedAt, paymentDeadline
 }
 
 ChatMessage {
@@ -166,24 +188,46 @@ ChatMessage {
 }
 ```
 
-#### 5.3 API Endpoints (Key Examples)
+#### 5.3 API Endpoints (Implemented)
 
-**Groups:**
-- POST /api/groups - Create group
-- GET /api/groups/search - Find groups
-- POST /api/groups/{id}/join - Request to join
-- POST /api/groups/{id}/approve - Approve member
-- POST /api/groups/{id}/admins - Add admin
+**Authentication:** ✅
+- POST /api/auth/register - Create account
+- POST /api/auth/login - Get JWT token
+- POST /api/auth/logout - Invalidate token
+- GET /api/auth/me - Get current user
 
-**Games:**
-- POST /api/games - Create game
-- GET /api/groups/{id}/games - List group games
-- POST /api/games/{id}/register - Register for game
-- PUT /api/games/{id}/payment - Update payment status
-- POST /api/games/{id}/teams - Save team composition
-- POST /api/games/{id}/roster - Send roster
+**Users:** ✅
+- GET /api/users/me - Get full profile
+- PUT /api/users/me - Update profile
+- GET /api/users/me/organizations - Get user's admin orgs
+- GET /api/users/me/events - Get user's registered events
 
-**Chat:**
+**Organizations:** ✅
+- POST /api/organizations - Create organization
+- GET /api/organizations - List all organizations
+- GET /api/organizations/{id} - Get organization details
+- PUT /api/organizations/{id} - Update organization (admin only)
+- DELETE /api/organizations/{id} - Delete organization (admin only)
+- POST /api/organizations/{id}/subscribe - Subscribe to org
+- DELETE /api/organizations/{id}/subscribe - Unsubscribe
+- GET /api/organizations/{id}/members - List members (admin only)
+- GET /api/organizations/{id}/admins - List admins (admin only) ✅
+- POST /api/organizations/{id}/admins - Add admin (admin only) ✅
+- DELETE /api/organizations/{id}/admins/{userId} - Remove admin ✅
+
+**Events:** ✅
+- POST /api/events - Create event
+- GET /api/events - List upcoming events
+- GET /api/events/{id} - Get event details
+- PUT /api/events/{id} - Update event (creator/admin only)
+- DELETE /api/events/{id} - Cancel event (creator/admin only)
+- POST /api/events/{id}/register - Register for event
+- DELETE /api/events/{id}/register - Cancel registration
+- POST /api/events/{id}/payment/mark-paid - Mark payment complete ✅
+- PUT /api/events/{id}/registrations/{regId}/payment - Verify payment ✅
+- GET /api/events/{id}/registrations - List registrations (organizer only)
+
+**Future - Chat:**
 - POST /api/chat/send - Send message
 - GET /api/chat/conversation/{userId} - Get conversation
 - GET /api/chat/unread - Get unread messages
@@ -214,27 +258,45 @@ ChatMessage {
 
 ### 8. Implementation Phases
 
-**Phase 1 - MVP (Weeks 1-8)**
-- Week 1-2: User authentication and profile management
-- Week 3-4: Group creation and membership management
-- Week 5-6: Game creation and registration system
-- Week 7: Team balancing and roster management
-- Week 8: Notifications and Venmo payment coordination
+**Phase 1 - Foundation & Auth** ✅ DONE (2025-11-25)
+- User registration and login
+- Profile management (skill level, position, Venmo handle)
+- JWT authentication with auto-logout on 401
 
-**Phase 2 - Enhanced Features (Weeks 9-12)**
+**Phase 2 - Organizations & Subscriptions** ✅ DONE (2025-11-26)
+- Organization CRUD operations
+- Subscribe/unsubscribe to organizations
+- Discover screen to browse organizations
+
+**Phase 3 - Events & Registration** ✅ DONE (2025-11-26)
+- Event CRUD operations (standalone or org-linked)
+- Event visibility (Public, OrganizationMembers, InviteOnly)
+- Registration and cancellation
+
+**Phase 4 - Venmo Payments** ✅ DONE (2025-11-27)
+- Payment status tracking (Pending, MarkedPaid, Verified)
+- Venmo deep link integration
+- Organizer payment verification
+
+**Phase 4.5 - Multi-Admin Organizations** ✅ DONE (2025-11-30)
+- Multiple admins per organization with equal permissions
+- Org admins can manage all org events
+- 33 new authorization tests
+
+**Push Notifications** ✅ DONE (2025-11-26)
+- New event notifications to org subscribers
+- Expo Push API integration
+
+**Phase 5 - Waitlist & Auto-Promotion** ⏳ NEXT
+- Waitlist when events are full
+- Auto-promotion with payment deadline
+- Background service for deadline enforcement
+
+**Future Phases:**
+- Team balancing and roster management
 - Chat system implementation
-- Recurring games with confirmation
-- Public game discovery
-- Payment tracking improvements
-
-**Phase 3 - Tournament Features (Weeks 13-16)**
-- Tournament setup and management
-- Bracket generation and visualization
-- Tournament communication tools
-
-**Phase 4 - League Features (Weeks 17-18)**
-- Substitute finder system
-- League integration
+- Tournament management
+- League substitute finder
 
 ### 9. Open Questions & Considerations
 

@@ -2,16 +2,16 @@
 
 ## 📋 Project Status
 
-**Overall Status**: Phase 3 Complete ✅ + Push Notifications ✅ | Ready for Phase 4 (Payments)
+**Overall Status**: Phase 4 Complete ✅ + Multi-Admin ✅ | Ready for Phase 5 (Waitlist)
 - Full-stack monorepo operational
 - Mobile app (Expo SDK 54, React Native) successfully connects to .NET 8 API
 - Complete authentication flow working (register, login, logout)
-- Organizations with subscriptions working
-- Events with registration working
+- Organizations with multi-admin support (any admin can manage org and events)
+- Events with registration and Venmo payment tracking working
 - Push notifications for new events working
 - Database: PostgreSQL on port 5433 (OrbStack)
 - API running: `http://0.0.0.0:5001`
-- **114 backend tests passing**
+- **164+ backend tests passing**
 
 ## 📊 Completed Phases
 
@@ -44,6 +44,21 @@
 - Mobile app registers for push token on auth
 - Deep link navigation when notification tapped
 - Requires EAS project setup and physical device
+
+**Phase 4: Venmo Payments** ✅ DONE (2025-11-27)
+- Payment tracking with PaymentStatus (Pending, MarkedPaid, Verified)
+- Venmo deep link integration for payments
+- Users mark payment as complete, organizers verify
+- Payment status badges in UI
+- Organizer registrations screen with verification controls
+
+**Multi-Admin Organizations** ✅ DONE (2025-11-30)
+- Organizations support multiple admins (no single owner)
+- Any admin can add/remove other admins (except last admin)
+- Org admins can manage ALL events under their organization
+- `IsCreator` → `IsAdmin` (orgs), `IsCreator` → `CanManage` (events)
+- New API endpoints: GET/POST/DELETE `/api/organizations/{id}/admins`
+- 33 new tests covering authorization and business rules
 
 ---
 
@@ -129,12 +144,17 @@ Store updates state, component re-renders
 **API Routing:**
 - `POST   /api/auth/register` - Create account
 - `POST   /api/auth/login` - Get JWT token
-- `POST   /api/auth/logout` - Invalidate token  
+- `POST   /api/auth/logout` - Invalidate token
 - `GET    /api/auth/me` - Get current authenticated user
 - `GET    /api/users/me` - Get full user profile (skill level, position, Venmo)
 - `PUT    /api/users/me` - Update profile fields
 - `GET    /api/organizations` - List organizations
 - `POST   /api/organizations/{id}/subscribe` - Subscribe to organization
+- `GET    /api/organizations/{id}/admins` - List admins (admin only)
+- `POST   /api/organizations/{id}/admins` - Add admin (admin only)
+- `DELETE /api/organizations/{id}/admins/{userId}` - Remove admin (admin only)
+- `POST   /api/events/{id}/payment/mark-paid` - Mark payment as complete
+- `PUT    /api/events/{id}/registrations/{regId}/payment` - Verify payment (organizer)
 - `/health` - Health check (root level)
 - `/swagger` - API documentation (root level)
 
@@ -167,6 +187,9 @@ Store updates state, component re-renders
 | **API URL Config** | `apps/mobile/config/api.ts` | getApiUrl() - platform-specific URL detection |
 | **Notification Utils** | `apps/mobile/utils/notifications.ts` | Push notification registration and handlers |
 | **Notification Service** | `apps/api/.../Services/NotificationService.cs` | Sends push notifications via Expo API |
+| **Admin Service** | `apps/api/.../Services/OrganizationAdminService.cs` | Multi-admin management (add/remove/check) |
+| **Admin Entity** | `apps/api/.../Models/Entities/OrganizationAdmin.cs` | OrganizationAdmin table (org-user-addedBy) |
+| **Venmo Utils** | `apps/mobile/utils/venmo.ts` | Venmo deep link helpers |
 | **Environment** | `.env` | Database password, JWT secret (NOT committed) |
 | **Env Template** | `.env.example` | Environment variables template |
 
@@ -379,17 +402,19 @@ setAuthUser(updatedUser);  // Sync store with API response
 | 1 | Auth & User Profile | ✅ DONE | Completed |
 | 2 | Organizations & Subscriptions | ✅ DONE | Completed |
 | 3 | Events & Registration | ✅ DONE | Completed |
-| 4 | Venmo Payments | ⏳ NEXT | 3-4 hours |
-| 5 | Waitlist & Auto-Promotion | Blocked on Phase 4 | 2-3 hours |
+| 4 | Venmo Payments | ✅ DONE | Completed |
+| - | Multi-Admin Organizations | ✅ DONE | Completed |
+| 5 | Waitlist & Auto-Promotion | ⏳ NEXT | 2-3 hours |
 | 6 | Push Notifications | ✅ DONE (partial) | Completed |
 | 7 | Real-time Updates | Future phase | TBD |
-| 8 | Admin Features | Future phase | TBD |
+| 8 | Payment Reminders | Future phase | TBD |
 
-**MVP Definition:** Phases 1-4 complete
+**MVP Definition:** Phases 1-4 complete ✅
 - ✅ Phase 1: User authentication and profile
 - ✅ Phase 2: Find organizations to join
 - ✅ Phase 3: Find and join events
-- ⏳ Phase 4: Pay via Venmo
+- ✅ Phase 4: Pay via Venmo
+- ✅ Bonus: Multi-admin organizations
 
 **After MVP:** Phases 5-8 add polish and features
 
@@ -401,11 +426,11 @@ setAuthUser(updatedUser);  // Sync store with API response
 
 ---
 
-## 🎯 Current Sprint: Phase 4 - Venmo Payments
+## 🎯 Current Sprint: Phase 5 - Waitlist & Auto-Promotion
 
-**Before Starting Phase 4:**
+**Before Starting Phase 5:**
 
-1. **Test Phase 3 end-to-end** (5-10 min):
+1. **Test Multi-Admin end-to-end** (5-10 min):
    ```bash
    # Terminal 1
    yarn api
@@ -413,43 +438,36 @@ setAuthUser(updatedUser);  // Sync store with API response
    # Terminal 2 (different terminal)
    cd apps/mobile && npx expo start
 
-   # On phone:
-   # - Browse organizations in Discover tab
-   # - Subscribe to an organization
-   # - Browse events in Events tab
-   # - Register for an event
-   # - Check Profile for "My Upcoming Events"
-   # - Create a new event (if org owner)
-   # - Verify subscribers receive push notification
+   # Test multi-admin:
+   # - Create an organization (you become admin)
+   # - Use API to add another user as admin
+   # - Verify both can edit org/events
+   # - Test payment flow with Venmo
    ```
 
-2. **Review Phase 4 requirements** in `docs/Implementation.md`
+2. **Review Phase 5 requirements** in `docs/Implementation.md`
 
-**Phase 4 Tasks (In Sequence):**
+**Phase 5 Tasks (In Sequence):**
 
-1. **Add PaymentStatus to EventRegistration**
-   - Fields: PaymentStatus (Pending, Completed, Refunded)
-   - PaymentReference (Venmo transaction ID)
-   - Create migration
+1. **Add Waitlist to EventRegistration**
+   - Fields: WaitlistPosition, PromotedAt, PaymentDeadline
+   - When event full, new registrations go to waitlist
 
-2. **Add Venmo deep link integration**
-   - Venmo URL scheme: `venmo://paycharge?txn=pay&recipients={handle}&amount={cost}&note={eventName}`
-   - Open Venmo app with pre-filled payment details
+2. **Implement auto-promotion**
+   - When someone cancels, promote next from waitlist
+   - Send push notification to promoted user
+   - Start 2-hour payment deadline timer
 
-3. **Add payment confirmation flow**
-   - Button to mark payment as complete
-   - Payment status display in registration
-
-4. **Payment validation**
-   - Events with cost > 0 show payment status
-   - Option to require payment before registration confirmed
+3. **Background service for deadline enforcement**
+   - Check every 15 minutes for expired deadlines
+   - Auto-cancel and promote next person
 
 **Key Files:**
-- `apps/api/.../Models/Entities/EventRegistration.cs` - Add PaymentStatus
-- `apps/api/.../Services/EventService.cs` - Payment-related methods
-- `apps/mobile/app/events/[id].tsx` - Add Venmo payment button
+- `apps/api/.../Models/Entities/EventRegistration.cs` - Add waitlist fields
+- `apps/api/.../Services/WaitlistService.cs` - New service
+- `apps/mobile/components/RegistrationStatus.tsx` - Waitlist UI
 
-**Estimated Time:** 3-4 hours
+**Estimated Time:** 2-3 hours
 
 ---
 
@@ -557,5 +575,5 @@ http://localhost:5001/swagger
 
 ---
 
-**Last Updated**: 2025-11-26
-**Next Session**: Begin Phase 4 Venmo Payments
+**Last Updated**: 2025-11-30
+**Next Session**: Begin Phase 5 Waitlist & Auto-Promotion (or build Admin Management UI)

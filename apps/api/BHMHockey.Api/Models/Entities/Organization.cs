@@ -16,4 +16,5 @@ public class Organization
     // Navigation properties
     public ICollection<OrganizationSubscription> Subscriptions { get; set; } = new List<OrganizationSubscription>();
     public ICollection<Event> Events { get; set; } = new List<Event>();
+    public ICollection<OrganizationAdmin> Admins { get; set; } = new List<OrganizationAdmin>();
 }

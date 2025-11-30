@@ -166,6 +166,36 @@ namespace BHMHockey.Api.Migrations
                     b.ToTable("Organizations");
                 });
 
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.OrganizationAdmin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AddedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrganizationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationAdmins");
+                });
+
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.OrganizationSubscription", b =>
                 {
                     b.Property<Guid>("Id")
@@ -306,6 +336,32 @@ namespace BHMHockey.Api.Migrations
                     b.Navigation("Creator");
                 });
 
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.OrganizationAdmin", b =>
+                {
+                    b.HasOne("BHMHockey.Api.Models.Entities.User", "AddedByUser")
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.Organization", "Organization")
+                        .WithMany("Admins")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddedByUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.OrganizationSubscription", b =>
                 {
                     b.HasOne("BHMHockey.Api.Models.Entities.Organization", "Organization")
@@ -332,6 +388,8 @@ namespace BHMHockey.Api.Migrations
 
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.Organization", b =>
                 {
+                    b.Navigation("Admins");
+
                     b.Navigation("Events");
 
                     b.Navigation("Subscriptions");
