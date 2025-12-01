@@ -8,21 +8,18 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
-import { useOrganizationStore } from '../../stores/organizationStore';
-import { useEventStore } from '../../stores/eventStore';
 import type { User, SkillLevel, Position } from '@bhmhockey/shared';
 import { SKILL_LEVELS, POSITIONS } from '@bhmhockey/shared';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user: authUser, setUser: setAuthUser, logout } = useAuthStore();
-  const { mySubscriptions, fetchMySubscriptions } = useOrganizationStore();
-  const { myRegistrations, fetchMyRegistrations } = useEventStore();
 
   const [user, setUser] = useState<User | null>(authUser);
   const [loading, setLoading] = useState(false);
@@ -45,13 +42,6 @@ export default function ProfileScreen() {
       setSkillLevel(authUser.skillLevel || '');
       setPosition(authUser.position || '');
       setVenmoHandle(authUser.venmoHandle || '');
-    }
-  }, [authUser]);
-
-  useEffect(() => {
-    if (authUser) {
-      fetchMySubscriptions();
-      fetchMyRegistrations();
     }
   }, [authUser]);
 
@@ -161,10 +151,11 @@ export default function ProfileScreen() {
                 selectedValue={skillLevel}
                 onValueChange={(value) => setSkillLevel(value as SkillLevel)}
                 style={styles.picker}
+                itemStyle={styles.pickerItem}
               >
-                <Picker.Item label="Select skill level..." value="" />
+                <Picker.Item label="Select skill level..." value="" color="#999" />
                 {SKILL_LEVELS.map((level) => (
-                  <Picker.Item key={level} label={level} value={level} />
+                  <Picker.Item key={level} label={level} value={level} color="#000" />
                 ))}
               </Picker>
             </View>
@@ -177,10 +168,11 @@ export default function ProfileScreen() {
                 selectedValue={position}
                 onValueChange={(value) => setPosition(value as Position)}
                 style={styles.picker}
+                itemStyle={styles.pickerItem}
               >
-                <Picker.Item label="Select position..." value="" />
+                <Picker.Item label="Select position..." value="" color="#999" />
                 {POSITIONS.map((pos) => (
-                  <Picker.Item key={pos} label={pos} value={pos} />
+                  <Picker.Item key={pos} label={pos} value={pos} color="#000" />
                 ))}
               </Picker>
             </View>
@@ -198,52 +190,6 @@ export default function ProfileScreen() {
             <Text style={styles.hint}>For receiving payments from events</Text>
           </View>
         </View>
-
-        {mySubscriptions.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Organizations</Text>
-            {mySubscriptions.map((sub) => (
-              <TouchableOpacity
-                key={sub.id}
-                style={styles.subscriptionCard}
-                onPress={() => router.push(`/organizations/${sub.organization.id}`)}
-              >
-                <View style={styles.subscriptionInfo}>
-                  <Text style={styles.subscriptionName}>{sub.organization.name}</Text>
-                  {sub.organization.skillLevel && (
-                    <Text style={styles.subscriptionSkill}>{sub.organization.skillLevel}</Text>
-                  )}
-                </View>
-                <Text style={styles.subscriptionArrow}>›</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {myRegistrations.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Upcoming Events</Text>
-            {myRegistrations.slice(0, 5).map((event) => (
-              <TouchableOpacity
-                key={event.id}
-                style={styles.subscriptionCard}
-                onPress={() => router.push(`/events/${event.id}`)}
-              >
-                <View style={styles.subscriptionInfo}>
-                  <Text style={styles.subscriptionName}>{event.name}</Text>
-                  <Text style={styles.subscriptionSkill}>
-                    {new Date(event.eventDate).toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                    })} - {event.organizationName}
-                  </Text>
-                </View>
-                <Text style={styles.subscriptionArrow}>›</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
 
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
@@ -339,7 +285,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   picker: {
-    height: 50,
+    height: Platform.OS === 'ios' ? 180 : 50,
+    width: '100%',
+  },
+  pickerItem: {
+    fontSize: 16,
+    color: '#000',
   },
   hint: {
     fontSize: 12,
@@ -374,32 +325,5 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontSize: 16,
     fontWeight: '600',
-  },
-  subscriptionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  subscriptionInfo: {
-    flex: 1,
-  },
-  subscriptionName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  subscriptionSkill: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  subscriptionArrow: {
-    fontSize: 24,
-    color: '#ccc',
-    marginLeft: 8,
   },
 });
