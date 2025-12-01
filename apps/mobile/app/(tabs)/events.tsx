@@ -20,27 +20,12 @@ export default function EventsScreen() {
     events,
     isLoading,
     error,
-    processingEventId,
     fetchEvents,
-    register,
-    cancelRegistration,
   } = useEventStore();
 
   useEffect(() => {
     fetchEvents();
   }, []);
-
-  const handleRegisterToggle = async (event: EventDto) => {
-    if (!isAuthenticated) {
-      return;
-    }
-
-    if (event.isRegistered) {
-      await cancelRegistration(event.id);
-    } else {
-      await register(event.id);
-    }
-  };
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -54,7 +39,6 @@ export default function EventsScreen() {
     const spotsLeft = item.maxPlayers - item.registeredCount;
     const isFull = spotsLeft <= 0;
     const isLowSpots = spotsLeft > 0 && spotsLeft <= 2;
-    const isProcessing = processingEventId === item.id;
     const isMyEvent = item.canManage;
 
     // Calculate paid count for organizer view
@@ -149,35 +133,7 @@ export default function EventsScreen() {
           )}
 
           <View style={styles.footerRight}>
-            {item.cost > 0 && !isMyEvent && (
-              <Text style={styles.cost}>${item.cost.toFixed(0)}</Text>
-            )}
-
-            {isAuthenticated && !isMyEvent && (
-              <TouchableOpacity
-                style={[
-                  styles.registerButton,
-                  item.isRegistered && styles.registeredButton,
-                  (isFull && !item.isRegistered) && styles.disabledButton,
-                ]}
-                onPress={() => handleRegisterToggle(item)}
-                disabled={(isFull && !item.isRegistered) || isProcessing}
-              >
-                {isProcessing ? (
-                  <ActivityIndicator size="small" color={item.isRegistered ? '#FF3B30' : '#fff'} />
-                ) : (
-                  <Text style={[
-                    styles.registerButtonText,
-                    item.isRegistered && styles.registeredButtonText,
-                    isFull && !item.isRegistered && styles.disabledButtonText,
-                  ]}>
-                    {item.isRegistered ? 'Cancel' : isFull ? 'Full' : 'Register'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {isMyEvent && item.cost > 0 && (
+            {item.cost > 0 && (
               <Text style={styles.cost}>${item.cost.toFixed(0)}</Text>
             )}
           </View>
@@ -493,33 +449,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-  },
-  registerButton: {
-    backgroundColor: '#003366',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  registeredButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-  },
-  disabledButton: {
-    backgroundColor: '#E0E0E0',
-  },
-  registerButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  registeredButtonText: {
-    color: '#FF3B30',
-  },
-  disabledButtonText: {
-    color: '#999',
   },
   emptyState: {
     alignItems: 'center',

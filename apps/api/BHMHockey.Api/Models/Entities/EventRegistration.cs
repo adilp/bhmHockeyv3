@@ -10,6 +10,9 @@ public class EventRegistration
     public string Status { get; set; } = "Registered"; // Registered, Cancelled
     public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
 
+    // Position tracking - which position user registered as (Goalie or Skater)
+    public string? RegisteredPosition { get; set; }
+
     // Payment tracking fields (Phase 4)
     public string? PaymentStatus { get; set; } // null (free), Pending, MarkedPaid, Verified
     public DateTime? PaymentMarkedAt { get; set; } // When user marked as paid

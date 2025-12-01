@@ -4,7 +4,9 @@ import type {
   CreateEventRequest,
   UpdateEventRequest,
   MarkPaymentRequest,
-  UpdatePaymentStatusRequest
+  UpdatePaymentStatusRequest,
+  RegisterForEventRequest,
+  Position
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -54,9 +56,12 @@ export const eventService = {
 
   /**
    * Register for event
+   * @param eventId Event ID to register for
+   * @param position Optional position (required if user has multiple positions in profile)
    */
-  async register(eventId: string): Promise<void> {
-    await apiClient.instance.post(`/events/${eventId}/register`);
+  async register(eventId: string, position?: Position): Promise<void> {
+    const body: RegisterForEventRequest = position ? { position } : {};
+    await apiClient.instance.post(`/events/${eventId}/register`, body);
   },
 
   /**

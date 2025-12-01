@@ -19,8 +19,7 @@ public record OrganizationMemberDto(
     string FirstName,
     string LastName,
     string Email,
-    string? SkillLevel,
-    string? Position,
+    Dictionary<string, string>? Positions,  // {"goalie": "Gold", "skater": "Silver"}
     DateTime SubscribedAt,
     bool IsAdmin  // True if this member is an admin of the organization
 );

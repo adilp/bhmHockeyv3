@@ -1,4 +1,7 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using BHMHockey.Api.Models.Entities;
 
 namespace BHMHockey.Api.Data;
@@ -21,6 +24,9 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Check if using InMemory database (for tests) vs PostgreSQL (production)
+        var isInMemory = Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory";
+
         // User configuration
         modelBuilder.Entity<User>(entity =>
         {
@@ -30,6 +36,29 @@ public class AppDbContext : DbContext
             entity.Property(e => e.FirstName).IsRequired().HasMaxLength(100);
             entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Role).HasMaxLength(50).HasDefaultValue("Player");
+
+            // Store Positions as JSONB for multi-position support
+            if (isInMemory)
+            {
+                // InMemory needs a value converter to handle Dictionary
+                var dictionaryConverter = new ValueConverter<Dictionary<string, string>?, string?>(
+                    v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => v == null ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(v, (JsonSerializerOptions?)null)
+                );
+                var dictionaryComparer = new ValueComparer<Dictionary<string, string>?>(
+                    (c1, c2) => c1 != null && c2 != null ? c1.SequenceEqual(c2) : c1 == c2,
+                    c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                    c => c == null ? null : new Dictionary<string, string>(c)
+                );
+                entity.Property(e => e.Positions)
+                    .HasConversion(dictionaryConverter)
+                    .Metadata.SetValueComparer(dictionaryComparer);
+            }
+            else
+            {
+                // PostgreSQL with EnableDynamicJson() handles Dictionary -> jsonb natively
+                entity.Property(e => e.Positions).HasColumnType("jsonb");
+            }
         });
 
         // Organization configuration

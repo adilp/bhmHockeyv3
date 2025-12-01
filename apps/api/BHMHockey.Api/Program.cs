@@ -21,8 +21,12 @@ builder.Services.AddSwaggerGen();
 
 // Database Configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var dataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(connectionString);
+dataSourceBuilder.EnableDynamicJson();  // Required for Dictionary<string, string> JSON serialization in Npgsql 8.0+
+var dataSource = dataSourceBuilder.Build();
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(dataSource));
 
 // CORS Configuration
 builder.Services.AddCors(options =>

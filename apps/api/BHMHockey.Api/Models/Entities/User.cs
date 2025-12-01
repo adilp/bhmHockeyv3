@@ -10,9 +10,10 @@ public class User
     public string? PhoneNumber { get; set; }
     public string? PushToken { get; set; }
 
-    // Hockey profile fields
-    public string? SkillLevel { get; set; } // Gold, Silver, Bronze, D-League
-    public string? Position { get; set; } // Forward, Defense, Goalie
+    // Hockey profile fields - Multi-position support
+    // Keys: "goalie", "skater" (lowercase)
+    // Values: "Gold", "Silver", "Bronze", "D-League"
+    public Dictionary<string, string>? Positions { get; set; }
     public string? VenmoHandle { get; set; }
 
     public string Role { get; set; } = "Player"; // Player, Organizer, Admin

@@ -58,6 +58,8 @@ public record EventRegistrationDto(
     UserDto User,
     string Status,
     DateTime RegisteredAt,
+    // Position tracking
+    string? RegisteredPosition,  // "Goalie" or "Skater"
     // Payment fields (Phase 4)
     string? PaymentStatus,       // Pending, MarkedPaid, Verified, or null (free)
     DateTime? PaymentMarkedAt,
@@ -71,4 +73,9 @@ public record MarkPaymentRequest(
 
 public record UpdatePaymentStatusRequest(
     string PaymentStatus         // "Verified" or "Pending" (to reset)
+);
+
+// Registration request DTO
+public record RegisterForEventRequest(
+    string? Position             // "Goalie" or "Skater" (optional if user has only one position)
 );

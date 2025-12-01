@@ -143,16 +143,17 @@ public class EventsController : ControllerBase
 
     /// <summary>
     /// Register for an event. Requires authentication.
+    /// Optionally specify position if user has multiple positions in their profile.
     /// </summary>
     [Authorize]
     [HttpPost("{id:guid}/register")]
-    public async Task<IActionResult> Register(Guid id)
+    public async Task<IActionResult> Register(Guid id, [FromBody] RegisterForEventRequest? request)
     {
         var userId = GetCurrentUserId();
 
         try
         {
-            var success = await _eventService.RegisterAsync(id, userId);
+            var success = await _eventService.RegisterAsync(id, userId, request?.Position);
 
             if (!success)
             {

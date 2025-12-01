@@ -212,8 +212,7 @@ public class OrganizationService : IOrganizationService
             s.User.FirstName,
             s.User.LastName,
             s.User.Email,
-            s.User.SkillLevel,
-            s.User.Position,
+            s.User.Positions,
             s.SubscribedAt,
             adminUserIds.Contains(s.User.Id)
         )).ToList();

@@ -6,8 +6,7 @@ public record UserDto(
     string FirstName,
     string LastName,
     string? PhoneNumber,
-    string? SkillLevel,
-    string? Position,
+    Dictionary<string, string>? Positions,  // {"goalie": "Gold", "skater": "Silver"}
     string? VenmoHandle,
     string Role,
     DateTime CreatedAt
@@ -17,8 +16,7 @@ public record UpdateUserProfileRequest(
     string? FirstName,
     string? LastName,
     string? PhoneNumber,
-    string? SkillLevel,
-    string? Position,
+    Dictionary<string, string>? Positions,  // {"goalie": "Gold", "skater": "Silver"}
     string? VenmoHandle
 );
 

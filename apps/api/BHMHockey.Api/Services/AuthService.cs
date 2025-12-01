@@ -133,8 +133,7 @@ public class AuthService : IAuthService
             user.FirstName,
             user.LastName,
             user.PhoneNumber,
-            user.SkillLevel,
-            user.Position,
+            user.Positions,
             user.VenmoHandle,
             user.Role,
             user.CreatedAt

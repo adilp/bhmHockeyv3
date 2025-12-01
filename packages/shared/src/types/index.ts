@@ -5,8 +5,7 @@ export interface User {
   firstName: string;
   lastName: string;
   phoneNumber?: string;
-  skillLevel?: SkillLevel;
-  position?: Position;
+  positions?: UserPositions;  // Multi-position support
   venmoHandle?: string;
   role: UserRole;
   pushToken?: string;
@@ -16,7 +15,15 @@ export interface User {
 }
 
 export type UserRole = 'Player' | 'Organizer' | 'Admin';
-export type Position = 'Forward' | 'Defense' | 'Goalie';
+
+// Simplified positions: Goalie or Skater only
+export type Position = 'Goalie' | 'Skater';
+
+// Position-skill mapping for multi-position support
+export type UserPositions = {
+  goalie?: SkillLevel;
+  skater?: SkillLevel;
+};
 
 // Organization types
 export interface Organization {
@@ -54,8 +61,7 @@ export interface OrganizationMember {
   firstName: string;
   lastName: string;
   email: string;
-  skillLevel?: SkillLevel;
-  position?: Position;
+  positions?: UserPositions;  // Multi-position support
   subscribedAt: string;
   isAdmin: boolean;  // True if this member is an admin of the organization
 }
@@ -157,6 +163,8 @@ export interface EventRegistrationDto {
   user: User;
   status: RegistrationStatus;
   registeredAt: string;
+  // Position tracking
+  registeredPosition?: Position;
   // Payment fields (Phase 4)
   paymentStatus?: PaymentStatus;
   paymentMarkedAt?: string;
@@ -223,9 +231,13 @@ export interface UpdateUserProfileRequest {
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
-  skillLevel?: SkillLevel;
-  position?: Position;
+  positions?: UserPositions;  // Multi-position support
   venmoHandle?: string;
+}
+
+// Registration request with optional position
+export interface RegisterForEventRequest {
+  position?: Position;  // Required if user has multiple positions
 }
 
 // API Response types

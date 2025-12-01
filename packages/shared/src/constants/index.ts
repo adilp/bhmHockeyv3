@@ -1,8 +1,8 @@
 // Skill levels
 export const SKILL_LEVELS = ['Gold', 'Silver', 'Bronze', 'D-League'] as const;
 
-// Positions
-export const POSITIONS = ['Forward', 'Defense', 'Goalie'] as const;
+// Positions (simplified to Goalie and Skater)
+export const POSITIONS = ['Goalie', 'Skater'] as const;
 
 // Event statuses
 export const EVENT_STATUSES = ['Draft', 'Published', 'Full', 'Completed', 'Cancelled'] as const;

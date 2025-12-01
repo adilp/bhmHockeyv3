@@ -9,13 +9,14 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Switch,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
-import type { User, SkillLevel, Position } from '@bhmhockey/shared';
-import { SKILL_LEVELS, POSITIONS } from '@bhmhockey/shared';
+import type { User, SkillLevel, UserPositions } from '@bhmhockey/shared';
+import { SKILL_LEVELS } from '@bhmhockey/shared';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -29,9 +30,13 @@ export default function ProfileScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [skillLevel, setSkillLevel] = useState<SkillLevel | ''>('');
-  const [position, setPosition] = useState<Position | ''>('');
   const [venmoHandle, setVenmoHandle] = useState('');
+
+  // Multi-position state
+  const [isGoalie, setIsGoalie] = useState(false);
+  const [goalieSkill, setGoalieSkill] = useState<SkillLevel>('Bronze');
+  const [isSkater, setIsSkater] = useState(false);
+  const [skaterSkill, setSkaterSkill] = useState<SkillLevel>('Bronze');
 
   useEffect(() => {
     if (authUser) {
@@ -39,22 +44,46 @@ export default function ProfileScreen() {
       setFirstName(authUser.firstName);
       setLastName(authUser.lastName);
       setPhoneNumber(authUser.phoneNumber || '');
-      setSkillLevel(authUser.skillLevel || '');
-      setPosition(authUser.position || '');
       setVenmoHandle(authUser.venmoHandle || '');
+
+      // Load positions
+      if (authUser.positions) {
+        if (authUser.positions.goalie) {
+          setIsGoalie(true);
+          setGoalieSkill(authUser.positions.goalie);
+        }
+        if (authUser.positions.skater) {
+          setIsSkater(true);
+          setSkaterSkill(authUser.positions.skater);
+        }
+      }
     }
   }, [authUser]);
 
   const handleSave = async () => {
+    // Validate at least one position is selected
+    if (!isGoalie && !isSkater) {
+      Alert.alert('Error', 'Please select at least one position (Goalie or Skater)');
+      return;
+    }
+
     try {
       setSaving(true);
+
+      // Build positions object
+      const positions: UserPositions = {};
+      if (isGoalie) {
+        positions.goalie = goalieSkill;
+      }
+      if (isSkater) {
+        positions.skater = skaterSkill;
+      }
 
       const updates = {
         firstName,
         lastName,
         phoneNumber: phoneNumber || undefined,
-        skillLevel: skillLevel || undefined,
-        position: position || undefined,
+        positions,
         venmoHandle: venmoHandle || undefined,
       };
 
@@ -63,9 +92,10 @@ export default function ProfileScreen() {
       setAuthUser(updatedUser);
 
       Alert.alert('Success', 'Profile updated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update profile:', error);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      const message = error?.response?.data?.message || 'Failed to update profile. Please try again.';
+      Alert.alert('Error', message);
     } finally {
       setSaving(false);
     }
@@ -142,41 +172,68 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Hockey Profile</Text>
+          <Text style={styles.sectionTitle}>Positions</Text>
+          <Text style={styles.sectionHint}>Select at least one position</Text>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Skill Level</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={skillLevel}
-                onValueChange={(value) => setSkillLevel(value as SkillLevel)}
-                style={styles.picker}
-                itemStyle={styles.pickerItem}
-              >
-                <Picker.Item label="Select skill level..." value="" color="#999" />
-                {SKILL_LEVELS.map((level) => (
-                  <Picker.Item key={level} label={level} value={level} color="#000" />
-                ))}
-              </Picker>
+          {/* Goalie Position */}
+          <View style={styles.positionRow}>
+            <View style={styles.positionHeader}>
+              <Switch
+                value={isGoalie}
+                onValueChange={setIsGoalie}
+                trackColor={{ false: '#e0e0e0', true: '#007AFF' }}
+              />
+              <Text style={[styles.positionLabel, isGoalie && styles.positionLabelActive]}>
+                Goalie
+              </Text>
             </View>
+            {isGoalie && (
+              <View style={styles.skillPickerContainer}>
+                <Picker
+                  selectedValue={goalieSkill}
+                  onValueChange={(value) => setGoalieSkill(value as SkillLevel)}
+                  style={styles.skillPicker}
+                  itemStyle={styles.pickerItem}
+                >
+                  {SKILL_LEVELS.map((level) => (
+                    <Picker.Item key={level} label={level} value={level} color="#000" />
+                  ))}
+                </Picker>
+              </View>
+            )}
           </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Position</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={position}
-                onValueChange={(value) => setPosition(value as Position)}
-                style={styles.picker}
-                itemStyle={styles.pickerItem}
-              >
-                <Picker.Item label="Select position..." value="" color="#999" />
-                {POSITIONS.map((pos) => (
-                  <Picker.Item key={pos} label={pos} value={pos} color="#000" />
-                ))}
-              </Picker>
+          {/* Skater Position */}
+          <View style={styles.positionRow}>
+            <View style={styles.positionHeader}>
+              <Switch
+                value={isSkater}
+                onValueChange={setIsSkater}
+                trackColor={{ false: '#e0e0e0', true: '#007AFF' }}
+              />
+              <Text style={[styles.positionLabel, isSkater && styles.positionLabelActive]}>
+                Skater
+              </Text>
             </View>
+            {isSkater && (
+              <View style={styles.skillPickerContainer}>
+                <Picker
+                  selectedValue={skaterSkill}
+                  onValueChange={(value) => setSkaterSkill(value as SkillLevel)}
+                  style={styles.skillPicker}
+                  itemStyle={styles.pickerItem}
+                >
+                  {SKILL_LEVELS.map((level) => (
+                    <Picker.Item key={level} label={level} value={level} color="#000" />
+                  ))}
+                </Picker>
+              </View>
+            )}
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Payment</Text>
 
           <View style={styles.field}>
             <Text style={styles.label}>Venmo Handle</Text>
@@ -257,8 +314,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: 4,
     color: '#333',
+  },
+  sectionHint: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
   },
   field: {
     marginBottom: 16,
@@ -277,15 +339,36 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
   },
-  pickerContainer: {
+  positionRow: {
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    paddingBottom: 16,
+  },
+  positionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  positionLabel: {
+    fontSize: 16,
+    marginLeft: 12,
+    color: '#666',
+  },
+  positionLabelActive: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  skillPickerContainer: {
     backgroundColor: '#f9f9f9',
     borderWidth: 1,
     borderColor: '#e0e0e0',
     borderRadius: 8,
     overflow: 'hidden',
+    marginLeft: 52, // Align with label after switch
   },
-  picker: {
-    height: Platform.OS === 'ios' ? 180 : 50,
+  skillPicker: {
+    height: Platform.OS === 'ios' ? 120 : 50,
     width: '100%',
   },
   pickerItem: {

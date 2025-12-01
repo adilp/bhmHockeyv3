@@ -7,17 +7,20 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEventStore } from '../../../stores/eventStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { openVenmoPayment, getPaymentStatusInfo } from '../../../utils/venmo';
+import type { Position } from '@bhmhockey/shared';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const {
     selectedEvent,
     isLoading,
@@ -67,11 +70,85 @@ export default function EventDetailScreen() {
   };
 
   const handleRegister = async () => {
-    if (!id || !isAuthenticated) return;
+    if (!id || !isAuthenticated || !user) return;
 
-    const success = await register(id);
-    if (success) {
-      Alert.alert('Success', 'You have been registered for this event!');
+    // Check if user has positions set up
+    const positions = user.positions;
+    const positionCount = positions
+      ? Object.keys(positions).filter(k => positions[k as keyof typeof positions]).length
+      : 0;
+
+    if (positionCount === 0) {
+      Alert.alert(
+        'Set Up Profile',
+        'Please set up your positions in your profile before registering for events.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Go to Profile', onPress: () => router.push('/(tabs)/profile') },
+        ]
+      );
+      return;
+    }
+
+    // If user has exactly one position, auto-register
+    if (positionCount === 1) {
+      const position = positions?.goalie ? 'Goalie' : 'Skater';
+      const success = await register(id, position as Position);
+      if (success) {
+        Alert.alert('Success', `You have been registered as a ${position}!`);
+      }
+      return;
+    }
+
+    // User has multiple positions - show picker
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Goalie', 'Skater'],
+          cancelButtonIndex: 0,
+          title: 'Register as which position?',
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 1) {
+            const success = await register(id, 'Goalie');
+            if (success) {
+              Alert.alert('Success', 'You have been registered as a Goalie!');
+            }
+          } else if (buttonIndex === 2) {
+            const success = await register(id, 'Skater');
+            if (success) {
+              Alert.alert('Success', 'You have been registered as a Skater!');
+            }
+          }
+        }
+      );
+    } else {
+      // Android - use Alert with buttons
+      Alert.alert(
+        'Register as which position?',
+        'Select the position you want to play',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Goalie',
+            onPress: async () => {
+              const success = await register(id, 'Goalie');
+              if (success) {
+                Alert.alert('Success', 'You have been registered as a Goalie!');
+              }
+            },
+          },
+          {
+            text: 'Skater',
+            onPress: async () => {
+              const success = await register(id, 'Skater');
+              if (success) {
+                Alert.alert('Success', 'You have been registered as a Skater!');
+              }
+            },
+          },
+        ]
+      );
     }
   };
 

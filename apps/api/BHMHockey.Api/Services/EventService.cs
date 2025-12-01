@@ -265,7 +265,7 @@ public class EventService : IEventService
         return true;
     }
 
-    public async Task<bool> RegisterAsync(Guid eventId, Guid userId)
+    public async Task<bool> RegisterAsync(Guid eventId, Guid userId, string? position = null)
     {
         var evt = await _context.Events
             .Include(e => e.Registrations)
@@ -278,6 +278,13 @@ public class EventService : IEventService
         {
             throw new InvalidOperationException("Registration deadline has passed");
         }
+
+        // Get user to validate/determine position
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return false;
+
+        // Determine the position to register with
+        var registeredPosition = DetermineRegistrationPosition(user, position);
 
         var existingReg = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
@@ -296,6 +303,7 @@ public class EventService : IEventService
             // Re-activate cancelled registration
             existingReg.Status = "Registered";
             existingReg.RegisteredAt = DateTime.UtcNow;
+            existingReg.RegisteredPosition = registeredPosition;
             // Reset payment status for paid events
             existingReg.PaymentStatus = evt.Cost > 0 ? "Pending" : null;
             existingReg.PaymentMarkedAt = null;
@@ -308,6 +316,7 @@ public class EventService : IEventService
             {
                 EventId = eventId,
                 UserId = userId,
+                RegisteredPosition = registeredPosition,
                 // Set payment status based on event cost
                 PaymentStatus = evt.Cost > 0 ? "Pending" : null
             };
@@ -316,6 +325,46 @@ public class EventService : IEventService
 
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// Determines which position to register with based on user's positions and the requested position.
+    /// </summary>
+    private string DetermineRegistrationPosition(Models.Entities.User user, string? requestedPosition)
+    {
+        // If user has no positions set up, they can't register
+        if (user.Positions == null || user.Positions.Count == 0)
+        {
+            throw new InvalidOperationException("Please set up your positions in your profile before registering for events");
+        }
+
+        // If user has exactly one position, use it (ignore requestedPosition)
+        if (user.Positions.Count == 1)
+        {
+            var singlePosition = user.Positions.Keys.First();
+            return singlePosition == "goalie" ? "Goalie" : "Skater";
+        }
+
+        // User has multiple positions - they must specify which one
+        if (string.IsNullOrEmpty(requestedPosition))
+        {
+            throw new InvalidOperationException("You have multiple positions. Please select which position you want to register as");
+        }
+
+        // Normalize and validate the requested position
+        var normalizedPosition = requestedPosition.ToLowerInvariant();
+        if (normalizedPosition != "goalie" && normalizedPosition != "skater")
+        {
+            throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
+        }
+
+        // Verify user has this position in their profile
+        if (!user.Positions.ContainsKey(normalizedPosition))
+        {
+            throw new InvalidOperationException($"You don't have {requestedPosition} in your profile positions");
+        }
+
+        return normalizedPosition == "goalie" ? "Goalie" : "Skater";
     }
 
     public async Task<bool> CancelRegistrationAsync(Guid eventId, Guid userId)
@@ -347,14 +396,14 @@ public class EventService : IEventService
                 r.User.FirstName,
                 r.User.LastName,
                 r.User.PhoneNumber,
-                r.User.SkillLevel,
-                r.User.Position,
+                r.User.Positions,
                 r.User.VenmoHandle,
                 r.User.Role,
                 r.User.CreatedAt
             ),
             r.Status,
             r.RegisteredAt,
+            r.RegisteredPosition,   // Position tracking
             r.PaymentStatus,        // Phase 4
             r.PaymentMarkedAt,      // Phase 4
             r.PaymentVerifiedAt     // Phase 4

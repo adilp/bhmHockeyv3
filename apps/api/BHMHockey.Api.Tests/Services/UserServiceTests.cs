@@ -35,8 +35,7 @@ public class UserServiceTests : IDisposable
         string email = "test@example.com",
         string firstName = "John",
         string lastName = "Doe",
-        string? skillLevel = null,
-        string? position = null,
+        Dictionary<string, string>? positions = null,
         string? venmoHandle = null,
         string? phoneNumber = null)
     {
@@ -47,8 +46,7 @@ public class UserServiceTests : IDisposable
             PasswordHash = "hashed_password",
             FirstName = firstName,
             LastName = lastName,
-            SkillLevel = skillLevel,
-            Position = position,
+            Positions = positions,
             VenmoHandle = venmoHandle,
             PhoneNumber = phoneNumber,
             Role = "Player",
@@ -104,16 +102,14 @@ public class UserServiceTests : IDisposable
         var user = await CreateTestUser(
             firstName: "John",
             lastName: "Doe",
-            skillLevel: "Gold",
-            position: "Forward"
+            positions: new Dictionary<string, string> { { "goalie", "Gold" } }
         );
 
         var request = new UpdateUserProfileRequest(
             FirstName: "Jane",
             LastName: null,
             PhoneNumber: null,
-            SkillLevel: null,
-            Position: null,
+            Positions: null,
             VenmoHandle: null
         );
 
@@ -123,8 +119,8 @@ public class UserServiceTests : IDisposable
         // Assert
         result.FirstName.Should().Be("Jane");      // Updated
         result.LastName.Should().Be("Doe");        // Preserved
-        result.SkillLevel.Should().Be("Gold");     // Preserved
-        result.Position.Should().Be("Forward");    // Preserved
+        result.Positions.Should().ContainKey("goalie");  // Preserved
+        result.Positions!["goalie"].Should().Be("Gold"); // Preserved
     }
 
     [Fact]
@@ -134,8 +130,7 @@ public class UserServiceTests : IDisposable
         var user = await CreateTestUser(
             firstName: "John",
             lastName: "Doe",
-            skillLevel: "Silver",
-            position: "Defense",
+            positions: new Dictionary<string, string> { { "skater", "Silver" } },
             venmoHandle: "john-doe",
             phoneNumber: "1234567890"
         );
@@ -144,8 +139,7 @@ public class UserServiceTests : IDisposable
             FirstName: null,
             LastName: null,
             PhoneNumber: null,
-            SkillLevel: null,
-            Position: null,
+            Positions: null,
             VenmoHandle: null
         );
 
@@ -155,8 +149,8 @@ public class UserServiceTests : IDisposable
         // Assert
         result.FirstName.Should().Be("John");
         result.LastName.Should().Be("Doe");
-        result.SkillLevel.Should().Be("Silver");
-        result.Position.Should().Be("Defense");
+        result.Positions.Should().ContainKey("skater");
+        result.Positions!["skater"].Should().Be("Silver");
         result.VenmoHandle.Should().Be("john-doe");
         result.PhoneNumber.Should().Be("1234567890");
     }
@@ -175,8 +169,7 @@ public class UserServiceTests : IDisposable
             FirstName: "Updated",
             LastName: null,
             PhoneNumber: null,
-            SkillLevel: null,
-            Position: null,
+            Positions: null,
             VenmoHandle: null
         );
 
@@ -198,8 +191,7 @@ public class UserServiceTests : IDisposable
             FirstName: "Test",
             LastName: null,
             PhoneNumber: null,
-            SkillLevel: null,
-            Position: null,
+            Positions: null,
             VenmoHandle: null
         );
 
@@ -220,8 +212,7 @@ public class UserServiceTests : IDisposable
             FirstName: "Jane",
             LastName: "Smith",
             PhoneNumber: "9876543210",
-            SkillLevel: "Gold",
-            Position: "Goalie",
+            Positions: new Dictionary<string, string> { { "goalie", "Gold" }, { "skater", "Bronze" } },
             VenmoHandle: "jane-smith"
         );
 
@@ -232,9 +223,133 @@ public class UserServiceTests : IDisposable
         result.FirstName.Should().Be("Jane");
         result.LastName.Should().Be("Smith");
         result.PhoneNumber.Should().Be("9876543210");
-        result.SkillLevel.Should().Be("Gold");
-        result.Position.Should().Be("Goalie");
+        result.Positions.Should().ContainKey("goalie");
+        result.Positions!["goalie"].Should().Be("Gold");
+        result.Positions.Should().ContainKey("skater");
+        result.Positions["skater"].Should().Be("Bronze");
         result.VenmoHandle.Should().Be("jane-smith");
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_WithDualPositions_StoresBothPositions()
+    {
+        // Arrange
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "goalie", "Silver" } }
+        );
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null,
+            LastName: null,
+            PhoneNumber: null,
+            Positions: new Dictionary<string, string> { { "goalie", "Gold" }, { "skater", "Bronze" } },
+            VenmoHandle: null
+        );
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.Positions.Should().HaveCount(2);
+        result.Positions.Should().ContainKey("goalie");
+        result.Positions.Should().ContainKey("skater");
+        result.Positions!["goalie"].Should().Be("Gold");
+        result.Positions["skater"].Should().Be("Bronze");
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_WithSinglePosition_StoresSinglePosition()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null,
+            LastName: null,
+            PhoneNumber: null,
+            Positions: new Dictionary<string, string> { { "skater", "Silver" } },
+            VenmoHandle: null
+        );
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.Positions.Should().HaveCount(1);
+        result.Positions.Should().ContainKey("skater");
+        result.Positions!["skater"].Should().Be("Silver");
+    }
+
+    #endregion
+
+    #region Position Validation Tests
+
+    [Fact]
+    public async Task UpdateProfileAsync_WithEmptyPositions_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "goalie", "Gold" } }
+        );
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null,
+            LastName: null,
+            PhoneNumber: null,
+            Positions: new Dictionary<string, string>(), // Empty - invalid
+            VenmoHandle: null
+        );
+
+        // Act
+        var act = () => _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*at least one position*");
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_WithInvalidPositionKey_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null,
+            LastName: null,
+            PhoneNumber: null,
+            Positions: new Dictionary<string, string> { { "forward", "Gold" } }, // Invalid key
+            VenmoHandle: null
+        );
+
+        // Act
+        var act = () => _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid position key*");
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_WithInvalidSkillLevel_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null,
+            LastName: null,
+            PhoneNumber: null,
+            Positions: new Dictionary<string, string> { { "goalie", "Platinum" } }, // Invalid skill level
+            VenmoHandle: null
+        );
+
+        // Act
+        var act = () => _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid skill level*");
     }
 
     #endregion

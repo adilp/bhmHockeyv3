@@ -43,7 +43,7 @@ public class EventServiceTests : IDisposable
 
     #region Helper Methods
 
-    private async Task<User> CreateTestUser(string email = "test@example.com")
+    private async Task<User> CreateTestUser(string email = "test@example.com", Dictionary<string, string>? positions = null)
     {
         var user = new User
         {
@@ -52,6 +52,8 @@ public class EventServiceTests : IDisposable
             PasswordHash = "hashed_password",
             FirstName = "Test",
             LastName = "User",
+            // Default to skater position so registration tests work
+            Positions = positions ?? new Dictionary<string, string> { { "skater", "Silver" } },
             Role = "Player",
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
@@ -281,6 +283,40 @@ public class EventServiceTests : IDisposable
 
         // Assert
         result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithNoPositionsSet_ThrowsHelpfulError()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com",
+            positions: new Dictionary<string, string>()); // Empty positions
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Act
+        var act = () => _sut.RegisterAsync(evt.Id, user.Id);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*set up your positions*");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithDualPositions_RequiresPositionSelection()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com",
+            positions: new Dictionary<string, string> { { "goalie", "Gold" }, { "skater", "Silver" } });
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Act - Try to register without specifying position
+        var act = () => _sut.RegisterAsync(evt.Id, user.Id, position: null);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*multiple positions*");
     }
 
     #endregion

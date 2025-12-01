@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventDto, CreateEventRequest } from '@bhmhockey/shared';
+import type { EventDto, CreateEventRequest, Position } from '@bhmhockey/shared';
 
 interface EventState {
   // State
@@ -17,7 +17,7 @@ interface EventState {
   fetchEventById: (id: string) => Promise<void>;
   fetchMyRegistrations: () => Promise<void>;
   createEvent: (data: CreateEventRequest) => Promise<EventDto | null>;
-  register: (eventId: string) => Promise<boolean>;
+  register: (eventId: string, position?: Position) => Promise<boolean>;
   cancelRegistration: (eventId: string) => Promise<boolean>;
   clearSelectedEvent: () => void;
   clearError: () => void;
@@ -98,7 +98,7 @@ export const useEventStore = create<EventState>((set, get) => ({
   },
 
   // Register for event (with optimistic update)
-  register: async (eventId: string) => {
+  register: async (eventId: string, position?: Position) => {
     const { events, selectedEvent, myRegistrations } = get();
 
     // Helper to update event registration state
@@ -118,7 +118,7 @@ export const useEventStore = create<EventState>((set, get) => ({
     });
 
     try {
-      await eventService.register(eventId);
+      await eventService.register(eventId, position);
 
       // Add to my registrations
       const registeredEvent = events.find(e => e.id === eventId);
@@ -129,13 +129,14 @@ export const useEventStore = create<EventState>((set, get) => ({
       }
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
       // Rollback on failure
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to register';
       set({
         events,
         selectedEvent,
         processingEventId: null,
-        error: error instanceof Error ? error.message : 'Failed to register'
+        error: errorMessage
       });
       return false;
     }

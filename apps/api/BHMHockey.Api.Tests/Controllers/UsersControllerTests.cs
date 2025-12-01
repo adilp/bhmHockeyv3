@@ -48,7 +48,7 @@ public class UsersControllerTests
         // Arrange
         var userId = Guid.NewGuid();
         var expectedUser = new UserDto(
-            userId, "test@example.com", "John", "Doe", null, null, null, null, "Player", DateTime.UtcNow);
+            userId, "test@example.com", "John", "Doe", null, null, null, "Player", DateTime.UtcNow);
 
         var claims = new List<Claim> { new Claim("sub", userId.ToString()) };
         SetupControllerWithClaims(claims);
@@ -100,9 +100,10 @@ public class UsersControllerTests
     {
         // Arrange
         var userId = Guid.NewGuid();
-        var request = new UpdateUserProfileRequest("Jane", "Smith", "1234567890", "Gold", "Forward", "jane-smith");
+        var positions = new Dictionary<string, string> { { "skater", "Gold" } };
+        var request = new UpdateUserProfileRequest("Jane", "Smith", "1234567890", positions, "jane-smith");
         var expectedUser = new UserDto(
-            userId, "test@example.com", "Jane", "Smith", "1234567890", "Gold", "Forward", "jane-smith", "Player", DateTime.UtcNow);
+            userId, "test@example.com", "Jane", "Smith", "1234567890", positions, "jane-smith", "Player", DateTime.UtcNow);
 
         var claims = new List<Claim> { new Claim("sub", userId.ToString()) };
         SetupControllerWithClaims(claims);
@@ -121,7 +122,7 @@ public class UsersControllerTests
     {
         // Arrange
         var userId = Guid.NewGuid();
-        var request = new UpdateUserProfileRequest("Jane", null, null, null, null, null);
+        var request = new UpdateUserProfileRequest("Jane", null, null, null, null);
 
         var claims = new List<Claim> { new Claim("sub", userId.ToString()) };
         SetupControllerWithClaims(claims);

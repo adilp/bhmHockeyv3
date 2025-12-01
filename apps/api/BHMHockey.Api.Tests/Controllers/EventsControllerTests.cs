@@ -98,8 +98,7 @@ public class EventsControllerTests
             FirstName: "Test",
             LastName: "User",
             PhoneNumber: null,
-            SkillLevel: null,
-            Position: null,
+            Positions: null,
             VenmoHandle: null,
             Role: "Player",
             CreatedAt: DateTime.UtcNow
@@ -390,11 +389,11 @@ public class EventsControllerTests
     {
         // Arrange
         SetupAuthenticatedUser();
-        _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId))
+        _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId, null))
             .ReturnsAsync(true);
 
         // Act
-        var result = await _controller.Register(_testEventId);
+        var result = await _controller.Register(_testEventId, null);
 
         // Assert
         var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
@@ -406,11 +405,11 @@ public class EventsControllerTests
     {
         // Arrange
         SetupAuthenticatedUser();
-        _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId))
+        _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId, null))
             .ReturnsAsync(false);
 
         // Act
-        var result = await _controller.Register(_testEventId);
+        var result = await _controller.Register(_testEventId, null);
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
@@ -421,14 +420,31 @@ public class EventsControllerTests
     {
         // Arrange
         SetupAuthenticatedUser();
-        _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId))
+        _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId, null))
             .ThrowsAsync(new InvalidOperationException("Event is full"));
 
         // Act
-        var result = await _controller.Register(_testEventId);
+        var result = await _controller.Register(_testEventId, null);
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task Register_WithPosition_PassesPositionToService()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var request = new RegisterForEventRequest("Goalie");
+        _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId, "Goalie"))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.Register(_testEventId, request);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        _mockEventService.Verify(s => s.RegisterAsync(_testEventId, _testUserId, "Goalie"), Times.Once);
     }
 
     [Fact]
@@ -474,6 +490,7 @@ public class EventsControllerTests
                 User: CreateUserDto(),
                 Status: "Registered",
                 RegisteredAt: DateTime.UtcNow,
+                RegisteredPosition: "Skater",  // Position tracking
                 PaymentStatus: null,           // Phase 4
                 PaymentMarkedAt: null,         // Phase 4
                 PaymentVerifiedAt: null        // Phase 4
