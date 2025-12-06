@@ -14,7 +14,16 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { organizationService } from '@bhmhockey/api-client';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
+import { Badge } from '../../components';
+import { colors, spacing, radius } from '../../theme';
 import type { Organization, OrganizationMember } from '@bhmhockey/shared';
+
+const skillLevelColors: Record<string, string> = {
+  Gold: '#FFD700',
+  Silver: '#C0C0C0',
+  Bronze: '#CD7F32',
+  'D-League': colors.primary.blue,
+};
 
 export default function OrganizationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,7 +52,6 @@ export default function OrganizationDetailScreen() {
       const org = await organizationService.getById(id);
       setOrganization(org);
 
-      // If user is admin, load members automatically
       if (org.isAdmin) {
         loadMembers();
       }
@@ -106,10 +114,7 @@ export default function OrganizationDetailScreen() {
   };
 
   const handleMemberPress = (member: OrganizationMember) => {
-    // Don't allow actions on yourself
-    if (member.id === user?.id) {
-      return;
-    }
+    if (member.id === user?.id) return;
     setSelectedMember(member);
     setShowMemberActions(true);
   };
@@ -122,7 +127,6 @@ export default function OrganizationDetailScreen() {
 
     try {
       await organizationService.addAdmin(id, { userId: selectedMember.id });
-      // Update local state
       setMembers(members.map(m =>
         m.id === selectedMember.id ? { ...m, isAdmin: true } : m
       ));
@@ -143,7 +147,6 @@ export default function OrganizationDetailScreen() {
 
     try {
       await organizationService.removeAdmin(id, selectedMember.id);
-      // Update local state
       setMembers(members.map(m =>
         m.id === selectedMember.id ? { ...m, isAdmin: false } : m
       ));
@@ -174,9 +177,7 @@ export default function OrganizationDetailScreen() {
 
             try {
               await organizationService.removeMember(id, selectedMember.id);
-              // Update local state
               setMembers(members.filter(m => m.id !== selectedMember.id));
-              // Update subscriber count
               if (organization) {
                 setOrganization({
                   ...organization,
@@ -199,15 +200,15 @@ export default function OrganizationDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#003366" />
+        <ActivityIndicator size="large" color={colors.primary.teal} />
       </View>
     );
   }
 
   if (!organization) {
     return (
-      <View style={styles.errorContainer}>
-        <Text>Organization not found</Text>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Organization not found</Text>
       </View>
     );
   }
@@ -216,40 +217,49 @@ export default function OrganizationDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: organization.name }} />
+      <Stack.Screen
+        options={{
+          title: organization.name,
+          headerStyle: { backgroundColor: colors.bg.dark },
+          headerTintColor: colors.text.primary,
+        }}
+      />
 
       <ScrollView style={styles.container}>
+        {/* Header */}
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <Text style={styles.title}>{organization.name}</Text>
-            {isAdmin && (
-              <View style={styles.adminBadge}>
-                <Text style={styles.adminBadgeText}>Admin</Text>
-              </View>
-            )}
+            {isAdmin && <Badge variant="purple">Admin</Badge>}
           </View>
 
           {organization.skillLevel && (
-            <View style={[styles.skillBadge, getSkillBadgeStyle(organization.skillLevel)]}>
+            <View style={[
+              styles.skillBadge,
+              { backgroundColor: skillLevelColors[organization.skillLevel] || colors.text.muted }
+            ]}>
               <Text style={styles.skillText}>{organization.skillLevel}</Text>
             </View>
           )}
         </View>
 
+        {/* Location */}
         {organization.location && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Location</Text>
-            <Text style={styles.location}>{organization.location}</Text>
+            <Text style={styles.sectionText}>{organization.location}</Text>
           </View>
         )}
 
+        {/* Description */}
         {organization.description && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>About</Text>
-            <Text style={styles.description}>{organization.description}</Text>
+            <Text style={styles.sectionText}>{organization.description}</Text>
           </View>
         )}
 
+        {/* Stats */}
         <View style={styles.statsSection}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{organization.subscriberCount}</Text>
@@ -273,7 +283,7 @@ export default function OrganizationDetailScreen() {
             {showMembers && (
               <View style={styles.membersList}>
                 {isLoadingMembers ? (
-                  <ActivityIndicator size="small" color="#003366" style={{ padding: 20 }} />
+                  <ActivityIndicator size="small" color={colors.primary.teal} style={{ padding: 20 }} />
                 ) : members.length === 0 ? (
                   <Text style={styles.noMembers}>No members yet</Text>
                 ) : (
@@ -282,34 +292,25 @@ export default function OrganizationDetailScreen() {
                     return (
                       <TouchableOpacity
                         key={member.id}
-                        style={[styles.memberCard, !isCurrentUser && styles.memberCardTappable]}
+                        style={styles.memberCard}
                         onPress={() => handleMemberPress(member)}
                         disabled={isCurrentUser}
                         activeOpacity={isCurrentUser ? 1 : 0.7}
                       >
+                        <View style={styles.memberAvatar}>
+                          <Text style={styles.memberAvatarText}>
+                            {member.firstName.charAt(0)}{member.lastName.charAt(0)}
+                          </Text>
+                        </View>
                         <View style={styles.memberInfo}>
                           <View style={styles.memberNameRow}>
                             <Text style={styles.memberName}>
                               {member.firstName} {member.lastName}
                             </Text>
-                            {member.isAdmin && (
-                              <View style={styles.memberAdminBadge}>
-                                <Text style={styles.memberAdminBadgeText}>Admin</Text>
-                              </View>
-                            )}
-                            {isCurrentUser && (
-                              <Text style={styles.youLabel}>(You)</Text>
-                            )}
+                            {member.isAdmin && <Badge variant="purple">Admin</Badge>}
+                            {isCurrentUser && <Text style={styles.youLabel}>(You)</Text>}
                           </View>
                           <Text style={styles.memberEmail}>{member.email}</Text>
-                        </View>
-                        <View style={styles.memberDetails}>
-                          {member.skillLevel && (
-                            <Text style={styles.memberDetail}>{member.skillLevel}</Text>
-                          )}
-                          {member.position && (
-                            <Text style={styles.memberDetail}>{member.position}</Text>
-                          )}
                         </View>
                       </TouchableOpacity>
                     );
@@ -320,7 +321,7 @@ export default function OrganizationDetailScreen() {
           </View>
         )}
 
-        {/* Subscribe Button - Only show if not admin */}
+        {/* Subscribe Button */}
         {user && !isAdmin && (
           <TouchableOpacity
             style={[
@@ -332,14 +333,12 @@ export default function OrganizationDetailScreen() {
             disabled={isProcessing}
           >
             {isProcessing ? (
-              <ActivityIndicator color={organization.isSubscribed ? '#003366' : '#FFFFFF'} />
+              <ActivityIndicator color={organization.isSubscribed ? colors.primary.teal : colors.bg.darkest} />
             ) : (
-              <Text
-                style={[
-                  styles.subscribeButtonText,
-                  organization.isSubscribed && styles.subscribedButtonText,
-                ]}
-              >
+              <Text style={[
+                styles.subscribeButtonText,
+                organization.isSubscribed && styles.subscribedButtonText,
+              ]}>
                 {organization.isSubscribed ? 'Joined' : 'Join Organization'}
               </Text>
             )}
@@ -375,6 +374,7 @@ export default function OrganizationDetailScreen() {
           }}
         >
           <View style={styles.actionSheet}>
+            <View style={styles.actionSheetHandle} />
             <View style={styles.actionSheetHeader}>
               <Text style={styles.actionSheetTitle}>
                 {selectedMember?.firstName} {selectedMember?.lastName}
@@ -385,19 +385,13 @@ export default function OrganizationDetailScreen() {
             </View>
 
             {selectedMember && !selectedMember.isAdmin && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={handlePromoteToAdmin}
-              >
+              <TouchableOpacity style={styles.actionButton} onPress={handlePromoteToAdmin}>
                 <Text style={styles.actionButtonText}>Promote to Admin</Text>
               </TouchableOpacity>
             )}
 
             {selectedMember?.isAdmin && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={handleRemoveAdmin}
-              >
+              <TouchableOpacity style={styles.actionButton} onPress={handleRemoveAdmin}>
                 <Text style={styles.actionButtonText}>Remove Admin Role</Text>
               </TouchableOpacity>
             )}
@@ -425,145 +419,134 @@ export default function OrganizationDetailScreen() {
   );
 }
 
-function getSkillBadgeStyle(skillLevel: string) {
-  const colors: Record<string, string> = {
-    Gold: '#FFD700',
-    Silver: '#C0C0C0',
-    Bronze: '#CD7F32',
-    'D-League': '#4A90D9',
-  };
-  return { backgroundColor: colors[skillLevel] || '#666' };
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.bg.darkest,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.bg.darkest,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  errorText: {
+    color: colors.text.muted,
+    fontSize: 16,
   },
   header: {
-    padding: 20,
+    backgroundColor: colors.bg.dark,
+    padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    borderBottomColor: colors.border.default,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginRight: 12,
-  },
-  adminBadge: {
-    backgroundColor: '#003366',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  adminBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text.primary,
   },
   skillBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.round,
   },
   skillText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
+    color: colors.bg.darkest,
   },
   section: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    backgroundColor: colors.bg.dark,
+    padding: spacing.md,
+    marginTop: spacing.sm,
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#888',
+    color: colors.text.muted,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
   },
-  location: {
+  sectionText: {
     fontSize: 16,
-    color: '#333',
-  },
-  description: {
-    fontSize: 16,
-    color: '#333',
+    color: colors.text.secondary,
     lineHeight: 24,
   },
   statsSection: {
     flexDirection: 'row',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    backgroundColor: colors.bg.dark,
+    padding: spacing.md,
+    marginTop: spacing.sm,
   },
   stat: {
     alignItems: 'center',
-    marginRight: 40,
+    marginRight: spacing.xl,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#003366',
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.primary.teal,
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+    color: colors.text.muted,
+    marginTop: spacing.xs,
   },
   adminSection: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    backgroundColor: colors.bg.dark,
+    marginTop: spacing.sm,
   },
   membersHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: spacing.md,
   },
   membersTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text.primary,
   },
   membersToggle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.text.muted,
   },
   membersList: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
   },
   noMembers: {
-    color: '#888',
+    color: colors.text.muted,
     fontStyle: 'italic',
   },
   memberCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border.default,
   },
-  memberCardTappable: {
-    backgroundColor: '#fff',
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.bg.active,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  memberAvatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text.muted,
   },
   memberInfo: {
     flex: 1,
@@ -572,134 +555,120 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.sm,
   },
   memberName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    color: '#333',
-  },
-  memberAdminBadge: {
-    backgroundColor: '#003366',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  memberAdminBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
+    color: colors.text.primary,
   },
   youLabel: {
-    fontSize: 14,
-    color: '#888',
+    fontSize: 13,
+    color: colors.text.muted,
     fontStyle: 'italic',
   },
   memberEmail: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: colors.text.muted,
     marginTop: 2,
   },
-  memberDetails: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  memberDetail: {
-    fontSize: 12,
-    color: '#888',
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
   subscribeButton: {
-    backgroundColor: '#003366',
-    marginHorizontal: 20,
-    marginTop: 24,
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: colors.primary.teal,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
     alignItems: 'center',
   },
   subscribedButton: {
-    backgroundColor: '#E8F4FF',
-    borderWidth: 2,
-    borderColor: '#003366',
+    backgroundColor: colors.subtle.teal,
+    borderWidth: 1,
+    borderColor: colors.primary.teal,
   },
   disabledButton: {
     opacity: 0.7,
   },
   subscribeButtonText: {
-    color: '#FFFFFF',
+    color: colors.bg.darkest,
     fontSize: 18,
     fontWeight: '600',
   },
   subscribedButtonText: {
-    color: '#003366',
+    color: colors.primary.teal,
   },
   hint: {
     textAlign: 'center',
-    color: '#888',
+    color: colors.text.muted,
     fontSize: 14,
-    marginTop: 12,
-    marginBottom: 40,
-    paddingHorizontal: 20,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   actionSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    backgroundColor: colors.bg.dark,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     paddingBottom: 34,
   },
+  actionSheetHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: colors.border.muted,
+    borderRadius: radius.round,
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
   actionSheetHeader: {
-    padding: 20,
+    padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border.default,
     alignItems: 'center',
   },
   actionSheetTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text.primary,
   },
   actionSheetSubtitle: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+    color: colors.text.muted,
+    marginTop: spacing.xs,
   },
   actionButton: {
-    padding: 16,
+    padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border.default,
   },
   actionButtonText: {
     fontSize: 16,
-    color: '#003366',
+    color: colors.primary.teal,
     textAlign: 'center',
   },
   destructiveButton: {
-    backgroundColor: '#fff',
+    borderBottomWidth: 0,
   },
   destructiveButtonText: {
     fontSize: 16,
-    color: '#dc3545',
+    color: colors.status.error,
     textAlign: 'center',
   },
   cancelButton: {
-    padding: 16,
-    marginTop: 8,
-    backgroundColor: '#f5f5f5',
-    marginHorizontal: 16,
-    borderRadius: 8,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    backgroundColor: colors.bg.hover,
+    marginHorizontal: spacing.md,
+    borderRadius: radius.md,
   },
   cancelButtonText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
     textAlign: 'center',
     fontWeight: '600',
   },

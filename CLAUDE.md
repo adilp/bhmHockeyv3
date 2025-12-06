@@ -192,6 +192,176 @@ Store updates state, component re-renders
 | **Venmo Utils** | `apps/mobile/utils/venmo.ts` | Venmo deep link helpers |
 | **Environment** | `.env` | Database password, JWT secret (NOT committed) |
 | **Env Template** | `.env.example` | Environment variables template |
+| **Theme** | `apps/mobile/theme/index.ts` | Centralized design system (colors, spacing, typography) |
+| **Components** | `apps/mobile/components/` | Reusable UI components (EventCard, Badge, etc.) |
+| **Design Reference** | `design-reference-rows.html` | Visual design system reference (open in browser) |
+
+---
+
+## 🎨 Frontend Design System
+
+The mobile app uses a **Sleeper-inspired dark theme**. All styling should use the centralized theme and reusable components.
+
+### Theme File (`apps/mobile/theme/index.ts`)
+
+```typescript
+import { colors, spacing, radius, typography } from '../../theme';
+
+// Use theme values instead of hardcoded colors
+backgroundColor: colors.bg.darkest,  // NOT '#0D1117'
+color: colors.text.primary,          // NOT '#FFFFFF'
+padding: spacing.md,                 // NOT 16
+borderRadius: radius.lg,             // NOT 12
+```
+
+### Color Palette
+
+| Category | Token | Value | Usage |
+|----------|-------|-------|-------|
+| **Primary** | `colors.primary.teal` | `#00D9C0` | Primary actions, accents, available events |
+| | `colors.primary.green` | `#3FB950` | Success, paid status, registered events |
+| | `colors.primary.purple` | `#A371F7` | Organizing/admin, special states |
+| | `colors.primary.blue` | `#58A6FF` | Info, links, defense position |
+| **Background** | `colors.bg.darkest` | `#0D1117` | Screen background |
+| | `colors.bg.dark` | `#161B22` | Cards, elevated surfaces |
+| | `colors.bg.elevated` | `#1C2128` | Input fields, modals |
+| | `colors.bg.hover` | `#21262D` | Hover/pressed states |
+| **Text** | `colors.text.primary` | `#FFFFFF` | Headings, important text |
+| | `colors.text.secondary` | `#C9D1D9` | Body text, descriptions |
+| | `colors.text.muted` | `#8B949E` | Labels, captions |
+| | `colors.text.subtle` | `#6E7681` | Hints, disabled text |
+| **Status** | `colors.status.success` | `#3FB950` | Success messages |
+| | `colors.status.warning` | `#D29922` | Pending, warnings |
+| | `colors.status.error` | `#F85149` | Errors, unpaid, urgent |
+| **Subtle BG** | `colors.subtle.teal` | `rgba(0,217,192,0.12)` | Teal badge background |
+| | `colors.subtle.green` | `rgba(63,185,80,0.12)` | Green badge background |
+
+### Spacing & Radius
+
+```typescript
+// Spacing (use for padding, margin, gap)
+spacing.xs   // 4px
+spacing.sm   // 8px
+spacing.md   // 16px
+spacing.lg   // 24px
+spacing.xl   // 32px
+
+// Border radius
+radius.sm    // 4px  - badges, small elements
+radius.md    // 8px  - inputs, buttons
+radius.lg    // 12px - cards
+radius.xl    // 16px - modals, sheets
+radius.round // 9999px - pills, circles
+```
+
+### Reusable Components (`apps/mobile/components/`)
+
+**Always import from the barrel export:**
+```typescript
+import { EventCard, OrgCard, Badge, SectionHeader, EmptyState } from '../../components';
+```
+
+| Component | Props | Usage |
+|-----------|-------|-------|
+| `EventCard` | `event: EventDto`, `variant: 'available' \| 'registered' \| 'organizing'`, `onPress` | Event list items with accent bar, badges, price |
+| `OrgCard` | `organization: Organization`, `isAdmin?`, `onPress`, `showJoinButton?`, `onJoinPress?` | Organization cards with logo, name, skill level, member count |
+| `Badge` | `children`, `variant: 'default' \| 'teal' \| 'green' \| 'purple' \| 'warning' \| 'error'` | Status indicators (spots, payment, etc.) |
+| `PositionBadge` | `position: 'G' \| 'D' \| 'F' \| 'C'` | Hockey position indicators |
+| `SectionHeader` | `title`, `count?`, `action?`, `onActionPress?` | Section titles with optional count badge |
+| `EmptyState` | `message`, `icon?`, `title?`, `actionLabel?`, `onAction?` | Empty list states |
+
+### Example: Using Components
+
+```typescript
+import { EventCard, SectionHeader, EmptyState, Badge } from '../../components';
+import { colors, spacing } from '../../theme';
+
+// In your screen:
+<View style={{ backgroundColor: colors.bg.darkest, flex: 1 }}>
+  <SectionHeader title="Upcoming Games" count={events.length} />
+
+  {events.length === 0 ? (
+    <EmptyState
+      icon="🏒"
+      message="No games available"
+      actionLabel="Create Event"
+      onAction={() => router.push('/events/create')}
+    />
+  ) : (
+    events.map(event => (
+      <EventCard
+        key={event.id}
+        event={event}
+        variant="available"
+        onPress={() => router.push(`/events/${event.id}`)}
+      />
+    ))
+  )}
+</View>
+```
+
+### Styling Patterns
+
+**DO:**
+```typescript
+// ✅ Use theme tokens
+import { colors, spacing, radius } from '../../theme';
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.bg.darkest,
+    padding: spacing.md,
+  },
+  card: {
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  title: {
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+```
+
+**DON'T:**
+```typescript
+// ❌ Hardcode colors
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#0D1117',  // Use colors.bg.darkest
+    padding: 16,                 // Use spacing.md
+  },
+});
+```
+
+### Adding New Components
+
+When creating new reusable components:
+
+1. Create file in `apps/mobile/components/ComponentName.tsx`
+2. Import theme: `import { colors, spacing, radius } from '../theme';`
+3. Export from `apps/mobile/components/index.ts`
+4. Keep props minimal and well-typed
+5. Follow existing patterns (see `EventCard.tsx` for reference)
+
+### Screens Not Yet Updated
+
+These screens still use the old light theme and should be migrated:
+- `apps/mobile/app/(tabs)/profile.tsx`
+- `apps/mobile/app/events/create.tsx`
+- `apps/mobile/app/organizations/create.tsx`
+- `apps/mobile/app/(auth)/login.tsx`
+- `apps/mobile/app/(auth)/register.tsx`
+
+**Already migrated:**
+- Home, Events, Discover tabs
+- Event details + registrations
+- Organization details
+
+When updating, replace hardcoded colors with theme tokens and use shared components where applicable.
 
 ---
 
@@ -575,5 +745,5 @@ http://localhost:5001/swagger
 
 ---
 
-**Last Updated**: 2025-11-30
-**Next Session**: Begin Phase 5 Waitlist & Auto-Promotion (or build Admin Management UI)
+**Last Updated**: 2025-12-06
+**Next Session**: Begin Phase 5 Waitlist & Auto-Promotion (or migrate remaining screens to dark theme)

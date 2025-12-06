@@ -8,19 +8,27 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { eventService } from '@bhmhockey/api-client';
 import type { EventRegistrationDto } from '@bhmhockey/shared';
 import { useEventStore } from '../../../stores/eventStore';
 import { getPaymentStatusInfo } from '../../../utils/venmo';
+import { EmptyState } from '../../../components';
+import { colors, spacing, radius } from '../../../theme';
 
 export default function EventRegistrationsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const navigation = useNavigation();
   const [registrations, setRegistrations] = useState<EventRegistrationDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { updatePaymentStatus, selectedEvent } = useEventStore();
 
   useEffect(() => {
+    navigation.setOptions({
+      title: 'Registrations',
+      headerStyle: { backgroundColor: colors.bg.dark },
+      headerTintColor: colors.text.primary,
+    });
     loadRegistrations();
   }, [id]);
 
@@ -49,9 +57,7 @@ export default function EventRegistrationsScreen() {
           text: 'Yes, Mark Paid',
           onPress: async () => {
             const success = await updatePaymentStatus(id, registrationId, 'Verified');
-            if (success) {
-              await loadRegistrations();
-            }
+            if (success) await loadRegistrations();
           },
         },
       ]
@@ -70,9 +76,7 @@ export default function EventRegistrationsScreen() {
           text: 'Yes, Verify',
           onPress: async () => {
             const success = await updatePaymentStatus(id, registrationId, 'Verified');
-            if (success) {
-              await loadRegistrations();
-            }
+            if (success) await loadRegistrations();
           },
         },
       ]
@@ -92,9 +96,7 @@ export default function EventRegistrationsScreen() {
           style: 'destructive',
           onPress: async () => {
             const success = await updatePaymentStatus(id, registrationId, 'Pending');
-            if (success) {
-              await loadRegistrations();
-            }
+            if (success) await loadRegistrations();
           },
         },
       ]
@@ -107,13 +109,24 @@ export default function EventRegistrationsScreen() {
 
     return (
       <View style={styles.registrationCard}>
+        {/* Avatar */}
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>
+            {item.user.firstName.charAt(0)}{item.user.lastName.charAt(0)}
+          </Text>
+        </View>
+
+        {/* User Info */}
         <View style={styles.userInfo}>
           <Text style={styles.userName}>
             {item.user.firstName} {item.user.lastName}
           </Text>
-          <Text style={styles.userEmail}>{item.user.email}</Text>
+          <Text style={styles.userMeta}>
+            {item.registeredPosition || 'Player'} • {item.user.email}
+          </Text>
         </View>
 
+        {/* Payment Status & Actions */}
         {showPaymentActions && (
           <View style={styles.paymentSection}>
             <View style={[styles.statusBadge, { backgroundColor: statusInfo.backgroundColor }]}>
@@ -124,19 +137,19 @@ export default function EventRegistrationsScreen() {
 
             {item.paymentStatus === 'Pending' && (
               <TouchableOpacity
-                style={styles.markPaidButton}
+                style={styles.actionButton}
                 onPress={() => handleMarkPaid(item.id)}
               >
-                <Text style={styles.markPaidButtonText}>Mark Paid</Text>
+                <Text style={styles.actionButtonText}>Mark Paid</Text>
               </TouchableOpacity>
             )}
 
             {item.paymentStatus === 'MarkedPaid' && (
               <TouchableOpacity
-                style={styles.verifyButton}
+                style={[styles.actionButton, styles.verifyButton]}
                 onPress={() => handleVerifyPayment(item.id)}
               >
-                <Text style={styles.verifyButtonText}>Verify</Text>
+                <Text style={styles.actionButtonText}>Verify</Text>
               </TouchableOpacity>
             )}
 
@@ -157,20 +170,50 @@ export default function EventRegistrationsScreen() {
   if (isLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.primary.teal} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {/* Summary Header */}
+      {selectedEvent && (
+        <View style={styles.summaryHeader}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{registrations.length}</Text>
+            <Text style={styles.statLabel}>Registered</Text>
+          </View>
+          {selectedEvent.cost > 0 && (
+            <>
+              <View style={styles.statBox}>
+                <Text style={[styles.statValue, { color: colors.primary.green }]}>
+                  {registrations.filter(r => r.paymentStatus === 'Verified').length}
+                </Text>
+                <Text style={styles.statLabel}>Paid</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={[styles.statValue, { color: colors.status.error }]}>
+                  {registrations.filter(r => r.paymentStatus !== 'Verified').length}
+                </Text>
+                <Text style={styles.statLabel}>Unpaid</Text>
+              </View>
+            </>
+          )}
+        </View>
+      )}
+
       <FlatList
         data={registrations}
         keyExtractor={(item) => item.id}
         renderItem={renderRegistration}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No registrations yet</Text>
+          <EmptyState
+            icon="👥"
+            title="No Registrations"
+            message="No one has registered for this event yet"
+          />
         }
       />
     </View>
@@ -180,91 +223,123 @@ export default function EventRegistrationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.bg.darkest,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.bg.darkest,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    backgroundColor: colors.bg.dark,
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: colors.text.muted,
+    marginTop: 2,
   },
   list: {
-    padding: 16,
+    padding: spacing.md,
   },
   registrationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.bg.active,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  avatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text.muted,
   },
   userInfo: {
-    marginBottom: 12,
+    flex: 1,
+    minWidth: 150,
   },
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text.primary,
   },
-  userEmail: {
-    fontSize: 14,
-    color: '#666',
+  userMeta: {
+    fontSize: 13,
+    color: colors.text.muted,
     marginTop: 2,
   },
   paymentSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 12,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    width: '100%',
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.border.default,
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
   },
   statusText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  markPaidButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  markPaidButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  actionButton: {
+    backgroundColor: colors.primary.teal,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    marginLeft: 'auto',
   },
   verifyButton: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.primary.green,
   },
-  verifyButtonText: {
-    color: '#fff',
+  actionButtonText: {
+    color: colors.bg.darkest,
     fontSize: 14,
     fontWeight: '600',
   },
   resetButton: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: 'transparent',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#FF3B30',
+    borderColor: colors.status.error,
+    marginLeft: 'auto',
   },
   resetButtonText: {
-    color: '#FF3B30',
+    color: colors.status.error,
     fontSize: 14,
     fontWeight: '600',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 16,
-    marginTop: 40,
   },
 });

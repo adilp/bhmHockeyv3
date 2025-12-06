@@ -14,6 +14,8 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEventStore } from '../../../stores/eventStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { openVenmoPayment, getPaymentStatusInfo } from '../../../utils/venmo';
+import { Badge } from '../../../components';
+import { colors, spacing, radius } from '../../../theme';
 import type { Position } from '@bhmhockey/shared';
 
 export default function EventDetailScreen() {
@@ -47,6 +49,8 @@ export default function EventDetailScreen() {
     if (selectedEvent) {
       navigation.setOptions({
         title: selectedEvent.name,
+        headerStyle: { backgroundColor: colors.bg.dark },
+        headerTintColor: colors.text.primary,
       });
     }
   }, [selectedEvent, navigation]);
@@ -72,7 +76,6 @@ export default function EventDetailScreen() {
   const handleRegister = async () => {
     if (!id || !isAuthenticated || !user) return;
 
-    // Check if user has positions set up
     const positions = user.positions;
     const positionCount = positions
       ? Object.keys(positions).filter(k => positions[k as keyof typeof positions]).length
@@ -90,7 +93,6 @@ export default function EventDetailScreen() {
       return;
     }
 
-    // If user has exactly one position, auto-register
     if (positionCount === 1) {
       const position = positions?.goalie ? 'Goalie' : 'Skater';
       const success = await register(id, position as Position);
@@ -100,7 +102,6 @@ export default function EventDetailScreen() {
       return;
     }
 
-    // User has multiple positions - show picker
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -111,19 +112,14 @@ export default function EventDetailScreen() {
         async (buttonIndex) => {
           if (buttonIndex === 1) {
             const success = await register(id, 'Goalie');
-            if (success) {
-              Alert.alert('Success', 'You have been registered as a Goalie!');
-            }
+            if (success) Alert.alert('Success', 'You have been registered as a Goalie!');
           } else if (buttonIndex === 2) {
             const success = await register(id, 'Skater');
-            if (success) {
-              Alert.alert('Success', 'You have been registered as a Skater!');
-            }
+            if (success) Alert.alert('Success', 'You have been registered as a Skater!');
           }
         }
       );
     } else {
-      // Android - use Alert with buttons
       Alert.alert(
         'Register as which position?',
         'Select the position you want to play',
@@ -133,18 +129,14 @@ export default function EventDetailScreen() {
             text: 'Goalie',
             onPress: async () => {
               const success = await register(id, 'Goalie');
-              if (success) {
-                Alert.alert('Success', 'You have been registered as a Goalie!');
-              }
+              if (success) Alert.alert('Success', 'You have been registered as a Goalie!');
             },
           },
           {
             text: 'Skater',
             onPress: async () => {
               const success = await register(id, 'Skater');
-              if (success) {
-                Alert.alert('Success', 'You have been registered as a Skater!');
-              }
+              if (success) Alert.alert('Success', 'You have been registered as a Skater!');
             },
           },
         ]
@@ -165,16 +157,13 @@ export default function EventDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             const success = await cancelRegistration(id);
-            if (success) {
-              Alert.alert('Cancelled', 'Your registration has been cancelled.');
-            }
+            if (success) Alert.alert('Cancelled', 'Your registration has been cancelled.');
           },
         },
       ]
     );
   };
 
-  // Payment handlers (Phase 4)
   const handlePayWithVenmo = async () => {
     if (!selectedEvent || !selectedEvent.creatorVenmoHandle) {
       Alert.alert('Error', 'Organizer has not set up their Venmo handle.');
@@ -215,7 +204,7 @@ export default function EventDetailScreen() {
   if (isLoading || !selectedEvent) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.primary.teal} />
         <Text style={styles.loadingText}>Loading event...</Text>
       </View>
     );
@@ -243,19 +232,13 @@ export default function EventDetailScreen() {
         </Text>
         <View style={styles.badgeRow}>
           {selectedEvent.isRegistered && (
-            <View style={styles.registeredBadge}>
-              <Text style={styles.registeredBadgeText}>You're Registered</Text>
-            </View>
+            <Badge variant="green">You're Registered</Badge>
           )}
           {selectedEvent.visibility === 'InviteOnly' && (
-            <View style={styles.inviteOnlyBadge}>
-              <Text style={styles.inviteOnlyBadgeText}>Invite Only</Text>
-            </View>
+            <Badge variant="warning">Invite Only</Badge>
           )}
           {selectedEvent.visibility === 'OrganizationMembers' && (
-            <View style={styles.membersBadge}>
-              <Text style={styles.membersBadgeText}>Members Only</Text>
-            </View>
+            <Badge variant="teal">Members Only</Badge>
           )}
         </View>
       </View>
@@ -271,7 +254,7 @@ export default function EventDetailScreen() {
           <Text style={styles.infoLabel}>Time</Text>
           <Text style={styles.infoValue}>{formatTime(selectedEvent.eventDate)}</Text>
         </View>
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, styles.infoRowLast]}>
           <Text style={styles.infoLabel}>Duration</Text>
           <Text style={styles.infoValue}>{selectedEvent.duration} minutes</Text>
         </View>
@@ -308,9 +291,7 @@ export default function EventDetailScreen() {
               <View
                 style={[
                   styles.progressFill,
-                  {
-                    width: `${(selectedEvent.registeredCount / selectedEvent.maxPlayers) * 100}%`,
-                  },
+                  { width: `${(selectedEvent.registeredCount / selectedEvent.maxPlayers) * 100}%` },
                   isFull && styles.progressFillFull,
                 ]}
               />
@@ -330,12 +311,11 @@ export default function EventDetailScreen() {
         </View>
       )}
 
-      {/* Payment Section - only show for paid events when registered */}
+      {/* Payment Section */}
       {selectedEvent.isRegistered && selectedEvent.cost > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment</Text>
 
-          {/* Payment Status Badge */}
           {selectedEvent.myPaymentStatus && (
             <View style={[
               styles.paymentStatusBadge,
@@ -350,26 +330,18 @@ export default function EventDetailScreen() {
             </View>
           )}
 
-          {/* Show Pay with Venmo button if payment is pending */}
           {selectedEvent.myPaymentStatus === 'Pending' && (
             <View style={styles.paymentActions}>
               {selectedEvent.creatorVenmoHandle ? (
                 <>
-                  <TouchableOpacity
-                    style={styles.venmoButton}
-                    onPress={handlePayWithVenmo}
-                  >
+                  <TouchableOpacity style={styles.venmoButton} onPress={handlePayWithVenmo}>
                     <Text style={styles.venmoButtonText}>Pay with Venmo</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.markPaidButton}
-                    onPress={handleMarkAsPaid}
-                  >
+                  <TouchableOpacity style={styles.markPaidButton} onPress={handleMarkAsPaid}>
                     <Text style={styles.markPaidButtonText}>I've Already Paid</Text>
                   </TouchableOpacity>
 
-                  {/* P2P Disclaimer */}
                   <Text style={styles.paymentDisclaimer}>
                     Payment goes directly to the organizer via Venmo. BHM Hockey does not
                     process payments or mediate disputes.
@@ -383,14 +355,12 @@ export default function EventDetailScreen() {
             </View>
           )}
 
-          {/* Show waiting message if marked as paid */}
           {selectedEvent.myPaymentStatus === 'MarkedPaid' && (
             <Text style={styles.waitingText}>
               Your payment is awaiting verification by the organizer.
             </Text>
           )}
 
-          {/* Show verified message */}
           {selectedEvent.myPaymentStatus === 'Verified' && (
             <Text style={styles.verifiedText}>
               Your payment has been verified. You're all set!
@@ -413,10 +383,7 @@ export default function EventDetailScreen() {
       {isAuthenticated && (
         <View style={styles.buttonContainer}>
           {selectedEvent.isRegistered ? (
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleCancelRegistration}
-            >
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRegistration}>
               <Text style={styles.cancelButtonText}>Cancel Registration</Text>
             </TouchableOpacity>
           ) : (
@@ -435,13 +402,11 @@ export default function EventDetailScreen() {
 
       {!isAuthenticated && (
         <View style={styles.loginPrompt}>
-          <Text style={styles.loginPromptText}>
-            Log in to register for this event
-          </Text>
+          <Text style={styles.loginPromptText}>Log in to register for this event</Text>
         </View>
       )}
 
-      {/* Organizer Actions - View Registrations */}
+      {/* Organizer Actions */}
       {selectedEvent.canManage && (
         <View style={styles.organizerSection}>
           <TouchableOpacity
@@ -455,7 +420,6 @@ export default function EventDetailScreen() {
         </View>
       )}
 
-      {/* Bottom padding */}
       <View style={{ height: 40 }} />
     </ScrollView>
   );
@@ -464,116 +428,87 @@ export default function EventDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.bg.darkest,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: spacing.lg,
+    backgroundColor: colors.bg.darkest,
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: spacing.sm,
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
   },
   errorText: {
     fontSize: 16,
-    color: '#FF3B30',
+    color: colors.status.error,
     textAlign: 'center',
   },
   header: {
-    backgroundColor: '#fff',
-    padding: 20,
+    backgroundColor: colors.bg.dark,
+    padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.border.default,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#333',
-    marginBottom: 4,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
   },
   organization: {
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
   },
   badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  registeredBadge: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  registeredBadgeText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  inviteOnlyBadge: {
-    backgroundColor: '#FFF3CD',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  inviteOnlyBadgeText: {
-    color: '#856404',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  membersBadge: {
-    backgroundColor: '#CCE5FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  membersBadgeText: {
-    color: '#004085',
-    fontSize: 14,
-    fontWeight: '600',
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
   section: {
-    backgroundColor: '#fff',
-    padding: 16,
-    marginTop: 12,
+    backgroundColor: colors.bg.dark,
+    padding: spacing.md,
+    marginTop: spacing.sm,
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#999',
+    color: colors.text.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border.default,
+  },
+  infoRowLast: {
+    borderBottomWidth: 0,
   },
   infoLabel: {
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
   },
   infoValue: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text.primary,
     fontWeight: '500',
   },
   venueText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text.secondary,
     lineHeight: 24,
   },
   descriptionText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text.secondary,
     lineHeight: 24,
   },
   availabilityContainer: {
@@ -582,116 +517,110 @@ const styles = StyleSheet.create({
   },
   availabilityInfo: {
     alignItems: 'center',
-    marginRight: 20,
+    marginRight: spacing.lg,
   },
   spotsNumber: {
     fontSize: 36,
     fontWeight: '700',
-    color: '#4CAF50',
+    color: colors.primary.green,
   },
   spotsNumberFull: {
-    color: '#FF3B30',
+    color: colors.status.error,
   },
   spotsLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.text.muted,
   },
   progressContainer: {
     flex: 1,
   },
   progressBar: {
     height: 8,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 4,
+    backgroundColor: colors.bg.hover,
+    borderRadius: radius.sm,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
-    borderRadius: 4,
+    backgroundColor: colors.primary.green,
+    borderRadius: radius.sm,
   },
   progressFillFull: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.status.error,
   },
   progressText: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 8,
+    color: colors.text.muted,
+    marginTop: spacing.sm,
   },
   costText: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#333',
-  },
-  costNote: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 4,
+    color: colors.text.primary,
   },
   deadlineText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text.secondary,
   },
   buttonContainer: {
-    padding: 20,
+    padding: spacing.lg,
   },
   registerButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: colors.primary.teal,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
     alignItems: 'center',
   },
   registerButtonText: {
-    color: '#fff',
+    color: colors.bg.darkest,
     fontSize: 18,
     fontWeight: '600',
   },
   cancelButton: {
-    backgroundColor: '#fff',
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: 'transparent',
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FF3B30',
+    borderColor: colors.status.error,
   },
   cancelButtonText: {
-    color: '#FF3B30',
+    color: colors.status.error,
     fontSize: 18,
     fontWeight: '600',
   },
   disabledButton: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.bg.hover,
   },
   disabledButtonText: {
-    color: '#999',
+    color: colors.text.subtle,
   },
   loginPrompt: {
-    padding: 20,
+    padding: spacing.lg,
     alignItems: 'center',
   },
   loginPromptText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
   },
-  // Payment styles (Phase 4)
   paymentStatusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
     alignSelf: 'flex-start',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   paymentStatusText: {
     fontSize: 14,
     fontWeight: '600',
   },
   paymentActions: {
-    gap: 12,
+    gap: spacing.sm,
   },
   venmoButton: {
     backgroundColor: '#008CFF',
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: radius.md,
     alignItems: 'center',
   },
   venmoButtonText: {
@@ -700,9 +629,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   markPaidButton: {
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: radius.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#008CFF',
@@ -714,38 +643,36 @@ const styles = StyleSheet.create({
   },
   noVenmoText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.text.muted,
     fontStyle: 'italic',
   },
   waitingText: {
     fontSize: 14,
-    color: '#0C5460',
+    color: colors.status.warning,
   },
   verifiedText: {
     fontSize: 14,
-    color: '#155724',
+    color: colors.primary.green,
     fontWeight: '500',
   },
   paymentDisclaimer: {
     fontSize: 12,
-    color: '#999',
+    color: colors.text.subtle,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: spacing.sm,
     fontStyle: 'italic',
   },
-  // Organizer styles (Phase 4)
   organizerSection: {
-    padding: 20,
-    paddingTop: 0,
+    paddingHorizontal: spacing.lg,
   },
   viewRegistrationsButton: {
-    backgroundColor: '#333',
+    backgroundColor: colors.primary.purple,
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: radius.md,
     alignItems: 'center',
   },
   viewRegistrationsButtonText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },
