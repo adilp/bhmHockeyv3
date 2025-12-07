@@ -38,6 +38,14 @@ public class OrganizationService : IOrganizationService
         };
         _context.OrganizationAdmins.Add(admin);
 
+        // Also subscribe creator as a member
+        var subscription = new OrganizationSubscription
+        {
+            OrganizationId = organization.Id,
+            UserId = creatorId
+        };
+        _context.OrganizationSubscriptions.Add(subscription);
+
         await _context.SaveChangesAsync();
 
         return await MapToDto(organization, creatorId);

@@ -36,7 +36,7 @@ export default function OrganizationDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showMembers, setShowMembers] = useState(false);
+  const [showMembers, setShowMembers] = useState(true);
   const [selectedMember, setSelectedMember] = useState<OrganizationMember | null>(null);
   const [showMemberActions, setShowMemberActions] = useState(false);
 
