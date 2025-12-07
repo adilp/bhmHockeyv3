@@ -1342,37 +1342,90 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task RegisterAsync_AssignsToTeamWithFewerPlayers()
+    public async Task RegisterAsync_AssignsSkaterToTeamWithFewerSkaters()
     {
-        // Arrange - Create event with 2 players on Black, 1 on White
+        // Arrange - Create event with 2 skaters on Black, 1 skater on White
         var creator = await CreateTestUser("creator@example.com");
         var evt = await CreateTestEvent(creator.Id);
 
-        // Add 2 players to Black team
+        // Add 2 skaters to Black team
         var black1 = await CreateTestUser("black1@example.com");
         var black2 = await CreateTestUser("black2@example.com");
         var reg1 = await CreateRegistration(evt.Id, black1.Id);
         var reg2 = await CreateRegistration(evt.Id, black2.Id);
         reg1.TeamAssignment = "Black";
+        reg1.RegisteredPosition = "Skater";
         reg2.TeamAssignment = "Black";
+        reg2.RegisteredPosition = "Skater";
 
-        // Add 1 player to White team
+        // Add 1 skater to White team
         var white1 = await CreateTestUser("white1@example.com");
         var reg3 = await CreateRegistration(evt.Id, white1.Id);
         reg3.TeamAssignment = "White";
+        reg3.RegisteredPosition = "Skater";
 
         await _context.SaveChangesAsync();
 
-        // New user registers
+        // New skater registers
         var newUser = await CreateTestUser("new@example.com");
 
         // Act
         await _sut.RegisterAsync(evt.Id, newUser.Id);
 
-        // Assert - Should be assigned to White (fewer players)
+        // Assert - Should be assigned to White (fewer skaters)
         var registration = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == newUser.Id);
         registration!.TeamAssignment.Should().Be("White");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_AssignsGoalieToTeamWithFewerGoalies()
+    {
+        // Arrange - Event has 2 goalies on White, 0 on Black
+        // New goalie should go to Black regardless of total player count
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Add 2 goalies to White team
+        var goalie1 = await CreateTestUser("goalie1@example.com",
+            positions: new Dictionary<string, string> { { "goalie", "Gold" } });
+        var goalie2 = await CreateTestUser("goalie2@example.com",
+            positions: new Dictionary<string, string> { { "goalie", "Gold" } });
+        var reg1 = await CreateRegistration(evt.Id, goalie1.Id);
+        var reg2 = await CreateRegistration(evt.Id, goalie2.Id);
+        reg1.TeamAssignment = "White";
+        reg1.RegisteredPosition = "Goalie";
+        reg2.TeamAssignment = "White";
+        reg2.RegisteredPosition = "Goalie";
+
+        // Add many skaters to Black team (more total players on Black)
+        var skater1 = await CreateTestUser("skater1@example.com");
+        var skater2 = await CreateTestUser("skater2@example.com");
+        var skater3 = await CreateTestUser("skater3@example.com");
+        var reg3 = await CreateRegistration(evt.Id, skater1.Id);
+        var reg4 = await CreateRegistration(evt.Id, skater2.Id);
+        var reg5 = await CreateRegistration(evt.Id, skater3.Id);
+        reg3.TeamAssignment = "Black";
+        reg3.RegisteredPosition = "Skater";
+        reg4.TeamAssignment = "Black";
+        reg4.RegisteredPosition = "Skater";
+        reg5.TeamAssignment = "Black";
+        reg5.RegisteredPosition = "Skater";
+
+        await _context.SaveChangesAsync();
+
+        // New goalie registers
+        var newGoalie = await CreateTestUser("newgoalie@example.com",
+            positions: new Dictionary<string, string> { { "goalie", "Silver" } });
+
+        // Act
+        await _sut.RegisterAsync(evt.Id, newGoalie.Id);
+
+        // Assert - Should be assigned to Black (0 goalies) despite Black having more total players
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == newGoalie.Id);
+        registration!.TeamAssignment.Should().Be("Black");
+        registration.RegisteredPosition.Should().Be("Goalie");
     }
 
     [Fact]

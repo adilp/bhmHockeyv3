@@ -322,8 +322,8 @@ public class EventService : IEventService
             throw new InvalidOperationException("Event is full");
         }
 
-        // Determine team assignment (balanced between Black and White)
-        var teamAssignment = await DetermineTeamAssignmentAsync(eventId);
+        // Determine team assignment (balanced by position - goalies with goalies, skaters with skaters)
+        var teamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
 
         if (existingReg != null)
         {
@@ -357,15 +357,18 @@ public class EventService : IEventService
     }
 
     /// <summary>
-    /// Determines team assignment based on current team balance.
-    /// Assigns to the team with fewer players, defaulting to Black if equal.
+    /// Determines team assignment based on current team balance by position.
+    /// Goalies are balanced with goalies, skaters with skaters.
+    /// Assigns to the team with fewer players of the same position, defaulting to Black if equal.
     /// </summary>
-    private async Task<string> DetermineTeamAssignmentAsync(Guid eventId)
+    private async Task<string> DetermineTeamAssignmentAsync(Guid eventId, string registeredPosition)
     {
         var blackCount = await _context.EventRegistrations
-            .CountAsync(r => r.EventId == eventId && r.Status == "Registered" && r.TeamAssignment == "Black");
+            .CountAsync(r => r.EventId == eventId && r.Status == "Registered"
+                && r.TeamAssignment == "Black" && r.RegisteredPosition == registeredPosition);
         var whiteCount = await _context.EventRegistrations
-            .CountAsync(r => r.EventId == eventId && r.Status == "Registered" && r.TeamAssignment == "White");
+            .CountAsync(r => r.EventId == eventId && r.Status == "Registered"
+                && r.TeamAssignment == "White" && r.RegisteredPosition == registeredPosition);
 
         return blackCount <= whiteCount ? "Black" : "White";
     }
