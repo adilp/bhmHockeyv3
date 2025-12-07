@@ -188,7 +188,7 @@ public class UsersControllerTests
         // Arrange
         var userId = Guid.NewGuid();
         var orgDto = new OrganizationDto(
-            Guid.NewGuid(), "Test Org", "Description", "Boston", "Gold", Guid.NewGuid(), 10, true, false, DateTime.UtcNow);
+            Guid.NewGuid(), "Test Org", "Description", "Boston", new List<string> { "Gold" }, Guid.NewGuid(), 10, true, false, DateTime.UtcNow);
         var subscriptions = new List<OrganizationSubscriptionDto>
         {
             new OrganizationSubscriptionDto(Guid.NewGuid(), orgDto, true, DateTime.UtcNow)
@@ -266,6 +266,7 @@ public class UsersControllerTests
                 RegistrationDeadline: DateTime.UtcNow.AddDays(6),
                 Status: "Published",
                 Visibility: "Public",
+                SkillLevels: null,           // Multi-skill levels
                 IsRegistered: true,
                 CanManage: false,
                 CreatedAt: DateTime.UtcNow,

@@ -61,7 +61,7 @@ public class OrganizationServiceTests : IDisposable
         string name = "Test Org",
         string? description = "Test Description",
         string? location = "Boston",
-        string? skillLevel = "Gold",
+        List<string>? skillLevels = null,
         bool isActive = true)
     {
         var org = new Organization
@@ -70,7 +70,7 @@ public class OrganizationServiceTests : IDisposable
             Name = name,
             Description = description,
             Location = location,
-            SkillLevel = skillLevel,
+            SkillLevels = skillLevels ?? new List<string> { "Gold" },
             CreatorId = creatorId,
             IsActive = isActive,
             CreatedAt = DateTime.UtcNow
@@ -329,7 +329,7 @@ public class OrganizationServiceTests : IDisposable
             name: "Original Name",
             description: "Original Description",
             location: "Boston",
-            skillLevel: "Gold"
+            skillLevels: new List<string> { "Gold" }
         );
 
         var request = new UpdateOrganizationRequest("Updated Name", null, null, null);
@@ -342,7 +342,26 @@ public class OrganizationServiceTests : IDisposable
         result!.Name.Should().Be("Updated Name");           // Changed
         result.Description.Should().Be("Original Description"); // Preserved
         result.Location.Should().Be("Boston");               // Preserved
-        result.SkillLevel.Should().Be("Gold");               // Preserved
+        result.SkillLevels.Should().Contain("Gold");          // Preserved
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithInvalidSkillLevel_ThrowsException()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        var request = new UpdateOrganizationRequest(
+            null,
+            null,
+            null,
+            new List<string> { "Platinum" } // Invalid skill level
+        );
+
+        // Act & Assert
+        await _sut.Invoking(s => s.UpdateAsync(org.Id, request, creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid skill level*");
     }
 
     #endregion
@@ -393,7 +412,7 @@ public class OrganizationServiceTests : IDisposable
     {
         // Arrange
         var creator = await CreateTestUser();
-        var request = new CreateOrganizationRequest("New Org", "Description", "Location", "Silver");
+        var request = new CreateOrganizationRequest("New Org", "Description", "Location", new List<string> { "Silver" });
 
         // Act
         var result = await _sut.CreateAsync(request, creator.Id);
@@ -402,8 +421,26 @@ public class OrganizationServiceTests : IDisposable
         result.Should().NotBeNull();
         result.Name.Should().Be("New Org");
         result.CreatorId.Should().Be(creator.Id);
-        result.SubscriberCount.Should().Be(0);
-        result.IsSubscribed.Should().BeFalse();
+        result.SubscriberCount.Should().Be(1); // Creator is auto-subscribed
+        result.IsSubscribed.Should().BeTrue(); // Creator is auto-subscribed
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithInvalidSkillLevel_ThrowsException()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest(
+            "New Org",
+            "Description",
+            "Location",
+            new List<string> { "Platinum" } // Invalid skill level
+        );
+
+        // Act & Assert
+        await _sut.Invoking(s => s.CreateAsync(request, creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid skill level*");
     }
 
     #endregion
@@ -614,7 +651,7 @@ public class OrganizationServiceTests : IDisposable
     {
         // Arrange
         var creator = await CreateTestUser();
-        var request = new CreateOrganizationRequest("New Org", "Description", "Location", "Silver");
+        var request = new CreateOrganizationRequest("New Org", "Description", "Location", new List<string> { "Silver" });
 
         // Act
         var result = await _sut.CreateAsync(request, creator.Id);

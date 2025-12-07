@@ -9,6 +9,7 @@ public class OrganizationService : IOrganizationService
 {
     private readonly AppDbContext _context;
     private readonly IOrganizationAdminService _adminService;
+    private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
     public OrganizationService(AppDbContext context, IOrganizationAdminService adminService)
     {
@@ -16,14 +17,29 @@ public class OrganizationService : IOrganizationService
         _adminService = adminService;
     }
 
+    private void ValidateSkillLevels(List<string>? skillLevels)
+    {
+        if (skillLevels == null || skillLevels.Count == 0) return;
+
+        foreach (var level in skillLevels)
+        {
+            if (!ValidSkillLevels.Contains(level))
+            {
+                throw new InvalidOperationException($"Invalid skill level: '{level}'. Valid values: Gold, Silver, Bronze, D-League");
+            }
+        }
+    }
+
     public async Task<OrganizationDto> CreateAsync(CreateOrganizationRequest request, Guid creatorId)
     {
+        ValidateSkillLevels(request.SkillLevels);
+
         var organization = new Organization
         {
             Name = request.Name,
             Description = request.Description,
             Location = request.Location,
-            SkillLevel = request.SkillLevel,
+            SkillLevels = request.SkillLevels,
             CreatorId = creatorId
         };
 
@@ -90,7 +106,11 @@ public class OrganizationService : IOrganizationService
         if (request.Name != null) organization.Name = request.Name;
         if (request.Description != null) organization.Description = request.Description;
         if (request.Location != null) organization.Location = request.Location;
-        if (request.SkillLevel != null) organization.SkillLevel = request.SkillLevel;
+        if (request.SkillLevels != null)
+        {
+            ValidateSkillLevels(request.SkillLevels);
+            organization.SkillLevels = request.SkillLevels;
+        }
 
         organization.UpdatedAt = DateTime.UtcNow;
 
@@ -268,7 +288,7 @@ public class OrganizationService : IOrganizationService
             org.Name,
             org.Description,
             org.Location,
-            org.SkillLevel,
+            org.SkillLevels,
             org.CreatorId,
             subscriberCount,
             isSubscribed,

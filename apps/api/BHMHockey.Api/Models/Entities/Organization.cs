@@ -8,7 +8,7 @@ public class Organization
     public Guid CreatorId { get; set; }
     public User Creator { get; set; } = null!;
     public string? Location { get; set; }
-    public string? SkillLevel { get; set; } // Beginner, Intermediate, Advanced, All
+    public List<string>? SkillLevels { get; set; } // Gold, Silver, Bronze, D-League (multiple allowed)
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

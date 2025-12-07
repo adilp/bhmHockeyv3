@@ -19,7 +19,8 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useEventStore } from '../../stores/eventStore';
 import { useOrganizationStore } from '../../stores/organizationStore';
-import type { EventVisibility } from '@bhmhockey/shared';
+import type { EventVisibility, SkillLevel } from '@bhmhockey/shared';
+import { SkillLevelSelector } from '../../components';
 
 export default function CreateEventScreen() {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function CreateEventScreen() {
   const [maxPlayers, setMaxPlayers] = useState('12');
   const [cost, setCost] = useState('0');
   const [visibility, setVisibility] = useState<EventVisibility>('Public');
+  const [skillLevels, setSkillLevels] = useState<SkillLevel[]>([]);
 
   // Keyboard accessory ID for iOS
   const inputAccessoryViewID = 'eventFormAccessory';
@@ -157,6 +159,7 @@ export default function CreateEventScreen() {
       maxPlayers: parseInt(maxPlayers, 10),
       cost: parseFloat(cost),
       visibility,
+      skillLevels: skillLevels.length > 0 ? skillLevels : undefined,
     });
 
     if (result) {
@@ -358,6 +361,18 @@ export default function CreateEventScreen() {
         )}
       </View>
 
+      {/* Skill Levels */}
+      <View style={styles.field}>
+        <SkillLevelSelector
+          selected={skillLevels}
+          onChange={setSkillLevels}
+          label="Skill Levels (optional)"
+        />
+        <Text style={styles.skillNote}>
+          Leave empty to allow all skill levels
+        </Text>
+      </View>
+
       {/* Submit Button */}
       <TouchableOpacity
         style={[styles.submitButton, isCreating && styles.submitButtonDisabled]}
@@ -520,6 +535,11 @@ const styles = StyleSheet.create({
     color: '#856404',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  skillNote: {
+    fontSize: 12,
+    color: '#8B949E',
+    marginTop: 4,
   },
   submitButton: {
     backgroundColor: '#007AFF',

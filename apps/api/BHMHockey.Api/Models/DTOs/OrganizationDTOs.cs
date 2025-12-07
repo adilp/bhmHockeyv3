@@ -5,7 +5,7 @@ public record OrganizationDto(
     string Name,
     string? Description,
     string? Location,
-    string? SkillLevel,
+    List<string>? SkillLevels,  // Gold, Silver, Bronze, D-League (multiple allowed)
     Guid CreatorId,
     int SubscriberCount,
     bool IsSubscribed,
@@ -28,14 +28,14 @@ public record CreateOrganizationRequest(
     string Name,
     string? Description,
     string? Location,
-    string? SkillLevel
+    List<string>? SkillLevels  // Gold, Silver, Bronze, D-League (multiple allowed)
 );
 
 public record UpdateOrganizationRequest(
     string? Name,
     string? Description,
     string? Location,
-    string? SkillLevel
+    List<string>? SkillLevels  // Gold, Silver, Bronze, D-League (multiple allowed)
 );
 
 public record OrganizationSubscriptionDto(

@@ -16,6 +16,7 @@ public record EventDto(
     DateTime? RegistrationDeadline,
     string Status,
     string Visibility,            // Public, OrganizationMembers, InviteOnly
+    List<string>? SkillLevels,    // Event's skill levels (overrides org if set)
     bool IsRegistered,
     bool CanManage,               // True if current user can manage this event (creator for standalone, org admin for org events)
     DateTime CreatedAt,
@@ -36,7 +37,8 @@ public record CreateEventRequest(
     int MaxPlayers,
     decimal Cost,
     DateTime? RegistrationDeadline,
-    string? Visibility = "Public" // Default to public if not specified
+    string? Visibility = "Public", // Default to public if not specified
+    List<string>? SkillLevels = null  // Optional - overrides org's skill levels if set
 );
 
 public record UpdateEventRequest(
@@ -49,7 +51,8 @@ public record UpdateEventRequest(
     decimal? Cost,
     DateTime? RegistrationDeadline,
     string? Status,
-    string? Visibility            // Can change visibility after creation
+    string? Visibility,           // Can change visibility after creation
+    List<string>? SkillLevels     // Can change skill levels after creation
 );
 
 public record EventRegistrationDto(

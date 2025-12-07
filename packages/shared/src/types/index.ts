@@ -32,7 +32,7 @@ export interface Organization {
   description?: string;
   creatorId: string;
   location?: string;
-  skillLevel?: SkillLevel;
+  skillLevels?: SkillLevel[];  // Multiple skill levels allowed (e.g., ["Silver", "Gold"])
   subscriberCount: number;
   isSubscribed: boolean;
   isAdmin: boolean;       // True if current user is an admin of this organization
@@ -79,14 +79,14 @@ export interface CreateOrganizationRequest {
   name: string;
   description?: string;
   location?: string;
-  skillLevel?: SkillLevel;
+  skillLevels?: SkillLevel[];  // Multiple skill levels allowed
 }
 
 export interface UpdateOrganizationRequest {
   name?: string;
   description?: string;
   location?: string;
-  skillLevel?: SkillLevel;
+  skillLevels?: SkillLevel[];  // Multiple skill levels allowed
 }
 
 // Event types
@@ -146,6 +146,7 @@ export interface EventDto {
   registrationDeadline?: string;
   status: EventStatus;
   visibility: EventVisibility;   // Public, OrganizationMembers, InviteOnly
+  skillLevels?: SkillLevel[];    // Event's skill levels (overrides org if set)
   isRegistered: boolean;
   canManage: boolean;            // True if current user can manage this event (creator for standalone, org admin for org events)
   createdAt: string;
@@ -183,6 +184,7 @@ export interface CreateEventRequest {
   cost: number;
   registrationDeadline?: string;
   visibility?: EventVisibility;  // Default: 'Public'
+  skillLevels?: SkillLevel[];    // Optional - overrides org's skill levels if set
 }
 
 export interface UpdateEventRequest {
@@ -196,6 +198,7 @@ export interface UpdateEventRequest {
   registrationDeadline?: string;
   status?: EventStatus;
   visibility?: EventVisibility;  // Can change visibility after creation
+  skillLevels?: SkillLevel[];    // Can change skill levels after creation
 }
 
 // Payment request types (Phase 4)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,20 +10,13 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { organizationService } from '@bhmhockey/api-client';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
-import { Badge } from '../../components';
+import { Badge, SkillLevelBadges } from '../../components';
 import { colors, spacing, radius } from '../../theme';
 import type { Organization, OrganizationMember } from '@bhmhockey/shared';
-
-const skillLevelColors: Record<string, string> = {
-  Gold: '#FFD700',
-  Silver: '#C0C0C0',
-  Bronze: '#CD7F32',
-  'D-League': colors.primary.blue,
-};
 
 export default function OrganizationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,9 +33,11 @@ export default function OrganizationDetailScreen() {
   const [selectedMember, setSelectedMember] = useState<OrganizationMember | null>(null);
   const [showMemberActions, setShowMemberActions] = useState(false);
 
-  useEffect(() => {
-    loadOrganization();
-  }, [id]);
+  useFocusEffect(
+    useCallback(() => {
+      loadOrganization();
+    }, [id])
+  );
 
   const loadOrganization = async () => {
     if (!id) return;
@@ -222,6 +217,14 @@ export default function OrganizationDetailScreen() {
           title: organization.name,
           headerStyle: { backgroundColor: colors.bg.dark },
           headerTintColor: colors.text.primary,
+          headerRight: isAdmin ? () => (
+            <TouchableOpacity
+              onPress={() => router.push(`/organizations/edit?id=${id}`)}
+              style={styles.headerButton}
+            >
+              <Text style={styles.headerButtonText}>Edit</Text>
+            </TouchableOpacity>
+          ) : undefined,
         }}
       />
 
@@ -233,14 +236,7 @@ export default function OrganizationDetailScreen() {
             {isAdmin && <Badge variant="purple">Admin</Badge>}
           </View>
 
-          {organization.skillLevel && (
-            <View style={[
-              styles.skillBadge,
-              { backgroundColor: skillLevelColors[organization.skillLevel] || colors.text.muted }
-            ]}>
-              <Text style={styles.skillText}>{organization.skillLevel}</Text>
-            </View>
-          )}
+          <SkillLevelBadges levels={organization.skillLevels} />
         </View>
 
         {/* Description */}
@@ -662,6 +658,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text.muted,
     textAlign: 'center',
+    fontWeight: '600',
+  },
+  headerButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  headerButtonText: {
+    color: colors.primary.teal,
+    fontSize: 16,
     fontWeight: '600',
   },
 });

@@ -452,6 +452,31 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateAsync_WithInvalidSkillLevel_ThrowsException()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateEventRequest(
+            OrganizationId: null,
+            Name: "Test Event",
+            Description: null,
+            EventDate: DateTime.UtcNow.AddDays(7),
+            Duration: 60,
+            Venue: null,
+            MaxPlayers: 10,
+            Cost: 0,
+            RegistrationDeadline: null,
+            Visibility: "Public",
+            SkillLevels: new List<string> { "Platinum" } // Invalid skill level
+        );
+
+        // Act & Assert
+        await _sut.Invoking(s => s.CreateAsync(request, creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid skill level*");
+    }
+
+    [Fact]
     public async Task UpdateAsync_SetOrganizationMembersWithoutOrg_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -468,12 +493,39 @@ public class EventServiceTests : IDisposable
             Cost: null,
             RegistrationDeadline: null,
             Status: null,
-            Visibility: "OrganizationMembers" // Invalid - no org on event
+            Visibility: "OrganizationMembers", // Invalid - no org on event
+            SkillLevels: null
         );
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _sut.UpdateAsync(evt.Id, request, creator.Id));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithInvalidSkillLevel_ThrowsException()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id);
+        var request = new UpdateEventRequest(
+            Name: null,
+            Description: null,
+            EventDate: null,
+            Duration: null,
+            Venue: null,
+            MaxPlayers: null,
+            Cost: null,
+            RegistrationDeadline: null,
+            Status: null,
+            Visibility: null,
+            SkillLevels: new List<string> { "Platinum" } // Invalid skill level
+        );
+
+        // Act & Assert
+        await _sut.Invoking(s => s.UpdateAsync(evt.Id, request, creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid skill level*");
     }
 
     #endregion
@@ -496,7 +548,8 @@ public class EventServiceTests : IDisposable
             Cost: null,
             RegistrationDeadline: null,
             Status: null,
-            Visibility: null
+            Visibility: null,
+            SkillLevels: null
         );
 
         // Act
@@ -525,7 +578,8 @@ public class EventServiceTests : IDisposable
             Cost: null,
             RegistrationDeadline: null,
             Status: null,
-            Visibility: null
+            Visibility: null,
+            SkillLevels: null
         );
 
         // Act
@@ -1016,7 +1070,8 @@ public class EventServiceTests : IDisposable
             Cost: null,
             RegistrationDeadline: null,
             Status: null,
-            Visibility: null
+            Visibility: null,
+            SkillLevels: null
         );
 
         // Act - Org admin (who is NOT the event creator) updates the event
@@ -1048,7 +1103,8 @@ public class EventServiceTests : IDisposable
             Cost: null,
             RegistrationDeadline: null,
             Status: null,
-            Visibility: null
+            Visibility: null,
+            SkillLevels: null
         );
 
         // Act

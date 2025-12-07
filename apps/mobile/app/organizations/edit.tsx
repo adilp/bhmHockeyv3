@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,46 +11,82 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
-import { useOrganizationStore } from '../../stores/organizationStore';
-import type { SkillLevel } from '@bhmhockey/shared';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { organizationService } from '@bhmhockey/api-client';
+import type { SkillLevel, Organization } from '@bhmhockey/shared';
 import { colors, spacing, radius, typography } from '../../theme';
 import { SkillLevelSelector } from '../../components';
 
-export default function CreateOrganizationScreen() {
+export default function EditOrganizationScreen() {
   const router = useRouter();
-  const { createOrganization, isLoading } = useOrganizationStore();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [skillLevels, setSkillLevels] = useState<SkillLevel[]>([]);
 
-  const handleCreate = async () => {
+  useEffect(() => {
+    loadOrganization();
+  }, [id]);
+
+  const loadOrganization = async () => {
+    if (!id) return;
+
+    setIsLoading(true);
+    try {
+      const org = await organizationService.getById(id);
+      setName(org.name);
+      setDescription(org.description || '');
+      setSkillLevels(org.skillLevels || []);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load organization');
+      router.back();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!id) return;
+
     if (!name.trim()) {
       Alert.alert('Error', 'Organization name is required');
       return;
     }
 
+    setIsSaving(true);
     try {
-      await createOrganization({
+      await organizationService.update(id, {
         name: name.trim(),
         description: description.trim() || undefined,
         skillLevels: skillLevels.length > 0 ? skillLevels : undefined,
       });
 
-      Alert.alert('Success', 'Organization created successfully!', [
+      Alert.alert('Success', 'Organization updated successfully!', [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create organization. Please try again.');
+      Alert.alert('Error', 'Failed to update organization. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary.teal} />
+      </View>
+    );
+  }
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: 'Create Organization',
+          title: 'Edit Organization',
           headerBackTitle: 'Cancel',
           headerStyle: {
             backgroundColor: colors.bg.darkest,
@@ -103,20 +139,16 @@ export default function CreateOrganizationScreen() {
           />
 
           <TouchableOpacity
-            style={[styles.createButton, isLoading && styles.createButtonDisabled]}
-            onPress={handleCreate}
-            disabled={isLoading}
+            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isSaving}
           >
-            {isLoading ? (
+            {isSaving ? (
               <ActivityIndicator color={colors.bg.darkest} />
             ) : (
-              <Text style={styles.createButtonText}>Create Organization</Text>
+              <Text style={styles.saveButtonText}>Save Changes</Text>
             )}
           </TouchableOpacity>
-
-          <Text style={styles.hint}>
-            As the creator, you'll be able to manage this organization and create events.
-          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </>
@@ -126,6 +158,12 @@ export default function CreateOrganizationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.bg.darkest,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: colors.bg.darkest,
   },
   scrollView: {
@@ -162,26 +200,19 @@ const styles = StyleSheet.create({
     minHeight: 100,
     paddingTop: spacing.md,
   },
-  createButton: {
+  saveButton: {
     backgroundColor: colors.primary.teal,
     borderRadius: radius.md,
     padding: spacing.md,
     alignItems: 'center',
     marginTop: spacing.sm,
   },
-  createButtonDisabled: {
+  saveButtonDisabled: {
     opacity: 0.7,
   },
-  createButtonText: {
+  saveButtonText: {
     color: colors.bg.darkest,
     fontSize: 16,
     fontWeight: '600',
-  },
-  hint: {
-    marginTop: spacing.md,
-    fontSize: 14,
-    color: colors.text.muted,
-    textAlign: 'center',
-    lineHeight: 20,
   },
 });

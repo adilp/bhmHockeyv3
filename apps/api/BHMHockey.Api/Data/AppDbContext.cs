@@ -70,6 +70,27 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.CreatorId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Store SkillLevels as JSONB array for multi-skill level support
+            if (isInMemory)
+            {
+                var listConverter = new ValueConverter<List<string>?, string?>(
+                    v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => v == null ? null : JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null)
+                );
+                var listComparer = new ValueComparer<List<string>?>(
+                    (c1, c2) => c1 != null && c2 != null ? c1.SequenceEqual(c2) : c1 == c2,
+                    c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                    c => c == null ? null : new List<string>(c)
+                );
+                entity.Property(e => e.SkillLevels)
+                    .HasConversion(listConverter)
+                    .Metadata.SetValueComparer(listComparer);
+            }
+            else
+            {
+                entity.Property(e => e.SkillLevels).HasColumnType("jsonb");
+            }
         });
 
         // OrganizationSubscription configuration
@@ -120,6 +141,27 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.CreatorId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Store SkillLevels as JSONB array for multi-skill level support
+            if (isInMemory)
+            {
+                var listConverter = new ValueConverter<List<string>?, string?>(
+                    v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => v == null ? null : JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null)
+                );
+                var listComparer = new ValueComparer<List<string>?>(
+                    (c1, c2) => c1 != null && c2 != null ? c1.SequenceEqual(c2) : c1 == c2,
+                    c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                    c => c == null ? null : new List<string>(c)
+                );
+                entity.Property(e => e.SkillLevels)
+                    .HasConversion(listConverter)
+                    .Metadata.SetValueComparer(listComparer);
+            }
+            else
+            {
+                entity.Property(e => e.SkillLevels).HasColumnType("jsonb");
+            }
         });
 
         // EventRegistration configuration

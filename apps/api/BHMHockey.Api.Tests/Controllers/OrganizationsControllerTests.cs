@@ -115,7 +115,7 @@ public class OrganizationsControllerTests
     {
         // Arrange
         SetupAuthenticatedUser(_testUserId);
-        var request = new CreateOrganizationRequest("New Org", "Description", "Boston", "Gold");
+        var request = new CreateOrganizationRequest("New Org", "Description", "Boston", new List<string> { "Gold" });
         var createdOrg = CreateOrgDto("New Org");
         _mockOrgService.Setup(s => s.CreateAsync(request, _testUserId)).ReturnsAsync(createdOrg);
 
@@ -293,7 +293,7 @@ public class OrganizationsControllerTests
             name,
             "Description",
             "Location",
-            "Gold",
+            new List<string> { "Gold" },
             Guid.NewGuid(),
             10,
             isSubscribed,

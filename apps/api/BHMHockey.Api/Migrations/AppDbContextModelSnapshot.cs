@@ -61,6 +61,9 @@ namespace BHMHockey.Api.Migrations
                     b.Property<DateTime?>("RegistrationDeadline")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<List<string>>("SkillLevels")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -157,8 +160,8 @@ namespace BHMHockey.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<string>("SkillLevel")
-                        .HasColumnType("text");
+                    b.Property<List<string>>("SkillLevels")
+                        .HasColumnType("jsonb");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

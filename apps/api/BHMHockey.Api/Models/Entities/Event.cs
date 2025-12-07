@@ -26,6 +26,9 @@ public class Event
     // - InviteOnly: Only invited users can see/register (Phase B: will use EventInvitation table)
     public string Visibility { get; set; } = "Public";
 
+    // Optional skill levels - if set, overrides organization's skill levels
+    public List<string>? SkillLevels { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

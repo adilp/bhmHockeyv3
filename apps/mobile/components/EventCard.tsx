@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors, spacing, radius } from '../theme';
 import { Badge } from './Badge';
-import type { EventDto } from '@bhmhockey/shared';
+import { SkillLevelBadges } from './SkillLevelBadges';
+import type { EventDto, SkillLevel } from '@bhmhockey/shared';
 
 export type EventCardVariant = 'available' | 'registered' | 'organizing';
 
@@ -67,6 +68,13 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
 
         {/* Event name - least emphasis */}
         <Text style={styles.name} numberOfLines={1}>{event.name}</Text>
+
+        {/* Skill level badges */}
+        {event.skillLevels && event.skillLevels.length > 0 && (
+          <View style={styles.skillLevels}>
+            <SkillLevelBadges levels={event.skillLevels as SkillLevel[]} size="small" />
+          </View>
+        )}
 
         {/* Footer badges */}
         <View style={styles.footer}>
@@ -174,6 +182,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     color: colors.text.subtle,
+    marginBottom: spacing.xs,
+  },
+  skillLevels: {
     marginBottom: spacing.sm,
   },
   footer: {

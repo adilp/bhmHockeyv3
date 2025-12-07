@@ -9,3 +9,7 @@ export { OrgCard } from './OrgCard';
 
 export { SectionHeader } from './SectionHeader';
 export { EmptyState } from './EmptyState';
+
+// Skill level components
+export { SkillLevelBadges, skillLevelColors } from './SkillLevelBadges';
+export { SkillLevelSelector } from './SkillLevelSelector';

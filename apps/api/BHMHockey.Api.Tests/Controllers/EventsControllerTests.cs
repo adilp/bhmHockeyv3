@@ -81,6 +81,7 @@ public class EventsControllerTests
             RegistrationDeadline: DateTime.UtcNow.AddDays(6),
             Status: "Published",
             Visibility: visibility,
+            SkillLevels: null,           // Multi-skill levels
             IsRegistered: isRegistered,
             CanManage: isCreator,
             CreatedAt: DateTime.UtcNow,
@@ -252,7 +253,8 @@ public class EventsControllerTests
             Cost: null,
             RegistrationDeadline: null,
             Status: null,
-            Visibility: null
+            Visibility: null,
+            SkillLevels: null
         );
         var updatedEvent = CreateEventDto();
         _mockEventService.Setup(s => s.UpdateAsync(_testEventId, request, _testUserId))
@@ -271,7 +273,7 @@ public class EventsControllerTests
     {
         // Arrange
         SetupAuthenticatedUser();
-        var request = new UpdateEventRequest("Updated", null, null, null, null, null, null, null, null, null);
+        var request = new UpdateEventRequest("Updated", null, null, null, null, null, null, null, null, null, null);
         _mockEventService.Setup(s => s.UpdateAsync(_testEventId, request, _testUserId))
             .ReturnsAsync((EventDto?)null);
 

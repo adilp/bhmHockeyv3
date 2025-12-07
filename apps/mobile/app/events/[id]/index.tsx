@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   ActionSheetIOS,
   Platform,
 } from 'react-native';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-router';
 import { useEventStore } from '../../../stores/eventStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { openVenmoPayment, getPaymentStatusInfo } from '../../../utils/venmo';
@@ -20,7 +20,6 @@ import type { Position } from '@bhmhockey/shared';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const navigation = useNavigation();
   const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
   const {
@@ -35,25 +34,18 @@ export default function EventDetailScreen() {
     markPayment,
   } = useEventStore();
 
-  useEffect(() => {
-    if (id) {
-      fetchEventById(id);
-    }
-    return () => {
-      clearSelectedEvent();
-      clearError();
-    };
-  }, [id]);
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        fetchEventById(id);
+      }
+      return () => {
+        clearSelectedEvent();
+        clearError();
+      };
+    }, [id])
+  );
 
-  useEffect(() => {
-    if (selectedEvent) {
-      navigation.setOptions({
-        title: selectedEvent.name,
-        headerStyle: { backgroundColor: colors.bg.dark },
-        headerTintColor: colors.text.primary,
-      });
-    }
-  }, [selectedEvent, navigation]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -223,7 +215,23 @@ export default function EventDetailScreen() {
   const canRegister = isAuthenticated && !selectedEvent.isRegistered && !isFull;
 
   return (
-    <ScrollView style={styles.container}>
+    <>
+      <Stack.Screen
+        options={{
+          title: selectedEvent.name,
+          headerStyle: { backgroundColor: colors.bg.dark },
+          headerTintColor: colors.text.primary,
+          headerRight: selectedEvent.canManage ? () => (
+            <TouchableOpacity
+              onPress={() => router.push(`/events/edit?id=${id}`)}
+              style={styles.headerButton}
+            >
+              <Text style={styles.headerButtonText}>Edit</Text>
+            </TouchableOpacity>
+          ) : undefined,
+        }}
+      />
+      <ScrollView style={styles.container}>
       {/* Header Section */}
       <View style={styles.header}>
         <Text style={styles.title}>{selectedEvent.name}</Text>
@@ -231,6 +239,9 @@ export default function EventDetailScreen() {
           {selectedEvent.organizationName || 'Pickup Game'}
         </Text>
         <View style={styles.badgeRow}>
+          {selectedEvent.canManage && (
+            <Badge variant="purple">Organizer</Badge>
+          )}
           {selectedEvent.isRegistered && (
             <Badge variant="green">You're Registered</Badge>
           )}
@@ -422,6 +433,7 @@ export default function EventDetailScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    </>
   );
 }
 
@@ -673,6 +685,15 @@ const styles = StyleSheet.create({
   },
   viewRegistrationsButtonText: {
     color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  headerButtonText: {
+    color: colors.primary.teal,
     fontSize: 16,
     fontWeight: '600',
   },

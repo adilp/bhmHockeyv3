@@ -10,12 +10,26 @@ public class EventService : IEventService
     private readonly AppDbContext _context;
     private readonly INotificationService _notificationService;
     private readonly IOrganizationAdminService _adminService;
+    private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
     public EventService(AppDbContext context, INotificationService notificationService, IOrganizationAdminService adminService)
     {
         _context = context;
         _notificationService = notificationService;
         _adminService = adminService;
+    }
+
+    private void ValidateSkillLevels(List<string>? skillLevels)
+    {
+        if (skillLevels == null || skillLevels.Count == 0) return;
+
+        foreach (var level in skillLevels)
+        {
+            if (!ValidSkillLevels.Contains(level))
+            {
+                throw new InvalidOperationException($"Invalid skill level: '{level}'. Valid values: Gold, Silver, Bronze, D-League");
+            }
+        }
     }
 
     /// <summary>
@@ -46,6 +60,8 @@ public class EventService : IEventService
             throw new InvalidOperationException("OrganizationMembers visibility requires an organization");
         }
 
+        ValidateSkillLevels(request.SkillLevels);
+
         var evt = new Event
         {
             OrganizationId = request.OrganizationId,
@@ -58,7 +74,8 @@ public class EventService : IEventService
             MaxPlayers = request.MaxPlayers,
             Cost = request.Cost,
             RegistrationDeadline = request.RegistrationDeadline,
-            Visibility = visibility
+            Visibility = visibility,
+            SkillLevels = request.SkillLevels
         };
 
         _context.Events.Add(evt);
@@ -240,6 +257,13 @@ public class EventService : IEventService
                 throw new InvalidOperationException("OrganizationMembers visibility requires an organization");
             }
             evt.Visibility = request.Visibility;
+        }
+
+        // Handle skill level changes
+        if (request.SkillLevels != null)
+        {
+            ValidateSkillLevels(request.SkillLevels);
+            evt.SkillLevels = request.SkillLevels;
         }
 
         evt.UpdatedAt = DateTime.UtcNow;
@@ -487,6 +511,7 @@ public class EventService : IEventService
             evt.RegistrationDeadline,
             evt.Status,
             evt.Visibility,
+            evt.SkillLevels,     // Event's skill levels (can override org's)
             isRegistered,
             canManage,
             evt.CreatedAt,

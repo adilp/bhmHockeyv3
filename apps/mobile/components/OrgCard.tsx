@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors, spacing, radius } from '../theme';
 import { Badge } from './Badge';
+import { SkillLevelBadges } from './SkillLevelBadges';
 import type { Organization } from '@bhmhockey/shared';
 
 interface OrgCardProps {
@@ -11,14 +12,6 @@ interface OrgCardProps {
   showJoinButton?: boolean;
 }
 
-// Skill level badge colors
-const skillLevelColors: Record<string, string> = {
-  Gold: '#FFD700',
-  Silver: '#C0C0C0',
-  Bronze: '#CD7F32',
-  'D-League': colors.primary.blue,
-};
-
 export function OrgCard({
   organization,
   isAdmin = false,
@@ -26,7 +19,7 @@ export function OrgCard({
   onJoinPress,
   showJoinButton = false,
 }: OrgCardProps) {
-  const { name, description, skillLevel, subscriberCount, isSubscribed } = organization;
+  const { name, description, skillLevels, subscriberCount, isSubscribed } = organization;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
@@ -42,11 +35,7 @@ export function OrgCard({
             <Text style={styles.name} numberOfLines={1}>{name}</Text>
             {isAdmin && <Badge variant="purple">Admin</Badge>}
           </View>
-          {skillLevel && (
-            <View style={[styles.skillBadge, { backgroundColor: skillLevelColors[skillLevel] || colors.text.muted }]}>
-              <Text style={styles.skillBadgeText}>{skillLevel}</Text>
-            </View>
-          )}
+          <SkillLevelBadges levels={skillLevels} size="small" />
         </View>
 
         {/* Description */}
@@ -125,16 +114,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text.primary,
     flexShrink: 1,
-  },
-  skillBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.round,
-  },
-  skillBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.bg.darkest,
   },
   description: {
     fontSize: 13,

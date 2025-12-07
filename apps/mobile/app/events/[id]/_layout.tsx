@@ -6,7 +6,7 @@ export default function EventDetailLayout() {
     <Stack
       screenOptions={{
         headerStyle: {
-          backgroundColor: colors.bg.darkest,
+          backgroundColor: colors.bg.dark,
         },
         headerTintColor: colors.primary.teal,
         headerTitleStyle: {
@@ -21,7 +21,7 @@ export default function EventDetailLayout() {
       <Stack.Screen
         name="index"
         options={{
-          headerShown: false,
+          title: 'Event',
         }}
       />
       <Stack.Screen

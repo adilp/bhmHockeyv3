@@ -27,9 +27,16 @@ export default function EventsLayout() {
         }}
       />
       <Stack.Screen
+        name="edit"
+        options={{
+          title: 'Edit Event',
+          headerBackTitle: 'Cancel',
+        }}
+      />
+      <Stack.Screen
         name="[id]"
         options={{
-          headerBackTitle: 'Back',
+          headerShown: false,
         }}
       />
     </Stack>
