@@ -95,6 +95,8 @@ export default function EventsScreen() {
             refreshing={isLoading}
             onRefresh={fetchEvents}
             tintColor={colors.primary.teal}
+            colors={[colors.primary.teal]}
+            progressBackgroundColor={colors.bg.dark}
           />
         }
         ListEmptyComponent={

@@ -96,6 +96,8 @@ export default function OrganizationsScreen() {
             refreshing={isLoading}
             onRefresh={fetchOrganizations}
             tintColor={colors.primary.teal}
+            colors={[colors.primary.teal]}
+            progressBackgroundColor={colors.bg.dark}
           />
         }
       >

@@ -73,6 +73,8 @@ export default function HomeScreen() {
           refreshing={refreshing}
           onRefresh={onRefresh}
           tintColor={colors.primary.teal}
+          colors={[colors.primary.teal]}
+          progressBackgroundColor={colors.bg.dark}
         />
       }
     >
