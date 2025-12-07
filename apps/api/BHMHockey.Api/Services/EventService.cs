@@ -322,12 +322,16 @@ public class EventService : IEventService
             throw new InvalidOperationException("Event is full");
         }
 
+        // Determine team assignment (balanced between Black and White)
+        var teamAssignment = await DetermineTeamAssignmentAsync(eventId);
+
         if (existingReg != null)
         {
             // Re-activate cancelled registration
             existingReg.Status = "Registered";
             existingReg.RegisteredAt = DateTime.UtcNow;
             existingReg.RegisteredPosition = registeredPosition;
+            existingReg.TeamAssignment = teamAssignment;
             // Reset payment status for paid events
             existingReg.PaymentStatus = evt.Cost > 0 ? "Pending" : null;
             existingReg.PaymentMarkedAt = null;
@@ -341,6 +345,7 @@ public class EventService : IEventService
                 EventId = eventId,
                 UserId = userId,
                 RegisteredPosition = registeredPosition,
+                TeamAssignment = teamAssignment,
                 // Set payment status based on event cost
                 PaymentStatus = evt.Cost > 0 ? "Pending" : null
             };
@@ -349,6 +354,20 @@ public class EventService : IEventService
 
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// Determines team assignment based on current team balance.
+    /// Assigns to the team with fewer players, defaulting to Black if equal.
+    /// </summary>
+    private async Task<string> DetermineTeamAssignmentAsync(Guid eventId)
+    {
+        var blackCount = await _context.EventRegistrations
+            .CountAsync(r => r.EventId == eventId && r.Status == "Registered" && r.TeamAssignment == "Black");
+        var whiteCount = await _context.EventRegistrations
+            .CountAsync(r => r.EventId == eventId && r.Status == "Registered" && r.TeamAssignment == "White");
+
+        return blackCount <= whiteCount ? "Black" : "White";
     }
 
     /// <summary>
@@ -430,7 +449,8 @@ public class EventService : IEventService
             r.RegisteredPosition,   // Position tracking
             r.PaymentStatus,        // Phase 4
             r.PaymentMarkedAt,      // Phase 4
-            r.PaymentVerifiedAt     // Phase 4
+            r.PaymentVerifiedAt,    // Phase 4
+            r.TeamAssignment        // Team assignment
         )).ToList();
     }
 
@@ -478,13 +498,18 @@ public class EventService : IEventService
             creatorVenmoHandle = creator?.VenmoHandle;
         }
 
-        // Get current user's payment status (Phase 4)
+        // Get current user's registration info (payment status and team assignment)
         string? myPaymentStatus = null;
-        if (currentUserId.HasValue && isRegistered && evt.Cost > 0)
+        string? myTeamAssignment = null;
+        if (currentUserId.HasValue && isRegistered)
         {
             var myRegistration = evt.Registrations?.FirstOrDefault(r => r.UserId == currentUserId.Value && r.Status == "Registered")
                 ?? await _context.EventRegistrations.FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && r.Status == "Registered");
-            myPaymentStatus = myRegistration?.PaymentStatus;
+            if (myRegistration != null)
+            {
+                myPaymentStatus = evt.Cost > 0 ? myRegistration.PaymentStatus : null;
+                myTeamAssignment = myRegistration.TeamAssignment;
+            }
         }
 
         // Calculate unpaid count for organizers (paid events only)
@@ -517,6 +542,7 @@ public class EventService : IEventService
             evt.CreatedAt,
             creatorVenmoHandle,  // Phase 4
             myPaymentStatus,     // Phase 4
+            myTeamAssignment,    // Team assignment
             unpaidCount          // Organizer view
         );
     }
@@ -575,6 +601,32 @@ public class EventService : IEventService
         }
 
         await _context.SaveChangesAsync();
+        return true;
+    }
+
+    // Team assignment methods
+    public async Task<bool> UpdateTeamAssignmentAsync(Guid eventId, Guid registrationId, string teamAssignment, Guid organizerId)
+    {
+        // Validate team assignment value
+        if (teamAssignment != "Black" && teamAssignment != "White")
+        {
+            throw new InvalidOperationException("Invalid team. Must be 'Black' or 'White'");
+        }
+
+        // Verify the organizer can manage this event
+        var evt = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+        if (evt == null) return false;
+
+        if (!await CanUserManageEventAsync(evt, organizerId)) return false;
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId && r.Status == "Registered");
+
+        if (registration == null) return false;
+
+        registration.TeamAssignment = teamAssignment;
+        await _context.SaveChangesAsync();
+
         return true;
     }
 }

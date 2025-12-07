@@ -81,8 +81,8 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
           {variant === 'available' && (
             <AvailableBadges spotsLeft={spotsLeft} />
           )}
-          {variant === 'registered' && event.cost > 0 && (
-            <RegisteredBadges paymentStatus={event.myPaymentStatus} />
+          {variant === 'registered' && (
+            <RegisteredBadges event={event} />
           )}
           {variant === 'organizing' && (
             <OrganizingBadges event={event} />
@@ -118,9 +118,30 @@ function AvailableBadges({ spotsLeft }: { spotsLeft: number }) {
   return null;
 }
 
-function RegisteredBadges({ paymentStatus }: { paymentStatus?: string }) {
-  const { text, variant } = getPaymentBadgeVariant(paymentStatus);
-  return <Badge variant={variant}>{text}</Badge>;
+function RegisteredBadges({ event }: { event: EventDto }) {
+  const { text, variant } = getPaymentBadgeVariant(event.myPaymentStatus);
+  const isBlackTeam = event.myTeamAssignment === 'Black';
+
+  return (
+    <View style={styles.registeredStats}>
+      {/* Team badge */}
+      {event.myTeamAssignment && (
+        <View style={[
+          styles.teamBadge,
+          isBlackTeam ? styles.teamBlack : styles.teamWhite
+        ]}>
+          <Text style={[
+            styles.teamBadgeText,
+            isBlackTeam ? styles.teamBlackText : styles.teamWhiteText
+          ]}>
+            Team {event.myTeamAssignment}
+          </Text>
+        </View>
+      )}
+      {/* Payment badge */}
+      {event.cost > 0 && <Badge variant={variant}>{text}</Badge>}
+    </View>
+  );
 }
 
 function OrganizingBadges({ event }: { event: EventDto }) {
@@ -195,6 +216,34 @@ const styles = StyleSheet.create({
   organizerStats: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  registeredStats: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  teamBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+  },
+  teamBlack: {
+    backgroundColor: colors.bg.darkest,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  teamWhite: {
+    backgroundColor: colors.text.primary,
+  },
+  teamBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  teamBlackText: {
+    color: colors.text.primary,
+  },
+  teamWhiteText: {
+    color: colors.bg.darkest,
   },
   priceColumn: {
     justifyContent: 'center',

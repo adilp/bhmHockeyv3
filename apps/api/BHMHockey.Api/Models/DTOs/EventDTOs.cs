@@ -23,6 +23,8 @@ public record EventDto(
     // Payment fields (Phase 4)
     string? CreatorVenmoHandle,   // For "Pay with Venmo" button
     string? MyPaymentStatus,      // Current user's payment status (null if not registered or free event)
+    // Team assignment
+    string? MyTeamAssignment,     // Current user's team assignment ("Black" or "White")
     // Organizer fields (only populated when CanManage = true)
     int? UnpaidCount              // Count of registrations with PaymentStatus != "Verified" (only for paid events)
 );
@@ -66,7 +68,9 @@ public record EventRegistrationDto(
     // Payment fields (Phase 4)
     string? PaymentStatus,       // Pending, MarkedPaid, Verified, or null (free)
     DateTime? PaymentMarkedAt,
-    DateTime? PaymentVerifiedAt
+    DateTime? PaymentVerifiedAt,
+    // Team assignment
+    string? TeamAssignment       // "Black" or "White"
 );
 
 // Payment request DTOs (Phase 4)
@@ -76,6 +80,11 @@ public record MarkPaymentRequest(
 
 public record UpdatePaymentStatusRequest(
     string PaymentStatus         // "Verified" or "Pending" (to reset)
+);
+
+// Team assignment request DTO
+public record UpdateTeamAssignmentRequest(
+    string TeamAssignment        // "Black" or "White"
 );
 
 // Registration request DTO

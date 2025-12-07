@@ -17,4 +17,7 @@ public class EventRegistration
     public string? PaymentStatus { get; set; } // null (free), Pending, MarkedPaid, Verified
     public DateTime? PaymentMarkedAt { get; set; } // When user marked as paid
     public DateTime? PaymentVerifiedAt { get; set; } // When organizer verified
+
+    // Team assignment for games
+    public string? TeamAssignment { get; set; } // "Black" or "White"
 }

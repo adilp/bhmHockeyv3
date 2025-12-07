@@ -1321,4 +1321,124 @@ public class EventServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Team Assignment Tests
+
+    [Fact]
+    public async Task RegisterAsync_WhenTeamsEqual_AssignsToBlack()
+    {
+        // Arrange - Empty event, first registration should go to Black
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Act
+        await _sut.RegisterAsync(evt.Id, user.Id);
+
+        // Assert
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == user.Id);
+        registration!.TeamAssignment.Should().Be("Black");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_AssignsToTeamWithFewerPlayers()
+    {
+        // Arrange - Create event with 2 players on Black, 1 on White
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Add 2 players to Black team
+        var black1 = await CreateTestUser("black1@example.com");
+        var black2 = await CreateTestUser("black2@example.com");
+        var reg1 = await CreateRegistration(evt.Id, black1.Id);
+        var reg2 = await CreateRegistration(evt.Id, black2.Id);
+        reg1.TeamAssignment = "Black";
+        reg2.TeamAssignment = "Black";
+
+        // Add 1 player to White team
+        var white1 = await CreateTestUser("white1@example.com");
+        var reg3 = await CreateRegistration(evt.Id, white1.Id);
+        reg3.TeamAssignment = "White";
+
+        await _context.SaveChangesAsync();
+
+        // New user registers
+        var newUser = await CreateTestUser("new@example.com");
+
+        // Act
+        await _sut.RegisterAsync(evt.Id, newUser.Id);
+
+        // Assert - Should be assigned to White (fewer players)
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == newUser.Id);
+        registration!.TeamAssignment.Should().Be("White");
+    }
+
+    [Fact]
+    public async Task UpdateTeamAssignmentAsync_AsOrgAdmin_Succeeds()
+    {
+        // Arrange - Org admin should be able to swap teams for org events
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id);
+        var registration = await CreateRegistration(evt.Id, registeredUser.Id);
+        registration.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        // Act - Org admin swaps player to White team
+        var result = await _sut.UpdateTeamAssignmentAsync(evt.Id, registration.Id, "White", orgAdmin.Id);
+
+        // Assert
+        result.Should().BeTrue();
+
+        var updated = await _context.EventRegistrations.FindAsync(registration.Id);
+        updated!.TeamAssignment.Should().Be("White");
+    }
+
+    [Fact]
+    public async Task UpdateTeamAssignmentAsync_AsNonAdmin_ReturnsFalse()
+    {
+        // Arrange - Non-admin should NOT be able to swap teams
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var subscriber = await CreateTestUser("subscriber@example.com");
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await CreateSubscription(org.Id, subscriber.Id); // Subscriber but NOT admin
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id);
+        var registration = await CreateRegistration(evt.Id, registeredUser.Id);
+        registration.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        // Act - Non-admin tries to swap team
+        var result = await _sut.UpdateTeamAssignmentAsync(evt.Id, registration.Id, "White", subscriber.Id);
+
+        // Assert
+        result.Should().BeFalse();
+
+        var unchanged = await _context.EventRegistrations.FindAsync(registration.Id);
+        unchanged!.TeamAssignment.Should().Be("Black");
+    }
+
+    [Fact]
+    public async Task UpdateTeamAssignmentAsync_WithInvalidTeam_ThrowsException()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+        var registration = await CreateRegistration(evt.Id, registeredUser.Id);
+
+        // Act & Assert - Invalid team value should throw
+        await _sut.Invoking(s => s.UpdateTeamAssignmentAsync(evt.Id, registration.Id, "Red", creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid team*");
+    }
+
+    #endregion
 }

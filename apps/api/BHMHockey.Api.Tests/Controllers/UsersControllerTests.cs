@@ -272,6 +272,7 @@ public class UsersControllerTests
                 CreatedAt: DateTime.UtcNow,
                 CreatorVenmoHandle: null,    // Phase 4
                 MyPaymentStatus: null,       // Phase 4
+                MyTeamAssignment: null,      // Team assignment
                 UnpaidCount: null            // Organizer view
             )
         };

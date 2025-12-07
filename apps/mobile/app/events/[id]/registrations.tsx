@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventRegistrationDto } from '@bhmhockey/shared';
+import type { EventRegistrationDto, TeamAssignment } from '@bhmhockey/shared';
 import { useEventStore } from '../../../stores/eventStore';
 import { getPaymentStatusInfo } from '../../../utils/venmo';
 import { EmptyState } from '../../../components';
@@ -21,7 +21,7 @@ export default function EventRegistrationsScreen() {
   const navigation = useNavigation();
   const [registrations, setRegistrations] = useState<EventRegistrationDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { updatePaymentStatus, selectedEvent } = useEventStore();
+  const { updatePaymentStatus, updateTeamAssignment, selectedEvent, fetchEventById } = useEventStore();
 
   useEffect(() => {
     navigation.setOptions({
@@ -29,19 +29,30 @@ export default function EventRegistrationsScreen() {
       headerStyle: { backgroundColor: colors.bg.dark },
       headerTintColor: colors.text.primary,
     });
-    loadRegistrations();
+    loadData();
   }, [id]);
+
+  const loadData = async () => {
+    if (!id) return;
+    setIsLoading(true);
+    try {
+      // Load event if not already loaded (needed for canManage and cost)
+      if (!selectedEvent || selectedEvent.id !== id) {
+        await fetchEventById(id);
+      }
+      await loadRegistrations();
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const loadRegistrations = async () => {
     if (!id) return;
-    setIsLoading(true);
     try {
       const data = await eventService.getRegistrations(id);
       setRegistrations(data);
     } catch (error) {
       Alert.alert('Error', 'Failed to load registrations');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -103,9 +114,32 @@ export default function EventRegistrationsScreen() {
     );
   };
 
+  const handleSwapTeam = async (registration: EventRegistrationDto) => {
+    if (!id) return;
+
+    const newTeam: TeamAssignment = registration.teamAssignment === 'Black' ? 'White' : 'Black';
+
+    Alert.alert(
+      'Swap Team',
+      `Move ${registration.user.firstName} to Team ${newTeam}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Swap',
+          onPress: async () => {
+            const success = await updateTeamAssignment(id, registration.id, newTeam);
+            if (success) await loadRegistrations();
+          },
+        },
+      ]
+    );
+  };
+
   const renderRegistration = ({ item }: { item: EventRegistrationDto }) => {
     const statusInfo = getPaymentStatusInfo(item.paymentStatus);
-    const showPaymentActions = selectedEvent?.cost && selectedEvent.cost > 0;
+    // Show payment actions if event has a cost (check selectedEvent or assume paid if paymentStatus exists)
+    const showPaymentActions = (selectedEvent?.cost && selectedEvent.cost > 0) || item.paymentStatus;
+    const isBlackTeam = item.teamAssignment === 'Black';
 
     return (
       <View style={styles.registrationCard}>
@@ -125,6 +159,22 @@ export default function EventRegistrationsScreen() {
             {item.registeredPosition || 'Player'} • {item.user.email}
           </Text>
         </View>
+
+        {/* Team Badge - always tappable (only organizers can access this screen) */}
+        <TouchableOpacity
+          style={[
+            styles.teamBadge,
+            isBlackTeam ? styles.teamBlack : styles.teamWhite
+          ]}
+          onPress={() => handleSwapTeam(item)}
+        >
+          <Text style={[
+            styles.teamBadgeText,
+            isBlackTeam ? styles.teamBlackText : styles.teamWhiteText
+          ]}>
+            {item.teamAssignment ? `Team ${item.teamAssignment}` : 'TBD'}
+          </Text>
+        </TouchableOpacity>
 
         {/* Payment Status & Actions */}
         {showPaymentActions && (
@@ -183,6 +233,19 @@ export default function EventRegistrationsScreen() {
           <View style={styles.statBox}>
             <Text style={styles.statValue}>{registrations.length}</Text>
             <Text style={styles.statLabel}>Registered</Text>
+          </View>
+          {/* Team counts */}
+          <View style={styles.statBox}>
+            <Text style={[styles.statValue, { color: colors.text.primary }]}>
+              {registrations.filter(r => r.teamAssignment === 'Black').length}
+            </Text>
+            <Text style={styles.statLabel}>Black</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={[styles.statValue, { color: colors.text.secondary }]}>
+              {registrations.filter(r => r.teamAssignment === 'White').length}
+            </Text>
+            <Text style={styles.statLabel}>White</Text>
           </View>
           {selectedEvent.cost > 0 && (
             <>
@@ -341,5 +404,32 @@ const styles = StyleSheet.create({
     color: colors.status.error,
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Team badge styles
+  teamBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    minWidth: 50,
+    alignItems: 'center',
+    marginLeft: spacing.sm,
+  },
+  teamBlack: {
+    backgroundColor: colors.bg.darkest,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  teamWhite: {
+    backgroundColor: colors.text.primary,
+  },
+  teamBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  teamBlackText: {
+    color: colors.text.primary,
+  },
+  teamWhiteText: {
+    color: colors.bg.darkest,
   },
 });

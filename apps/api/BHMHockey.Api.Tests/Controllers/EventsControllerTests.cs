@@ -87,6 +87,7 @@ public class EventsControllerTests
             CreatedAt: DateTime.UtcNow,
             CreatorVenmoHandle: null,    // Phase 4
             MyPaymentStatus: null,       // Phase 4
+            MyTeamAssignment: null,      // Team assignment
             UnpaidCount: null            // Organizer view
         );
     }
@@ -495,7 +496,8 @@ public class EventsControllerTests
                 RegisteredPosition: "Skater",  // Position tracking
                 PaymentStatus: null,           // Phase 4
                 PaymentMarkedAt: null,         // Phase 4
-                PaymentVerifiedAt: null        // Phase 4
+                PaymentVerifiedAt: null,       // Phase 4
+                TeamAssignment: null           // Team assignment
             )
         };
         _mockEventService.Setup(s => s.GetRegistrationsAsync(_testEventId))

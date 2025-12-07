@@ -129,6 +129,9 @@ export type RegistrationStatus = 'Registered' | 'Cancelled';
 // Payment status for event registrations (Phase 4)
 export type PaymentStatus = 'Pending' | 'MarkedPaid' | 'Verified';
 
+// Team assignment for events
+export type TeamAssignment = 'Black' | 'White';
+
 // EventDto - API response with computed fields
 export interface EventDto {
   id: string;
@@ -153,6 +156,8 @@ export interface EventDto {
   // Payment fields (Phase 4)
   creatorVenmoHandle?: string;   // For "Pay with Venmo" button
   myPaymentStatus?: PaymentStatus; // Current user's payment status
+  // Team assignment
+  myTeamAssignment?: TeamAssignment; // Current user's team ("Black" or "White")
   // Organizer fields (only populated when canManage = true)
   unpaidCount?: number;          // Count of registrations with PaymentStatus != "Verified"
 }
@@ -170,6 +175,8 @@ export interface EventRegistrationDto {
   paymentStatus?: PaymentStatus;
   paymentMarkedAt?: string;
   paymentVerifiedAt?: string;
+  // Team assignment
+  teamAssignment?: TeamAssignment;
 }
 
 // Event request types
@@ -208,6 +215,11 @@ export interface MarkPaymentRequest {
 
 export interface UpdatePaymentStatusRequest {
   paymentStatus: 'Verified' | 'Pending';
+}
+
+// Team assignment request
+export interface UpdateTeamAssignmentRequest {
+  teamAssignment: TeamAssignment;
 }
 
 // Auth types

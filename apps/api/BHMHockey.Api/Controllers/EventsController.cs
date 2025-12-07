@@ -249,4 +249,38 @@ public class EventsController : ControllerBase
     }
 
     #endregion
+
+    #region Team Assignment
+
+    /// <summary>
+    /// Update team assignment for a registration (organizer only).
+    /// </summary>
+    [Authorize]
+    [HttpPut("{eventId:guid}/registrations/{registrationId:guid}/team")]
+    public async Task<IActionResult> UpdateTeamAssignment(
+        Guid eventId,
+        Guid registrationId,
+        [FromBody] UpdateTeamAssignmentRequest request)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var success = await _eventService.UpdateTeamAssignmentAsync(
+                eventId, registrationId, request.TeamAssignment, userId);
+
+            if (!success)
+            {
+                return NotFound(new { message = "Event or registration not found, or you are not the organizer." });
+            }
+
+            return Ok(new { message = $"Moved to Team {request.TeamAssignment}" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    #endregion
 }

@@ -245,6 +245,19 @@ export default function EventDetailScreen() {
           {selectedEvent.isRegistered && (
             <Badge variant="green">You're Registered</Badge>
           )}
+          {selectedEvent.myTeamAssignment && (
+            <View style={[
+              styles.teamBadge,
+              selectedEvent.myTeamAssignment === 'Black' ? styles.teamBlack : styles.teamWhite
+            ]}>
+              <Text style={[
+                styles.teamBadgeText,
+                selectedEvent.myTeamAssignment === 'Black' ? styles.teamBlackText : styles.teamWhiteText
+              ]}>
+                Team {selectedEvent.myTeamAssignment}
+              </Text>
+            </View>
+          )}
           {selectedEvent.visibility === 'InviteOnly' && (
             <Badge variant="warning">Invite Only</Badge>
           )}
@@ -696,5 +709,29 @@ const styles = StyleSheet.create({
     color: colors.primary.teal,
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Team badge styles
+  teamBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+  },
+  teamBlack: {
+    backgroundColor: colors.bg.darkest,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  teamWhite: {
+    backgroundColor: colors.text.primary,
+  },
+  teamBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  teamBlackText: {
+    color: colors.text.primary,
+  },
+  teamWhiteText: {
+    color: colors.bg.darkest,
   },
 });

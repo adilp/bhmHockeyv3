@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventDto, CreateEventRequest, Position } from '@bhmhockey/shared';
+import type { EventDto, CreateEventRequest, Position, TeamAssignment } from '@bhmhockey/shared';
 
 interface EventState {
   // State
@@ -25,6 +25,9 @@ interface EventState {
   // Payment actions (Phase 4)
   markPayment: (eventId: string) => Promise<boolean>;
   updatePaymentStatus: (eventId: string, registrationId: string, status: 'Verified' | 'Pending') => Promise<boolean>;
+
+  // Team assignment actions
+  updateTeamAssignment: (eventId: string, registrationId: string, team: TeamAssignment) => Promise<boolean>;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
@@ -227,6 +230,21 @@ export const useEventStore = create<EventState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to update payment status',
+      });
+      return false;
+    }
+  },
+
+  // Team assignment actions
+
+  // Update team assignment for a registration (organizer only)
+  updateTeamAssignment: async (eventId: string, registrationId: string, team: TeamAssignment) => {
+    try {
+      await eventService.updateTeamAssignment(eventId, registrationId, team);
+      return true;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to update team assignment',
       });
       return false;
     }

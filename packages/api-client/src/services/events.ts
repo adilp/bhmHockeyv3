@@ -5,8 +5,10 @@ import type {
   UpdateEventRequest,
   MarkPaymentRequest,
   UpdatePaymentStatusRequest,
+  UpdateTeamAssignmentRequest,
   RegisterForEventRequest,
-  Position
+  Position,
+  TeamAssignment
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -107,6 +109,22 @@ export const eventService = {
     await apiClient.instance.put(
       `/events/${eventId}/registrations/${registrationId}/payment`,
       request
+    );
+  },
+
+  // Team assignment methods
+
+  /**
+   * Update team assignment for a registration (organizer only)
+   */
+  async updateTeamAssignment(
+    eventId: string,
+    registrationId: string,
+    teamAssignment: TeamAssignment
+  ): Promise<void> {
+    await apiClient.instance.put(
+      `/events/${eventId}/registrations/${registrationId}/team`,
+      { teamAssignment }
     );
   },
 };

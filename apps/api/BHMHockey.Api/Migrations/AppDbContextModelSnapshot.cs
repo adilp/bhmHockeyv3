@@ -121,6 +121,9 @@ namespace BHMHockey.Api.Migrations
                         .HasColumnType("character varying(50)")
                         .HasDefaultValue("Registered");
 
+                    b.Property<string>("TeamAssignment")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
