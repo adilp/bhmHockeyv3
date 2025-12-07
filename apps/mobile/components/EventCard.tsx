@@ -51,24 +51,22 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
       <View style={[styles.accent, { backgroundColor: accentColor }]} />
 
       <View style={styles.content}>
-        {/* Event name */}
-        <Text style={styles.name} numberOfLines={1}>{event.name}</Text>
+        {/* Date and venue - most important after cost */}
+        <Text style={styles.dateTime}>{formatDateTime(event.eventDate)}</Text>
+        {event.venue && (
+          <Text style={styles.venue} numberOfLines={1}>{event.venue}</Text>
+        )}
 
         {/* Organization row with colored dot */}
         <View style={styles.orgRow}>
           <View style={[styles.orgDot, { backgroundColor: accentColor }]} />
           <Text style={styles.orgName} numberOfLines={1}>
-            {event.organizationName || 'Open Game'}
+            {event.organizationName || 'Pickup'}
           </Text>
         </View>
 
-        {/* Date and venue */}
-        <View style={styles.detailsRow}>
-          <Text style={styles.dateTime}>{formatDateTime(event.eventDate)}</Text>
-          {event.venue && (
-            <Text style={styles.venue} numberOfLines={1}> · {event.venue}</Text>
-          )}
-        </View>
+        {/* Event name - least emphasis */}
+        <Text style={styles.name} numberOfLines={1}>{event.name}</Text>
 
         {/* Footer badges */}
         <View style={styles.footer}>
@@ -101,6 +99,7 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
 
 // Sub-components for different badge configurations
 function AvailableBadges({ spotsLeft }: { spotsLeft: number }) {
+  // Only show badge when 2 or fewer spots remain
   if (spotsLeft <= 2 && spotsLeft > 0) {
     return (
       <Badge variant="error">
@@ -108,7 +107,7 @@ function AvailableBadges({ spotsLeft }: { spotsLeft: number }) {
       </Badge>
     );
   }
-  return <Badge variant="teal">{spotsLeft} spots</Badge>;
+  return null;
 }
 
 function RegisteredBadges({ paymentStatus }: { paymentStatus?: string }) {
@@ -144,16 +143,21 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 14,
   },
-  name: {
+  dateTime: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
-    marginBottom: 6,
+    marginBottom: 2,
+  },
+  venue: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
   },
   orgRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: 4,
   },
   orgDot: {
     width: 8,
@@ -164,21 +168,13 @@ const styles = StyleSheet.create({
   orgName: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.text.secondary,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  dateTime: {
-    fontSize: 13,
     color: colors.text.muted,
   },
-  venue: {
+  name: {
     fontSize: 13,
+    fontWeight: '400',
     color: colors.text.subtle,
-    flex: 1,
+    marginBottom: spacing.sm,
   },
   footer: {
     flexDirection: 'row',

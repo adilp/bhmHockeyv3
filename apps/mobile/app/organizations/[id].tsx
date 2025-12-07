@@ -243,14 +243,6 @@ export default function OrganizationDetailScreen() {
           )}
         </View>
 
-        {/* Location */}
-        {organization.location && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Location</Text>
-            <Text style={styles.sectionText}>{organization.location}</Text>
-          </View>
-        )}
-
         {/* Description */}
         {organization.description && (
           <View style={styles.section}>

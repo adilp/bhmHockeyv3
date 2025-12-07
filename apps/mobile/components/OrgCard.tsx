@@ -26,7 +26,7 @@ export function OrgCard({
   onJoinPress,
   showJoinButton = false,
 }: OrgCardProps) {
-  const { name, description, location, skillLevel, subscriberCount, isSubscribed } = organization;
+  const { name, description, skillLevel, subscriberCount, isSubscribed } = organization;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
@@ -52,11 +52,6 @@ export function OrgCard({
         {/* Description */}
         {description && (
           <Text style={styles.description} numberOfLines={2}>{description}</Text>
-        )}
-
-        {/* Location */}
-        {location && (
-          <Text style={styles.location} numberOfLines={1}>{location}</Text>
         )}
 
         {/* Footer with stats and join button */}
@@ -145,11 +140,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text.muted,
     lineHeight: 18,
-    marginBottom: spacing.xs,
-  },
-  location: {
-    fontSize: 12,
-    color: colors.text.subtle,
     marginBottom: spacing.sm,
   },
   footer: {

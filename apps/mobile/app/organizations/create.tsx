@@ -16,6 +16,7 @@ import { Picker } from '@react-native-picker/picker';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { SKILL_LEVELS } from '@bhmhockey/shared';
 import type { SkillLevel } from '@bhmhockey/shared';
+import { colors, spacing, radius, typography } from '../../theme';
 
 export default function CreateOrganizationScreen() {
   const router = useRouter();
@@ -23,7 +24,6 @@ export default function CreateOrganizationScreen() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
   const [skillLevel, setSkillLevel] = useState<SkillLevel | ''>('');
 
   const handleCreate = async () => {
@@ -36,7 +36,6 @@ export default function CreateOrganizationScreen() {
       await createOrganization({
         name: name.trim(),
         description: description.trim() || undefined,
-        location: location.trim() || undefined,
         skillLevel: skillLevel || undefined,
       });
 
@@ -54,6 +53,14 @@ export default function CreateOrganizationScreen() {
         options={{
           title: 'Create Organization',
           headerBackTitle: 'Cancel',
+          headerStyle: {
+            backgroundColor: colors.bg.darkest,
+          },
+          headerTintColor: colors.primary.teal,
+          headerTitleStyle: {
+            color: colors.text.primary,
+            fontWeight: '600',
+          },
         }}
       />
 
@@ -71,7 +78,7 @@ export default function CreateOrganizationScreen() {
               value={name}
               onChangeText={setName}
               placeholder="e.g., Boston Hockey Club"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.text.placeholder}
               autoCapitalize="words"
             />
           </View>
@@ -83,21 +90,10 @@ export default function CreateOrganizationScreen() {
               value={description}
               onChangeText={setDescription}
               placeholder="Tell people about your organization..."
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.text.placeholder}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Location</Text>
-            <TextInput
-              style={styles.input}
-              value={location}
-              onChangeText={setLocation}
-              placeholder="e.g., Boston, MA"
-              placeholderTextColor="#999"
             />
           </View>
 
@@ -108,6 +104,8 @@ export default function CreateOrganizationScreen() {
                 selectedValue={skillLevel}
                 onValueChange={(value) => setSkillLevel(value)}
                 style={styles.picker}
+                itemStyle={styles.pickerItem}
+                dropdownIconColor={colors.text.muted}
               >
                 <Picker.Item label="Any Skill Level" value="" />
                 {SKILL_LEVELS.map((level) => (
@@ -123,7 +121,7 @@ export default function CreateOrganizationScreen() {
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.bg.darkest} />
             ) : (
               <Text style={styles.createButtonText}>Create Organization</Text>
             )}
@@ -141,70 +139,76 @@ export default function CreateOrganizationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.bg.darkest,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    padding: 20,
+    padding: spacing.md,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 20,
-    color: '#333',
+    ...typography.sectionTitle,
+    marginBottom: spacing.lg,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: spacing.md,
   },
   label: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
+    color: colors.text.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
   },
   input: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 15,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border.default,
+    color: colors.text.primary,
   },
   textArea: {
     minHeight: 100,
-    paddingTop: 14,
+    paddingTop: spacing.md,
   },
   pickerContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border.default,
     overflow: 'hidden',
   },
   picker: {
-    height: 50,
+    height: Platform.OS === 'ios' ? 150 : 50,
+    color: colors.text.primary,
+  },
+  pickerItem: {
+    fontSize: 16,
+    color: colors.text.primary,
   },
   createButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 10,
-    padding: 16,
+    backgroundColor: colors.primary.teal,
+    borderRadius: radius.md,
+    padding: spacing.md,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   createButtonDisabled: {
     opacity: 0.7,
   },
   createButtonText: {
-    color: '#fff',
-    fontSize: 18,
+    color: colors.bg.darkest,
+    fontSize: 16,
     fontWeight: '600',
   },
   hint: {
-    marginTop: 16,
+    marginTop: spacing.md,
     fontSize: 14,
-    color: '#666',
+    color: colors.text.muted,
     textAlign: 'center',
     lineHeight: 20,
   },
