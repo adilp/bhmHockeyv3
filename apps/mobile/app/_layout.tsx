@@ -3,12 +3,22 @@ import { useEffect } from 'react';
 import { initializeApiClient } from '@bhmhockey/api-client';
 import { getApiUrl } from '../config/api';
 import { colors } from '../theme';
+import { useAuthStore } from '../stores/authStore';
 
 export default function RootLayout() {
   useEffect(() => {
     // Initialize API client on app startup
     initializeApiClient({
       baseURL: getApiUrl(),
+      onAuthError: () => {
+        // When 401 occurs, update Zustand store to trigger redirect to login
+        console.log('🔒 Auth error (401) - logging out user');
+        useAuthStore.setState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      },
     });
   }, []);
 

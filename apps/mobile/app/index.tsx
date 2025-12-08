@@ -3,6 +3,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, Redirect } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '../stores/authStore';
+import { colors } from '../theme';
 import {
   registerForPushNotificationsAsync,
   savePushTokenToBackend,
@@ -71,7 +72,7 @@ export default function IndexScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.primary.teal} />
       </View>
     );
   }
@@ -89,6 +90,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.bg.darkest,
   },
 });
