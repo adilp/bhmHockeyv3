@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../stores/authStore';
+import { colors, spacing, radius } from '../../theme';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -63,6 +64,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="you@example.com"
+              placeholderTextColor={colors.text.muted}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -77,6 +79,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="Enter your password"
+              placeholderTextColor={colors.text.muted}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -115,74 +118,75 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.bg.darkest,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+    padding: spacing.lg,
   },
   header: {
-    marginBottom: 40,
+    marginBottom: spacing.xxl,
     alignItems: 'center',
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
+    marginBottom: spacing.sm,
+    color: colors.text.primary,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
   },
   form: {
     width: '100%',
   },
   field: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
+    marginBottom: spacing.sm,
+    color: colors.text.secondary,
   },
   input: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: colors.bg.elevated,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing.md,
     fontSize: 16,
+    color: colors.text.primary,
   },
   button: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: colors.primary.teal,
+    borderRadius: radius.md,
+    padding: spacing.md,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.bg.darkest,
     fontSize: 16,
     fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: spacing.lg,
   },
   footerText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.text.muted,
   },
   link: {
     fontSize: 14,
-    color: '#007AFF',
+    color: colors.primary.teal,
     fontWeight: '600',
   },
 });

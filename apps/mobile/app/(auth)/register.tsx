@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../stores/authStore';
+import { colors, spacing, radius } from '../../theme';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -82,6 +83,7 @@ export default function RegisterScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="John"
+                placeholderTextColor={colors.text.muted}
                 value={firstName}
                 onChangeText={setFirstName}
                 autoComplete="given-name"
@@ -94,6 +96,7 @@ export default function RegisterScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Doe"
+                placeholderTextColor={colors.text.muted}
                 value={lastName}
                 onChangeText={setLastName}
                 autoComplete="family-name"
@@ -107,6 +110,7 @@ export default function RegisterScreen() {
             <TextInput
               style={styles.input}
               placeholder="you@example.com"
+              placeholderTextColor={colors.text.muted}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -121,6 +125,7 @@ export default function RegisterScreen() {
             <TextInput
               style={styles.input}
               placeholder="At least 8 characters"
+              placeholderTextColor={colors.text.muted}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -134,6 +139,7 @@ export default function RegisterScreen() {
             <TextInput
               style={styles.input}
               placeholder="Re-enter password"
+              placeholderTextColor={colors.text.muted}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
@@ -172,26 +178,26 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.bg.darkest,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+    padding: spacing.lg,
   },
   header: {
-    marginBottom: 40,
+    marginBottom: spacing.xxl,
     alignItems: 'center',
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
+    marginBottom: spacing.sm,
+    color: colors.text.primary,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
   },
   form: {
     width: '100%',
@@ -201,7 +207,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   field: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   halfField: {
     width: '48%',
@@ -209,44 +215,45 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
+    marginBottom: spacing.sm,
+    color: colors.text.secondary,
   },
   input: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: colors.bg.elevated,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing.md,
     fontSize: 16,
+    color: colors.text.primary,
   },
   button: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: colors.primary.teal,
+    borderRadius: radius.md,
+    padding: spacing.md,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.bg.darkest,
     fontSize: 16,
     fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: spacing.lg,
   },
   footerText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.text.muted,
   },
   link: {
     fontSize: 14,
-    color: '#007AFF',
+    color: colors.primary.teal,
     fontWeight: '600',
   },
 });

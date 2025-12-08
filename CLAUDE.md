@@ -347,21 +347,46 @@ When creating new reusable components:
 4. Keep props minimal and well-typed
 5. Follow existing patterns (see `EventCard.tsx` for reference)
 
-### Screens Not Yet Updated
+### All Screens Migrated ✅
 
-These screens still use the old light theme and should be migrated:
-- `apps/mobile/app/(tabs)/profile.tsx`
-- `apps/mobile/app/events/create.tsx`
-- `apps/mobile/app/organizations/create.tsx`
-- `apps/mobile/app/(auth)/login.tsx`
-- `apps/mobile/app/(auth)/register.tsx`
+All screens now use the centralized theme system:
+- ✅ Home, Events, Discover, Profile tabs
+- ✅ Event details, create, edit + registrations
+- ✅ Organization details, create, edit
+- ✅ Login and Register screens
+- ✅ All form components (EventForm, OrgForm)
+- ✅ All modal pickers (dark theme with white text)
 
-**Already migrated:**
-- Home, Events, Discover tabs
-- Event details + registrations
-- Organization details
+### Creating New Screens
 
-When updating, replace hardcoded colors with theme tokens and use shared components where applicable.
+When creating new screens, always import and use theme tokens:
+
+```typescript
+import { colors, spacing, radius } from '../../theme';
+import { EventCard, Badge, SectionHeader } from '../../components';
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg.darkest,
+  },
+  input: {
+    backgroundColor: colors.bg.elevated,
+    borderColor: colors.border.default,
+    color: colors.text.primary,
+    // Always add placeholderTextColor prop to TextInputs:
+    // placeholderTextColor={colors.text.muted}
+  },
+});
+```
+
+**Key patterns for new screens:**
+- Use `colors.bg.darkest` for screen backgrounds
+- Use `colors.bg.dark` for cards/sections
+- Use `colors.bg.elevated` for inputs/modals
+- Always set `placeholderTextColor={colors.text.muted}` on TextInputs
+- Use `colors.primary.teal` for primary buttons (with `colors.bg.darkest` text)
+- Use `colors.status.error` for destructive actions
 
 ---
 

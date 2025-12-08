@@ -17,6 +17,7 @@ import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
 import type { User, SkillLevel, UserPositions } from '@bhmhockey/shared';
 import { SKILL_LEVELS } from '@bhmhockey/shared';
+import { colors, spacing, radius } from '../../theme';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -122,7 +123,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.primary.teal} />
         <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
@@ -146,6 +147,7 @@ export default function ProfileScreen() {
               value={firstName}
               onChangeText={setFirstName}
               placeholder="Enter first name"
+              placeholderTextColor={colors.text.muted}
             />
           </View>
 
@@ -156,6 +158,7 @@ export default function ProfileScreen() {
               value={lastName}
               onChangeText={setLastName}
               placeholder="Enter last name"
+              placeholderTextColor={colors.text.muted}
             />
           </View>
 
@@ -166,6 +169,7 @@ export default function ProfileScreen() {
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               placeholder="(123) 456-7890"
+              placeholderTextColor={colors.text.muted}
               keyboardType="phone-pad"
             />
           </View>
@@ -181,7 +185,8 @@ export default function ProfileScreen() {
               <Switch
                 value={isGoalie}
                 onValueChange={setIsGoalie}
-                trackColor={{ false: '#e0e0e0', true: '#007AFF' }}
+                trackColor={{ false: colors.bg.hover, true: colors.primary.teal }}
+                thumbColor={isGoalie ? colors.text.primary : colors.text.muted}
               />
               <Text style={[styles.positionLabel, isGoalie && styles.positionLabelActive]}>
                 Goalie
@@ -194,9 +199,10 @@ export default function ProfileScreen() {
                   onValueChange={(value) => setGoalieSkill(value as SkillLevel)}
                   style={styles.skillPicker}
                   itemStyle={styles.pickerItem}
+                  dropdownIconColor={colors.text.primary}
                 >
                   {SKILL_LEVELS.map((level) => (
-                    <Picker.Item key={level} label={level} value={level} color="#000" />
+                    <Picker.Item key={level} label={level} value={level} color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
                   ))}
                 </Picker>
               </View>
@@ -209,7 +215,8 @@ export default function ProfileScreen() {
               <Switch
                 value={isSkater}
                 onValueChange={setIsSkater}
-                trackColor={{ false: '#e0e0e0', true: '#007AFF' }}
+                trackColor={{ false: colors.bg.hover, true: colors.primary.teal }}
+                thumbColor={isSkater ? colors.text.primary : colors.text.muted}
               />
               <Text style={[styles.positionLabel, isSkater && styles.positionLabelActive]}>
                 Skater
@@ -222,9 +229,10 @@ export default function ProfileScreen() {
                   onValueChange={(value) => setSkaterSkill(value as SkillLevel)}
                   style={styles.skillPicker}
                   itemStyle={styles.pickerItem}
+                  dropdownIconColor={colors.text.primary}
                 >
                   {SKILL_LEVELS.map((level) => (
-                    <Picker.Item key={level} label={level} value={level} color="#000" />
+                    <Picker.Item key={level} label={level} value={level} color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
                   ))}
                 </Picker>
               </View>
@@ -242,6 +250,7 @@ export default function ProfileScreen() {
               value={venmoHandle}
               onChangeText={setVenmoHandle}
               placeholder="@username"
+              placeholderTextColor={colors.text.muted}
               autoCapitalize="none"
             />
             <Text style={styles.hint}>For receiving payments from events</Text>
@@ -275,137 +284,143 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.bg.darkest,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.bg.darkest,
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: spacing.md,
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
   },
   header: {
-    padding: 20,
-    backgroundColor: '#fff',
+    padding: spacing.lg,
+    backgroundColor: colors.bg.dark,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.border.default,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
+    color: colors.text.primary,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: colors.text.muted,
   },
   form: {
-    padding: 20,
+    padding: spacing.lg,
   },
   section: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border.default,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
-    color: '#333',
+    marginBottom: spacing.xs,
+    color: colors.text.primary,
   },
   sectionHint: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
+    color: colors.text.muted,
+    marginBottom: spacing.md,
   },
   field: {
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   label: {
     fontSize: 14,
     fontWeight: '500',
-    marginBottom: 8,
-    color: '#333',
+    marginBottom: spacing.sm,
+    color: colors.text.secondary,
   },
   input: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: colors.bg.elevated,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing.md,
     fontSize: 16,
+    color: colors.text.primary,
   },
   positionRow: {
-    marginBottom: 16,
+    marginBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    paddingBottom: 16,
+    borderBottomColor: colors.border.default,
+    paddingBottom: spacing.md,
   },
   positionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   positionLabel: {
     fontSize: 16,
-    marginLeft: 12,
-    color: '#666',
+    marginLeft: spacing.md,
+    color: colors.text.muted,
   },
   positionLabelActive: {
-    color: '#007AFF',
+    color: colors.primary.teal,
     fontWeight: '600',
   },
   skillPickerContainer: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: colors.bg.elevated,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
     overflow: 'hidden',
-    marginLeft: 52, // Align with label after switch
+    marginLeft: 52,
   },
   skillPicker: {
     height: Platform.OS === 'ios' ? 120 : 50,
     width: '100%',
+    color: colors.text.primary,
   },
   pickerItem: {
     fontSize: 16,
-    color: '#000',
+    color: colors.text.primary,
   },
   hint: {
     fontSize: 12,
-    color: '#999',
-    marginTop: 4,
+    color: colors.text.muted,
+    marginTop: spacing.xs,
   },
   saveButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.primary.teal,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
-    color: '#fff',
+    color: colors.bg.darkest,
     fontSize: 16,
     fontWeight: '600',
   },
   logoutButton: {
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#FF3B30',
-    borderRadius: 12,
-    padding: 16,
+    borderColor: colors.status.error,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
   logoutButtonText: {
-    color: '#FF3B30',
+    color: colors.status.error,
     fontSize: 16,
     fontWeight: '600',
   },

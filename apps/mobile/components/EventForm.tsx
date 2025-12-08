@@ -443,12 +443,13 @@ export function EventForm({
                 selectedValue={selectedOrgId || 'personal'}
                 onValueChange={(value) => setSelectedOrgId(value === 'personal' ? null : value)}
                 style={styles.modalPicker}
+                dropdownIconColor={colors.text.primary}
                 {...(Platform.OS === 'android' ? { mode: 'dialog' as const } : {})}
-                {...(Platform.OS === 'ios' ? { itemStyle: { color: '#000' }, themeVariant: 'light' as const } : {})}
+                {...(Platform.OS === 'ios' ? { itemStyle: { color: colors.text.primary }, themeVariant: 'dark' as const } : {})}
               >
-                <Picker.Item label="Myself (Pickup Game)" value="personal" color="#000" />
+                <Picker.Item label="Myself (Pickup Game)" value="personal" color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
                 {organizations.map((org) => (
-                  <Picker.Item key={org.id} label={org.name} value={org.id} color="#000" />
+                  <Picker.Item key={org.id} label={org.name} value={org.id} color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
                 ))}
               </Picker>
             </View>
@@ -473,14 +474,15 @@ export function EventForm({
                 selectedValue={visibility}
                 onValueChange={(value) => setVisibility(value)}
                 style={styles.modalPicker}
+                dropdownIconColor={colors.text.primary}
                 {...(Platform.OS === 'android' ? { mode: 'dialog' as const } : {})}
-                {...(Platform.OS === 'ios' ? { itemStyle: { color: '#000' }, themeVariant: 'light' as const } : {})}
+                {...(Platform.OS === 'ios' ? { itemStyle: { color: colors.text.primary }, themeVariant: 'dark' as const } : {})}
               >
-                <Picker.Item label="Public - Anyone can join" value="Public" color="#000" />
+                <Picker.Item label="Public - Anyone can join" value="Public" color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
                 {hasOrganization && (
-                  <Picker.Item label="Members Only - Organization subscribers" value="OrganizationMembers" color="#000" />
+                  <Picker.Item label="Members Only - Organization subscribers" value="OrganizationMembers" color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
                 )}
-                <Picker.Item label="Invite Only - Private event" value="InviteOnly" color="#000" />
+                <Picker.Item label="Invite Only - Private event" value="InviteOnly" color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
               </Picker>
             </View>
           </View>
@@ -588,14 +590,17 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.bg.dark,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingBottom: 34,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderBottomWidth: 0,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -603,12 +608,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.border.default,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text.primary,
   },
   modalDone: {
     fontSize: 16,
@@ -617,6 +622,7 @@ const styles = StyleSheet.create({
   },
   modalPicker: {
     height: 200,
+    backgroundColor: colors.bg.dark,
   },
   accessoryBar: {
     flexDirection: 'row',
@@ -625,7 +631,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    backgroundColor: '#fff',
+    borderTopColor: colors.border.default,
+    backgroundColor: colors.bg.elevated,
   },
 });

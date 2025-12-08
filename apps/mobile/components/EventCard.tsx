@@ -12,9 +12,9 @@ interface EventCardProps {
   onPress: () => void;
 }
 
-// Accent and dot colors per variant
-const variantColors: Record<EventCardVariant, string> = {
-  available: colors.primary.teal,
+// Accent and dot colors per variant (available has no accent)
+const variantColors: Record<EventCardVariant, string | null> = {
+  available: null,
   registered: colors.primary.green,
   organizing: colors.primary.purple,
 };
@@ -48,8 +48,8 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
-      {/* Left accent bar */}
-      <View style={[styles.accent, { backgroundColor: accentColor }]} />
+      {/* Left accent bar - only show for registered/organizing */}
+      {accentColor && <View style={[styles.accent, { backgroundColor: accentColor }]} />}
 
       <View style={styles.content}>
         {/* Date and venue - most important after cost */}
@@ -58,9 +58,9 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
           <Text style={styles.venue} numberOfLines={1}>{event.venue}</Text>
         )}
 
-        {/* Organization row with colored dot */}
+        {/* Organization row with colored dot (only for registered/organizing) */}
         <View style={styles.orgRow}>
-          <View style={[styles.orgDot, { backgroundColor: accentColor }]} />
+          {accentColor && <View style={[styles.orgDot, { backgroundColor: accentColor }]} />}
           <Text style={styles.orgName} numberOfLines={1}>
             {event.organizationName || 'Pickup'}
           </Text>
