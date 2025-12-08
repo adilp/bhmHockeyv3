@@ -165,7 +165,7 @@ export default function EventDetailScreen() {
     await openVenmoPayment(
       selectedEvent.creatorVenmoHandle,
       selectedEvent.cost,
-      selectedEvent.name
+      selectedEvent.name || 'Hockey'
     );
   };
 
@@ -218,7 +218,7 @@ export default function EventDetailScreen() {
     <>
       <Stack.Screen
         options={{
-          title: selectedEvent.name,
+          title: selectedEvent.name || 'Event',
           headerStyle: { backgroundColor: colors.bg.dark },
           headerTintColor: colors.text.primary,
           headerRight: selectedEvent.canManage ? () => (
@@ -234,7 +234,9 @@ export default function EventDetailScreen() {
       <ScrollView style={styles.container}>
       {/* Header Section */}
       <View style={styles.header}>
-        <Text style={styles.title}>{selectedEvent.name}</Text>
+        {selectedEvent.name && (
+          <Text style={styles.title}>{selectedEvent.name}</Text>
+        )}
         <Text style={styles.organization}>
           {selectedEvent.organizationName || 'Pickup Game'}
         </Text>

@@ -51,9 +51,7 @@ namespace BHMHockey.Api.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("OrganizationId")
                         .HasColumnType("uuid");

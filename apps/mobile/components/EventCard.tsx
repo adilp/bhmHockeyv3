@@ -66,8 +66,10 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
           </Text>
         </View>
 
-        {/* Event name - least emphasis */}
-        <Text style={styles.name} numberOfLines={1}>{event.name}</Text>
+        {/* Event name - only show if provided */}
+        {event.name && (
+          <Text style={styles.name} numberOfLines={1}>{event.name}</Text>
+        )}
 
         {/* Skill level badges */}
         {event.skillLevels && event.skillLevels.length > 0 && (

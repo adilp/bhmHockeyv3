@@ -62,14 +62,17 @@ public class EventService : IEventService
 
         ValidateSkillLevels(request.SkillLevels);
 
+        // Default duration to 60 minutes if not provided
+        var duration = request.Duration ?? 60;
+
         var evt = new Event
         {
             OrganizationId = request.OrganizationId,
             CreatorId = creatorId,
-            Name = request.Name,
+            Name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name,
             Description = request.Description,
             EventDate = request.EventDate,
-            Duration = request.Duration,
+            Duration = duration,
             Venue = request.Venue,
             MaxPlayers = request.MaxPlayers,
             Cost = request.Cost,

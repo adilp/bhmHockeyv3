@@ -28,7 +28,7 @@ const createMockOrg = (overrides: Partial<Organization> = {}): Organization => (
   name: 'Test Org',
   description: 'Test Description',
   location: 'Boston',
-  skillLevel: 'Gold' as const,
+  skillLevels: ['Gold'] as const,
   creatorId: 'creator-1',
   subscriberCount: 5,
   isSubscribed: false,

@@ -131,7 +131,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Event>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            // Name is optional - entity property is string?
             entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("Published");
             entity.HasOne(e => e.Organization)
                 .WithMany(o => o.Events)

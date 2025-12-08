@@ -138,7 +138,7 @@ export interface EventDto {
   organizationId?: string;       // Optional - null for standalone events
   organizationName?: string;     // Optional - null for standalone events
   creatorId: string;             // Who created the event
-  name: string;
+  name?: string;                 // Optional - null if no custom name set
   description?: string;
   eventDate: string;
   duration: number;
@@ -182,10 +182,10 @@ export interface EventRegistrationDto {
 // Event request types
 export interface CreateEventRequest {
   organizationId?: string;       // Optional - omit for standalone pickup games
-  name: string;
+  name?: string;                 // Optional - backend generates default if not provided
   description?: string;
   eventDate: string;
-  duration: number;
+  duration?: number;             // Optional - backend uses default if not provided
   venue?: string;
   maxPlayers: number;
   cost: number;

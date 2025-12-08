@@ -5,7 +5,7 @@ public record EventDto(
     Guid? OrganizationId,         // Nullable - standalone events have no org
     string? OrganizationName,     // Nullable - standalone events show null or creator name
     Guid CreatorId,               // Always present - who created the event
-    string Name,
+    string? Name,                 // Optional - null if no custom name set
     string? Description,
     DateTime EventDate,
     int Duration,
@@ -30,17 +30,17 @@ public record EventDto(
 );
 
 public record CreateEventRequest(
-    Guid? OrganizationId,         // Nullable - omit for standalone pickup games
-    string Name,
-    string? Description,
     DateTime EventDate,
-    int Duration,
-    string? Venue,
     int MaxPlayers,
     decimal Cost,
-    DateTime? RegistrationDeadline,
-    string? Visibility = "Public", // Default to public if not specified
-    List<string>? SkillLevels = null  // Optional - overrides org's skill levels if set
+    Guid? OrganizationId = null,         // Optional - omit for standalone pickup games
+    string? Name = null,                 // Optional - generates default based on date if not provided
+    string? Description = null,
+    int? Duration = null,                // Optional - defaults to 60 minutes if not provided
+    string? Venue = null,
+    DateTime? RegistrationDeadline = null,
+    string? Visibility = "Public",       // Default to public if not specified
+    List<string>? SkillLevels = null     // Optional - overrides org's skill levels if set
 );
 
 public record UpdateEventRequest(

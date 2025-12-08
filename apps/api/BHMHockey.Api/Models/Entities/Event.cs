@@ -10,7 +10,7 @@ public class Event
 
     public Guid CreatorId { get; set; }
     public User Creator { get; set; } = null!;
-    public string Name { get; set; } = string.Empty;
+    public string? Name { get; set; }  // Optional - null means no custom name
     public string? Description { get; set; }
     public DateTime EventDate { get; set; }
     public int Duration { get; set; } = 60; // minutes
