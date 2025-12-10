@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Web;
 using BHMHockey.Api.Data;
 using BHMHockey.Api.Services;
 
@@ -20,7 +21,24 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Database Configuration
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+// DigitalOcean provides DATABASE_URL in postgres:// format, convert to .NET connection string
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+string connectionString;
+
+if (!string.IsNullOrEmpty(databaseUrl))
+{
+    // Convert DigitalOcean DATABASE_URL format to .NET connection string
+    // Input:  postgresql://user:pass@host:port/database?sslmode=require
+    // Output: Host=host;Port=port;Database=database;Username=user;Password=pass;SSL Mode=Require;Trust Server Certificate=true
+    connectionString = ConvertDatabaseUrl(databaseUrl);
+    Console.WriteLine("📦 Using DATABASE_URL from environment");
+}
+else
+{
+    connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
+    Console.WriteLine("📦 Using connection string from appsettings");
+}
+
 var dataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(connectionString);
 dataSourceBuilder.EnableDynamicJson();  // Required for Dictionary<string, string> JSON serialization in Npgsql 8.0+
 var dataSource = dataSourceBuilder.Build();
@@ -148,3 +166,36 @@ app.MapGet("/", () => new
 });
 
 app.Run();
+
+// Helper function to convert DATABASE_URL to .NET connection string
+static string ConvertDatabaseUrl(string databaseUrl)
+{
+    // DigitalOcean provides: postgresql://user:pass@host:port/database?sslmode=require
+    // We need: Host=host;Port=port;Database=database;Username=user;Password=pass;SSL Mode=Require;Trust Server Certificate=true
+
+    if (string.IsNullOrEmpty(databaseUrl)) return databaseUrl;
+
+    // Handle both postgresql:// and postgres:// schemes
+    if (!databaseUrl.StartsWith("postgresql://") && !databaseUrl.StartsWith("postgres://"))
+        return databaseUrl;
+
+    var uri = new Uri(databaseUrl.Replace("postgres://", "postgresql://"));
+    var userInfo = uri.UserInfo.Split(':');
+    var query = HttpUtility.ParseQueryString(uri.Query);
+
+    var connectionStringBuilder = new StringBuilder();
+    connectionStringBuilder.Append($"Host={uri.Host};");
+    connectionStringBuilder.Append($"Port={uri.Port};");
+    connectionStringBuilder.Append($"Database={uri.AbsolutePath.TrimStart('/')};");
+    connectionStringBuilder.Append($"Username={userInfo[0]};");
+    connectionStringBuilder.Append($"Password={Uri.UnescapeDataString(userInfo[1])};");
+
+    // Handle SSL mode
+    var sslMode = query["sslmode"];
+    if (sslMode == "require")
+    {
+        connectionStringBuilder.Append("SSL Mode=Require;Trust Server Certificate=true;");
+    }
+
+    return connectionStringBuilder.ToString();
+}
