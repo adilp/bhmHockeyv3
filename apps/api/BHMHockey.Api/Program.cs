@@ -126,9 +126,11 @@ builder.Services.AddScoped<IOrganizationAdminService, OrganizationAdminService>(
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IWaitlistService, WaitlistService>();
+builder.Services.AddScoped<IEventReminderService, EventReminderService>();
 
 // Background Services
 builder.Services.AddHostedService<WaitlistBackgroundService>();
+builder.Services.AddHostedService<EventReminderBackgroundService>();
 
 // Health Checks
 builder.Services.AddHealthChecks()

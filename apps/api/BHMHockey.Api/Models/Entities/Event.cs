@@ -32,6 +32,10 @@ public class Event
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    // Reminder tracking - to avoid sending duplicates
+    public DateTime? PlayerReminderSentAt { get; set; }
+    public DateTime? OrganizerPaymentReminderSentAt { get; set; }
+
     // Navigation properties
     public ICollection<EventRegistration> Registrations { get; set; } = new List<EventRegistration>();
 

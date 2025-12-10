@@ -131,21 +131,8 @@ export default function EventRegistrationsScreen() {
     if (!id) return;
 
     const newTeam: TeamAssignment = registration.teamAssignment === 'Black' ? 'White' : 'Black';
-
-    Alert.alert(
-      'Swap Team',
-      `Move ${registration.user.firstName} to Team ${newTeam}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Swap',
-          onPress: async () => {
-            const success = await updateTeamAssignment(id, registration.id, newTeam);
-            if (success) await loadRegistrations();
-          },
-        },
-      ]
-    );
+    const success = await updateTeamAssignment(id, registration.id, newTeam);
+    if (success) await loadRegistrations();
   };
 
   const handleRemove = async (registration: EventRegistrationDto) => {

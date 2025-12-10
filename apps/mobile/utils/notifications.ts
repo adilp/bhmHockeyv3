@@ -149,9 +149,17 @@ export function handleNotificationData(data: NotificationData | null) {
       break;
 
     case 'payment_reminder':
-      // Payment reminder - navigate to event detail
+    case 'game_reminder':
+      // Payment/game reminder - navigate to event detail
       if (data.eventId) {
         router.push(`/events/${data.eventId}`);
+      }
+      break;
+
+    case 'organizer_payment_reminder':
+      // Organizer payment reminder - navigate to registrations list
+      if (data.eventId) {
+        router.push(`/events/${data.eventId}/registrations`);
       }
       break;
 
