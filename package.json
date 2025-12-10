@@ -24,7 +24,9 @@
     "test:api-client": "yarn workspace @bhmhockey/api-client test",
     "test:mobile": "yarn workspace @bhmhockey/mobile test",
     "test:watch": "yarn workspace @bhmhockey/mobile test:watch",
-    "test:coverage": "yarn test:api -- --collect:\"XPlat Code Coverage\" && yarn test:frontend --coverage"
+    "test:coverage": "yarn test:api -- --collect:\"XPlat Code Coverage\" && yarn test:frontend --coverage",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
@@ -33,5 +35,10 @@
   "description": "BHM Hockey - Monorepo for mobile app and API",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "expo": "~54.0.25",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   }
 }

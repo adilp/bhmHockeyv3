@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0D1117"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -18,13 +18,15 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.bhmhockey.app",
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["venmo"]
+        "LSApplicationQueriesSchemes": [
+          "venmo"
+        ]
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0D1117"
       },
       "package": "com.bhmhockey.app"
     },
@@ -38,7 +40,7 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#ffffff"
+          "color": "#00D9C0"
         }
       ]
     ],
@@ -46,9 +48,12 @@
       "router": {
         "origin": false
       },
+      "apiUrl": "https://bhmhockey-mb3md.ondigitalocean.app/api",
+      "environment": "development",
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "f6225f7a-0181-4b8c-b44a-cea3e0017cfa"
       }
-    }
+    },
+    "owner": "adilp"
   }
 }
