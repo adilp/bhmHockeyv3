@@ -149,16 +149,33 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("🔄 Starting database migration...");
         Console.WriteLine("🔄 Starting database migration...");
 
-        var pendingMigrations = db.Database.GetPendingMigrations().ToList();
-        if (pendingMigrations.Any())
+        // Log ALL migrations known to EF Core
+        var allMigrations = db.Database.GetMigrations().ToList();
+        Console.WriteLine($"📋 All migrations in assembly: {allMigrations.Count}");
+        foreach (var m in allMigrations)
         {
-            logger.LogInformation("📋 Pending migrations: {Migrations}", string.Join(", ", pendingMigrations));
-            Console.WriteLine($"📋 Pending migrations: {string.Join(", ", pendingMigrations)}");
+            Console.WriteLine($"   - {m}");
         }
-        else
+
+        // Log applied migrations from database
+        var appliedMigrations = db.Database.GetAppliedMigrations().ToList();
+        Console.WriteLine($"📋 Applied migrations in DB: {appliedMigrations.Count}");
+        foreach (var m in appliedMigrations)
         {
-            logger.LogInformation("✅ No pending migrations");
-            Console.WriteLine("✅ No pending migrations");
+            Console.WriteLine($"   - {m}");
+        }
+
+        // Log pending migrations
+        var pendingMigrations = db.Database.GetPendingMigrations().ToList();
+        Console.WriteLine($"📋 Pending migrations: {pendingMigrations.Count}");
+        foreach (var m in pendingMigrations)
+        {
+            Console.WriteLine($"   - {m}");
+        }
+
+        if (!pendingMigrations.Any())
+        {
+            Console.WriteLine("✅ No pending migrations to apply");
         }
 
         db.Database.Migrate();
