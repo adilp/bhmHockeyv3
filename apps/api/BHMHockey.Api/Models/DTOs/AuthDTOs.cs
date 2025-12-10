@@ -5,7 +5,9 @@ public record RegisterRequest(
     string Password,
     string FirstName,
     string LastName,
-    string? PhoneNumber
+    string? PhoneNumber,
+    Dictionary<string, string>? Positions,
+    string? VenmoHandle
 );
 
 public record LoginRequest(

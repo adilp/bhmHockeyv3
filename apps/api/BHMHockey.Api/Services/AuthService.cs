@@ -39,6 +39,8 @@ public class AuthService : IAuthService
             FirstName = request.FirstName,
             LastName = request.LastName,
             PhoneNumber = request.PhoneNumber,
+            Positions = request.Positions,
+            VenmoHandle = request.VenmoHandle,
             Role = "Player"
         };
 

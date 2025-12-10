@@ -13,22 +13,38 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../stores/authStore';
+import type { SkillLevel } from '@bhmhockey/shared';
+import {
+  FormSection,
+  FormInput,
+  PositionSelector,
+  buildPositionsFromState,
+} from '../../components';
 import { colors, spacing, radius } from '../../theme';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const register = useAuthStore((state) => state.register);
 
+  // Basic info
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Profile fields
+  const [venmoHandle, setVenmoHandle] = useState('');
+  const [isGoalie, setIsGoalie] = useState(false);
+  const [goalieSkill, setGoalieSkill] = useState<SkillLevel>('Bronze');
+  const [isSkater, setIsSkater] = useState(false);
+  const [skaterSkill, setSkaterSkill] = useState<SkillLevel>('Bronze');
+
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
     if (!firstName || !lastName || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
@@ -37,10 +53,12 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters');
+    if (!isGoalie && !isSkater) {
+      Alert.alert('Error', 'Please select at least one position (Goalie or Skater)');
       return;
     }
+
+    const positions = buildPositionsFromState({ isGoalie, goalieSkill, isSkater, skaterSkill });
 
     try {
       setLoading(true);
@@ -49,6 +67,8 @@ export default function RegisterScreen() {
         lastName,
         email,
         password,
+        positions,
+        venmoHandle: venmoHandle || undefined,
       });
       router.replace('/(tabs)');
     } catch (error: any) {
@@ -77,40 +97,33 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.form}>
-          <View style={styles.row}>
-            <View style={[styles.field, styles.halfField]}>
-              <Text style={styles.label}>First Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="John"
-                placeholderTextColor={colors.text.muted}
-                value={firstName}
-                onChangeText={setFirstName}
-                autoComplete="given-name"
-                editable={!loading}
-              />
+          <FormSection title="Basic Information">
+            <View style={styles.row}>
+              <View style={styles.halfField}>
+                <FormInput
+                  label="First Name *"
+                  placeholder="John"
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  autoComplete="given-name"
+                  editable={!loading}
+                />
+              </View>
+              <View style={styles.halfField}>
+                <FormInput
+                  label="Last Name *"
+                  placeholder="Doe"
+                  value={lastName}
+                  onChangeText={setLastName}
+                  autoComplete="family-name"
+                  editable={!loading}
+                />
+              </View>
             </View>
 
-            <View style={[styles.field, styles.halfField]}>
-              <Text style={styles.label}>Last Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Doe"
-                placeholderTextColor={colors.text.muted}
-                value={lastName}
-                onChangeText={setLastName}
-                autoComplete="family-name"
-                editable={!loading}
-              />
-            </View>
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
+            <FormInput
+              label="Email *"
               placeholder="you@example.com"
-              placeholderTextColor={colors.text.muted}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -118,35 +131,53 @@ export default function RegisterScreen() {
               autoComplete="email"
               editable={!loading}
             />
-          </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="At least 8 characters"
-              placeholderTextColor={colors.text.muted}
+            <FormInput
+              label="Password *"
+              placeholder="Enter password"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="password-new"
               editable={!loading}
             />
-          </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <TextInput
-              style={styles.input}
+            <FormInput
+              label="Confirm Password *"
               placeholder="Re-enter password"
-              placeholderTextColor={colors.text.muted}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
               autoComplete="password-new"
               editable={!loading}
             />
-          </View>
+          </FormSection>
+
+          <FormSection title="Positions *" hint="Select at least one position">
+            <PositionSelector
+              isGoalie={isGoalie}
+              goalieSkill={goalieSkill}
+              isSkater={isSkater}
+              skaterSkill={skaterSkill}
+              onGoalieChange={setIsGoalie}
+              onGoalieSkillChange={setGoalieSkill}
+              onSkaterChange={setIsSkater}
+              onSkaterSkillChange={setSkaterSkill}
+              disabled={loading}
+            />
+          </FormSection>
+
+          <FormSection title="Payment (Optional)">
+            <FormInput
+              label="Venmo Handle"
+              placeholder="@username"
+              value={venmoHandle}
+              onChangeText={setVenmoHandle}
+              autoCapitalize="none"
+              editable={!loading}
+              hint="For receiving payments when you organize events"
+            />
+          </FormSection>
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -162,10 +193,7 @@ export default function RegisterScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              disabled={loading}
-            >
+            <TouchableOpacity onPress={() => router.back()} disabled={loading}>
               <Text style={styles.link}>Sign In</Text>
             </TouchableOpacity>
           </View>
@@ -182,11 +210,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     padding: spacing.lg,
+    paddingTop: spacing.xxl,
   },
   header: {
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.lg,
     alignItems: 'center',
   },
   title: {
@@ -206,26 +234,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  field: {
-    marginBottom: spacing.lg,
-  },
   halfField: {
     width: '48%',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-    color: colors.text.secondary,
-  },
-  input: {
-    backgroundColor: colors.bg.elevated,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    fontSize: 16,
-    color: colors.text.primary,
   },
   button: {
     backgroundColor: colors.primary.teal,
@@ -246,6 +256,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: spacing.lg,
+    marginBottom: spacing.xxl,
   },
   footerText: {
     fontSize: 14,

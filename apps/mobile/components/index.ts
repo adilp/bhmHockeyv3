@@ -19,6 +19,10 @@ export { EventForm } from './EventForm';
 export type { EventFormData } from './EventForm';
 export { OrgForm } from './OrgForm';
 export type { OrgFormData } from './OrgForm';
+export { FormSection } from './FormSection';
+export { FormInput } from './FormInput';
+export { PositionSelector, buildPositionsFromState, createStateFromPositions } from './PositionSelector';
+export type { PositionState } from './PositionSelector';
 
 // Utility components
 export { EnvBanner } from './EnvBanner';

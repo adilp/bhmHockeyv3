@@ -234,6 +234,8 @@ export interface RegisterRequest {
   firstName: string;
   lastName: string;
   phoneNumber?: string;
+  positions?: UserPositions;
+  venmoHandle?: string;
 }
 
 export interface AuthResponse {
