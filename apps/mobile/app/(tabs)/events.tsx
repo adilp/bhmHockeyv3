@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useEventStore } from '../../stores/eventStore';
@@ -15,6 +16,17 @@ import { EventCard, EmptyState } from '../../components';
 import { colors, spacing, radius } from '../../theme';
 import type { EventDto } from '@bhmhockey/shared';
 import type { EventCardVariant } from '../../components';
+
+// Filter options
+type FilterOption = 'all' | 'available' | 'registered' | 'organizing' | 'waitlisted';
+
+const FILTER_OPTIONS: { key: FilterOption; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'available', label: 'Available' },
+  { key: 'registered', label: 'Registered' },
+  { key: 'waitlisted', label: 'Waitlisted' },
+  { key: 'organizing', label: 'Organizing' },
+];
 
 // Determine card variant based on user's relationship to event
 function getEventVariant(event: EventDto): EventCardVariant {
@@ -34,9 +46,27 @@ export default function EventsScreen() {
     fetchEvents,
   } = useEventStore();
 
+  const [activeFilter, setActiveFilter] = useState<FilterOption>('all');
+
   useEffect(() => {
     fetchEvents();
   }, []);
+
+  // Filter events based on selected filter
+  const filteredEvents = useMemo(() => {
+    switch (activeFilter) {
+      case 'available':
+        return events.filter(e => !e.isRegistered && !e.canManage && !e.amIWaitlisted && e.registeredCount < e.maxPlayers);
+      case 'registered':
+        return events.filter(e => e.isRegistered);
+      case 'organizing':
+        return events.filter(e => e.canManage);
+      case 'waitlisted':
+        return events.filter(e => e.amIWaitlisted);
+      default:
+        return events;
+    }
+  }, [events, activeFilter]);
 
   const handleEventPress = (eventId: string) => {
     router.push(`/events/${eventId}`);
@@ -79,6 +109,35 @@ export default function EventsScreen() {
         </View>
       </View>
 
+      {/* Filter Pills */}
+      <View style={styles.filterContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterContent}
+        >
+        {FILTER_OPTIONS.map((filter) => (
+          <TouchableOpacity
+            key={filter.key}
+            style={[
+              styles.filterPill,
+              activeFilter === filter.key && styles.filterPillActive,
+            ]}
+            onPress={() => setActiveFilter(filter.key)}
+          >
+            <Text
+              style={[
+                styles.filterPillText,
+                activeFilter === filter.key && styles.filterPillTextActive,
+              ]}
+            >
+              {filter.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        </ScrollView>
+      </View>
+
       {/* Error banner */}
       {error && (
         <View style={styles.errorBanner}>
@@ -87,7 +146,7 @@ export default function EventsScreen() {
       )}
 
       <FlatList
-        data={events}
+        data={filteredEvents}
         renderItem={renderEvent}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
@@ -179,5 +238,41 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: spacing.lg,
+  },
+  // Filter Pills styles (matching design-reference-rows.html)
+  filterContainer: {
+    backgroundColor: colors.bg.darkest,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  filterContent: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.muted,
+    borderRadius: 9999, // pill shape
+    marginRight: spacing.sm,
+  },
+  filterPillActive: {
+    backgroundColor: colors.primary.teal,
+    borderColor: colors.primary.teal,
+  },
+  filterPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    lineHeight: 18,
+  },
+  filterPillTextActive: {
+    color: colors.bg.darkest,
   },
 });

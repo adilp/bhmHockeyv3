@@ -22,6 +22,29 @@ const variantColors: Record<EventCardVariant, string | null> = {
 
 function formatDateTime(dateString: string): string {
   const date = new Date(dateString);
+  const now = new Date();
+
+  // Get date parts for comparison (in local timezone)
+  const eventDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // Format time
+  const timeStr = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  // Check if today or tomorrow
+  if (eventDay.getTime() === today.getTime()) {
+    return `Today at ${timeStr}`;
+  }
+  if (eventDay.getTime() === tomorrow.getTime()) {
+    return `Tomorrow at ${timeStr}`;
+  }
+
+  // Otherwise show full date
   return date.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
