@@ -16,6 +16,7 @@ namespace BHMHockey.Api.Tests.Controllers;
 public class EventsControllerTests
 {
     private readonly Mock<IEventService> _mockEventService;
+    private readonly Mock<IWaitlistService> _mockWaitlistService;
     private readonly EventsController _controller;
     private readonly Guid _testUserId = Guid.NewGuid();
     private readonly Guid _testOrgId = Guid.NewGuid();
@@ -24,7 +25,8 @@ public class EventsControllerTests
     public EventsControllerTests()
     {
         _mockEventService = new Mock<IEventService>();
-        _controller = new EventsController(_mockEventService.Object);
+        _mockWaitlistService = new Mock<IWaitlistService>();
+        _controller = new EventsController(_mockEventService.Object, _mockWaitlistService.Object);
     }
 
     #region Test Helpers
@@ -88,7 +90,11 @@ public class EventsControllerTests
             CreatorVenmoHandle: null,    // Phase 4
             MyPaymentStatus: null,       // Phase 4
             MyTeamAssignment: null,      // Team assignment
-            UnpaidCount: null            // Organizer view
+            UnpaidCount: null,           // Organizer view
+            WaitlistCount: 0,            // Phase 5 - Waitlist
+            MyWaitlistPosition: null,    // Phase 5 - Waitlist
+            MyPaymentDeadline: null,     // Phase 5 - Waitlist
+            AmIWaitlisted: false         // Phase 5 - Waitlist
         );
     }
 
@@ -392,15 +398,17 @@ public class EventsControllerTests
     {
         // Arrange
         SetupAuthenticatedUser();
+        var registrationResult = new RegistrationResultDto("Registered", null, "Successfully registered!");
         _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId, null))
-            .ReturnsAsync(true);
+            .ReturnsAsync(registrationResult);
 
         // Act
         var result = await _controller.Register(_testEventId, null);
 
         // Assert
-        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
-        okResult.Value.Should().NotBeNull();
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returnedResult = okResult.Value.Should().BeOfType<RegistrationResultDto>().Subject;
+        returnedResult.Status.Should().Be("Registered");
     }
 
     [Fact]
@@ -409,28 +417,32 @@ public class EventsControllerTests
         // Arrange
         SetupAuthenticatedUser();
         _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId, null))
-            .ReturnsAsync(false);
+            .ThrowsAsync(new InvalidOperationException("Already registered for this event"));
 
         // Act
         var result = await _controller.Register(_testEventId, null);
 
         // Assert
-        result.Should().BeOfType<BadRequestObjectResult>();
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     [Fact]
-    public async Task Register_WhenEventFull_Returns400()
+    public async Task Register_WhenEventFull_ReturnsWaitlisted()
     {
         // Arrange
         SetupAuthenticatedUser();
+        var waitlistResult = new RegistrationResultDto("Waitlisted", 1, "Event is full. You're #1 on the waitlist.");
         _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId, null))
-            .ThrowsAsync(new InvalidOperationException("Event is full"));
+            .ReturnsAsync(waitlistResult);
 
         // Act
         var result = await _controller.Register(_testEventId, null);
 
         // Assert
-        result.Should().BeOfType<BadRequestObjectResult>();
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returnedResult = okResult.Value.Should().BeOfType<RegistrationResultDto>().Subject;
+        returnedResult.Status.Should().Be("Waitlisted");
+        returnedResult.WaitlistPosition.Should().Be(1);
     }
 
     [Fact]
@@ -439,14 +451,15 @@ public class EventsControllerTests
         // Arrange
         SetupAuthenticatedUser();
         var request = new RegisterForEventRequest("Goalie");
+        var registrationResult = new RegistrationResultDto("Registered", null, "Successfully registered!");
         _mockEventService.Setup(s => s.RegisterAsync(_testEventId, _testUserId, "Goalie"))
-            .ReturnsAsync(true);
+            .ReturnsAsync(registrationResult);
 
         // Act
         var result = await _controller.Register(_testEventId, request);
 
         // Assert
-        result.Should().BeOfType<OkObjectResult>();
+        result.Result.Should().BeOfType<OkObjectResult>();
         _mockEventService.Verify(s => s.RegisterAsync(_testEventId, _testUserId, "Goalie"), Times.Once);
     }
 
@@ -497,7 +510,11 @@ public class EventsControllerTests
                 PaymentStatus: null,           // Phase 4
                 PaymentMarkedAt: null,         // Phase 4
                 PaymentVerifiedAt: null,       // Phase 4
-                TeamAssignment: null           // Team assignment
+                TeamAssignment: null,          // Team assignment
+                WaitlistPosition: null,        // Phase 5 - Waitlist
+                PromotedAt: null,              // Phase 5 - Waitlist
+                PaymentDeadlineAt: null,       // Phase 5 - Waitlist
+                IsWaitlisted: false            // Phase 5 - Waitlist
             )
         };
         _mockEventService.Setup(s => s.GetRegistrationsAsync(_testEventId))

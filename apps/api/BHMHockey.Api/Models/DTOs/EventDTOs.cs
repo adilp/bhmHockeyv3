@@ -26,7 +26,12 @@ public record EventDto(
     // Team assignment
     string? MyTeamAssignment,     // Current user's team assignment ("Black" or "White")
     // Organizer fields (only populated when CanManage = true)
-    int? UnpaidCount              // Count of registrations with PaymentStatus != "Verified" (only for paid events)
+    int? UnpaidCount,             // Count of registrations with PaymentStatus != "Verified" (only for paid events)
+    // Waitlist fields (Phase 5)
+    int WaitlistCount,            // Number of people on waitlist
+    int? MyWaitlistPosition,      // Current user's waitlist position (null if not waitlisted)
+    DateTime? MyPaymentDeadline,  // Current user's payment deadline after promotion (null if none)
+    bool AmIWaitlisted            // Convenience flag - true if current user is on waitlist
 );
 
 public record CreateEventRequest(
@@ -70,7 +75,12 @@ public record EventRegistrationDto(
     DateTime? PaymentMarkedAt,
     DateTime? PaymentVerifiedAt,
     // Team assignment
-    string? TeamAssignment       // "Black" or "White"
+    string? TeamAssignment,      // "Black" or "White"
+    // Waitlist fields (Phase 5)
+    int? WaitlistPosition,       // Position in waitlist (1 = first, null = not waitlisted)
+    DateTime? PromotedAt,        // When user was promoted from waitlist
+    DateTime? PaymentDeadlineAt, // Deadline to pay after promotion
+    bool IsWaitlisted            // True if Status == "Waitlisted"
 );
 
 // Payment request DTOs (Phase 4)
@@ -90,4 +100,11 @@ public record UpdateTeamAssignmentRequest(
 // Registration request DTO
 public record RegisterForEventRequest(
     string? Position             // "Goalie" or "Skater" (optional if user has only one position)
+);
+
+// Registration result DTO (Phase 5 - includes waitlist info)
+public record RegistrationResultDto(
+    string Status,               // "Registered" or "Waitlisted"
+    int? WaitlistPosition,       // Position if waitlisted (null if registered)
+    string Message               // User-friendly message
 );

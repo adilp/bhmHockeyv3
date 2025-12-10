@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace BHMHockey.Api.Models.Entities;
 
 public class EventRegistration
@@ -20,4 +22,16 @@ public class EventRegistration
 
     // Team assignment for games
     public string? TeamAssignment { get; set; } // "Black" or "White"
+
+    // Waitlist fields (Phase 5)
+    public int? WaitlistPosition { get; set; } // Position in waitlist (1 = first, null = not waitlisted)
+    public DateTime? PromotedAt { get; set; } // When user was promoted from waitlist
+    public DateTime? PaymentDeadlineAt { get; set; } // Deadline to pay after promotion (2 hours)
+
+    // Computed properties
+    [NotMapped]
+    public bool IsWaitlisted => Status == "Waitlisted";
+
+    [NotMapped]
+    public bool IsPromotedAndPending => PromotedAt != null && PaymentStatus == "Pending";
 }

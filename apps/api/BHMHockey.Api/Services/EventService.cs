@@ -10,13 +10,19 @@ public class EventService : IEventService
     private readonly AppDbContext _context;
     private readonly INotificationService _notificationService;
     private readonly IOrganizationAdminService _adminService;
+    private readonly IWaitlistService _waitlistService;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
-    public EventService(AppDbContext context, INotificationService notificationService, IOrganizationAdminService adminService)
+    public EventService(
+        AppDbContext context,
+        INotificationService notificationService,
+        IOrganizationAdminService adminService,
+        IWaitlistService waitlistService)
     {
         _context = context;
         _notificationService = notificationService;
         _adminService = adminService;
+        _waitlistService = waitlistService;
     }
 
     private void ValidateSkillLevels(List<string>? skillLevels)
@@ -49,6 +55,18 @@ public class EventService : IEventService
             // Standalone event: only creator can manage
             return evt.CreatorId == userId;
         }
+    }
+
+    /// <summary>
+    /// Public method to check if user can manage an event by ID.
+    /// Used by controller for authorization checks.
+    /// </summary>
+    public async Task<bool> CanUserManageEventAsync(Guid eventId, Guid userId)
+    {
+        var evt = await _context.Events.FindAsync(eventId);
+        if (evt == null) return false;
+
+        return await CanUserManageEventAsync(evt, userId);
     }
 
     public async Task<EventDto> CreateAsync(CreateEventRequest request, Guid creatorId)
@@ -292,13 +310,16 @@ public class EventService : IEventService
         return true;
     }
 
-    public async Task<bool> RegisterAsync(Guid eventId, Guid userId, string? position = null)
+    public async Task<RegistrationResultDto> RegisterAsync(Guid eventId, Guid userId, string? position = null)
     {
         var evt = await _context.Events
             .Include(e => e.Registrations)
             .FirstOrDefaultAsync(e => e.Id == eventId);
 
-        if (evt == null) return false;
+        if (evt == null)
+        {
+            throw new InvalidOperationException("Event not found");
+        }
 
         // Check registration deadline
         if (evt.RegistrationDeadline.HasValue && evt.RegistrationDeadline.Value < DateTime.UtcNow)
@@ -308,7 +329,10 @@ public class EventService : IEventService
 
         // Get user to validate/determine position
         var user = await _context.Users.FindAsync(userId);
-        if (user == null) return false;
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found");
+        }
 
         // Determine the position to register with
         var registeredPosition = DetermineRegistrationPosition(user, position);
@@ -316,47 +340,98 @@ public class EventService : IEventService
         var existingReg = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
 
-        // If already registered (not cancelled), return false
-        if (existingReg != null && existingReg.Status == "Registered") return false;
-
-        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
-        if (registeredCount >= evt.MaxPlayers)
+        // If already registered (not cancelled or waitlisted), throw error
+        if (existingReg != null && (existingReg.Status == "Registered" || existingReg.Status == "Waitlisted"))
         {
-            throw new InvalidOperationException("Event is full");
+            throw new InvalidOperationException("Already registered for this event");
         }
 
-        // Determine team assignment (balanced by position - goalies with goalies, skaters with skaters)
-        var teamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
+        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
+        bool isWaitlisted = registeredCount >= evt.MaxPlayers;
 
-        if (existingReg != null)
+        if (isWaitlisted)
         {
-            // Re-activate cancelled registration
-            existingReg.Status = "Registered";
-            existingReg.RegisteredAt = DateTime.UtcNow;
-            existingReg.RegisteredPosition = registeredPosition;
-            existingReg.TeamAssignment = teamAssignment;
-            // Reset payment status for paid events
-            existingReg.PaymentStatus = evt.Cost > 0 ? "Pending" : null;
-            existingReg.PaymentMarkedAt = null;
-            existingReg.PaymentVerifiedAt = null;
+            // Add to waitlist
+            var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
+
+            if (existingReg != null)
+            {
+                // Re-activate cancelled registration as waitlisted
+                existingReg.Status = "Waitlisted";
+                existingReg.RegisteredAt = DateTime.UtcNow;
+                existingReg.RegisteredPosition = registeredPosition;
+                existingReg.WaitlistPosition = waitlistPosition;
+                existingReg.TeamAssignment = null; // No team until promoted
+                existingReg.PaymentStatus = evt.Cost > 0 ? "Pending" : null;
+                existingReg.PaymentMarkedAt = null;
+                existingReg.PaymentVerifiedAt = null;
+                existingReg.PromotedAt = null;
+                existingReg.PaymentDeadlineAt = null;
+            }
+            else
+            {
+                // Create new waitlisted registration
+                var registration = new EventRegistration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    Status = "Waitlisted",
+                    RegisteredPosition = registeredPosition,
+                    WaitlistPosition = waitlistPosition,
+                    PaymentStatus = evt.Cost > 0 ? "Pending" : null
+                };
+                _context.EventRegistrations.Add(registration);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return new RegistrationResultDto(
+                "Waitlisted",
+                waitlistPosition,
+                $"Event is full. You're #{waitlistPosition} on the waitlist."
+            );
         }
         else
         {
-            // Create new registration
-            var registration = new EventRegistration
-            {
-                EventId = eventId,
-                UserId = userId,
-                RegisteredPosition = registeredPosition,
-                TeamAssignment = teamAssignment,
-                // Set payment status based on event cost
-                PaymentStatus = evt.Cost > 0 ? "Pending" : null
-            };
-            _context.EventRegistrations.Add(registration);
-        }
+            // Normal registration
+            var teamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
 
-        await _context.SaveChangesAsync();
-        return true;
+            if (existingReg != null)
+            {
+                // Re-activate cancelled registration
+                existingReg.Status = "Registered";
+                existingReg.RegisteredAt = DateTime.UtcNow;
+                existingReg.RegisteredPosition = registeredPosition;
+                existingReg.TeamAssignment = teamAssignment;
+                existingReg.WaitlistPosition = null;
+                existingReg.PaymentStatus = evt.Cost > 0 ? "Pending" : null;
+                existingReg.PaymentMarkedAt = null;
+                existingReg.PaymentVerifiedAt = null;
+                existingReg.PromotedAt = null;
+                existingReg.PaymentDeadlineAt = null;
+            }
+            else
+            {
+                // Create new registration
+                var registration = new EventRegistration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    RegisteredPosition = registeredPosition,
+                    TeamAssignment = teamAssignment,
+                    PaymentStatus = evt.Cost > 0 ? "Pending" : null
+                };
+                _context.EventRegistrations.Add(registration);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return new RegistrationResultDto(
+                "Registered",
+                null,
+                "Successfully registered!"
+            );
+        }
     }
 
     /// <summary>
@@ -423,8 +498,24 @@ public class EventService : IEventService
 
         if (registration == null) return false;
 
+        var wasRegistered = registration.Status == "Registered";
+        var wasWaitlisted = registration.Status == "Waitlisted";
+
         registration.Status = "Cancelled";
+        registration.WaitlistPosition = null;
+        registration.PaymentDeadlineAt = null;
         await _context.SaveChangesAsync();
+
+        // If a registered user cancels, promote next from waitlist
+        if (wasRegistered)
+        {
+            await _waitlistService.PromoteNextFromWaitlistAsync(eventId);
+        }
+        // If a waitlisted user cancels, renumber the waitlist
+        else if (wasWaitlisted)
+        {
+            await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
+        }
 
         return true;
     }
@@ -456,7 +547,11 @@ public class EventService : IEventService
             r.PaymentStatus,        // Phase 4
             r.PaymentMarkedAt,      // Phase 4
             r.PaymentVerifiedAt,    // Phase 4
-            r.TeamAssignment        // Team assignment
+            r.TeamAssignment,       // Team assignment
+            r.WaitlistPosition,     // Phase 5 - Waitlist
+            r.PromotedAt,           // Phase 5 - Waitlist
+            r.PaymentDeadlineAt,    // Phase 5 - Waitlist
+            r.IsWaitlisted          // Phase 5 - Waitlist
         )).ToList();
     }
 
@@ -526,6 +621,25 @@ public class EventService : IEventService
                 await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id && r.Status == "Registered" && r.PaymentStatus != "Verified");
         }
 
+        // Waitlist fields (Phase 5)
+        var waitlistCount = evt.Registrations?.Count(r => r.Status == "Waitlisted") ??
+            await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id && r.Status == "Waitlisted");
+
+        int? myWaitlistPosition = null;
+        DateTime? myPaymentDeadline = null;
+        bool amIWaitlisted = false;
+        if (currentUserId.HasValue)
+        {
+            var myReg = evt.Registrations?.FirstOrDefault(r => r.UserId == currentUserId.Value && r.Status != "Cancelled")
+                ?? await _context.EventRegistrations.FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && r.Status != "Cancelled");
+            if (myReg != null)
+            {
+                myWaitlistPosition = myReg.WaitlistPosition;
+                myPaymentDeadline = myReg.PaymentDeadlineAt;
+                amIWaitlisted = myReg.Status == "Waitlisted";
+            }
+        }
+
         return new EventDto(
             evt.Id,
             evt.OrganizationId,
@@ -549,7 +663,11 @@ public class EventService : IEventService
             creatorVenmoHandle,  // Phase 4
             myPaymentStatus,     // Phase 4
             myTeamAssignment,    // Team assignment
-            unpaidCount          // Organizer view
+            unpaidCount,         // Organizer view
+            waitlistCount,       // Phase 5 - Waitlist
+            myWaitlistPosition,  // Phase 5 - Waitlist
+            myPaymentDeadline,   // Phase 5 - Waitlist
+            amIWaitlisted        // Phase 5 - Waitlist
         );
     }
 

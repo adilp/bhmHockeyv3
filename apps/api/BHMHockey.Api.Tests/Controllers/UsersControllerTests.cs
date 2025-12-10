@@ -273,7 +273,11 @@ public class UsersControllerTests
                 CreatorVenmoHandle: null,    // Phase 4
                 MyPaymentStatus: null,       // Phase 4
                 MyTeamAssignment: null,      // Team assignment
-                UnpaidCount: null            // Organizer view
+                UnpaidCount: null,           // Organizer view
+                WaitlistCount: 0,            // Phase 5 - Waitlist
+                MyWaitlistPosition: null,    // Phase 5 - Waitlist
+                MyPaymentDeadline: null,     // Phase 5 - Waitlist
+                AmIWaitlisted: false         // Phase 5 - Waitlist
             )
         };
 

@@ -51,7 +51,7 @@ public class AuthServiceTests : IDisposable
     public async Task RegisterAsync_WithValidData_CreatesUserAndReturnsToken()
     {
         // Arrange
-        var request = new RegisterRequest("test@example.com", "Password1!", "John", "Doe", null);
+        var request = new RegisterRequest("test@example.com", "Password1!", "John", "Doe", null, null, null);
 
         // Act
         var result = await _sut.RegisterAsync(request);
@@ -68,7 +68,7 @@ public class AuthServiceTests : IDisposable
     public async Task RegisterAsync_WithDuplicateEmail_ThrowsInvalidOperationException()
     {
         // Arrange
-        var request = new RegisterRequest("dupe@example.com", "Password1!", "John", "Doe", null);
+        var request = new RegisterRequest("dupe@example.com", "Password1!", "John", "Doe", null, null, null);
         await _sut.RegisterAsync(request);
 
         // Act
@@ -84,7 +84,7 @@ public class AuthServiceTests : IDisposable
     {
         // Arrange
         var plainPassword = "Password1!";
-        var request = new RegisterRequest("hash@example.com", plainPassword, "John", "Doe", null);
+        var request = new RegisterRequest("hash@example.com", plainPassword, "John", "Doe", null, null, null);
 
         // Act
         await _sut.RegisterAsync(request);
@@ -99,8 +99,8 @@ public class AuthServiceTests : IDisposable
     public async Task RegisterAsync_GeneratesUniqueRefreshToken()
     {
         // Arrange
-        var request1 = new RegisterRequest("user1@example.com", "Password1!", "User", "One", null);
-        var request2 = new RegisterRequest("user2@example.com", "Password1!", "User", "Two", null);
+        var request1 = new RegisterRequest("user1@example.com", "Password1!", "User", "One", null, null, null);
+        var request2 = new RegisterRequest("user2@example.com", "Password1!", "User", "Two", null, null, null);
 
         // Act
         var result1 = await _sut.RegisterAsync(request1);
@@ -116,7 +116,7 @@ public class AuthServiceTests : IDisposable
     public async Task RegisterAsync_SetsUserRoleToPlayer()
     {
         // Arrange
-        var request = new RegisterRequest("role@example.com", "Password1!", "John", "Doe", null);
+        var request = new RegisterRequest("role@example.com", "Password1!", "John", "Doe", null, null, null);
 
         // Act
         var result = await _sut.RegisterAsync(request);
@@ -129,7 +129,7 @@ public class AuthServiceTests : IDisposable
     public async Task RegisterAsync_CreatesActiveUser()
     {
         // Arrange
-        var request = new RegisterRequest("active@example.com", "Password1!", "John", "Doe", null);
+        var request = new RegisterRequest("active@example.com", "Password1!", "John", "Doe", null, null, null);
 
         // Act
         await _sut.RegisterAsync(request);
@@ -143,7 +143,7 @@ public class AuthServiceTests : IDisposable
     public async Task RegisterAsync_WithPhoneNumber_StoresPhoneNumber()
     {
         // Arrange
-        var request = new RegisterRequest("phone@example.com", "Password1!", "John", "Doe", "1234567890");
+        var request = new RegisterRequest("phone@example.com", "Password1!", "John", "Doe", "1234567890", null, null);
 
         // Act
         var result = await _sut.RegisterAsync(request);
@@ -160,7 +160,7 @@ public class AuthServiceTests : IDisposable
     public async Task LoginAsync_WithValidCredentials_ReturnsAuthResponse()
     {
         // Arrange
-        await _sut.RegisterAsync(new RegisterRequest("login@example.com", "Password1!", "John", "Doe", null));
+        await _sut.RegisterAsync(new RegisterRequest("login@example.com", "Password1!", "John", "Doe", null, null, null));
         var loginRequest = new LoginRequest("login@example.com", "Password1!");
 
         // Act
@@ -176,7 +176,7 @@ public class AuthServiceTests : IDisposable
     public async Task LoginAsync_WithWrongPassword_ThrowsUnauthorizedException()
     {
         // Arrange
-        await _sut.RegisterAsync(new RegisterRequest("wrong@example.com", "Password1!", "John", "Doe", null));
+        await _sut.RegisterAsync(new RegisterRequest("wrong@example.com", "Password1!", "John", "Doe", null, null, null));
 
         // Act
         var act = () => _sut.LoginAsync(new LoginRequest("wrong@example.com", "WrongPassword!"));
@@ -199,7 +199,7 @@ public class AuthServiceTests : IDisposable
     public async Task LoginAsync_WithInactiveAccount_ThrowsUnauthorizedException()
     {
         // Arrange
-        await _sut.RegisterAsync(new RegisterRequest("inactive@example.com", "Password1!", "John", "Doe", null));
+        await _sut.RegisterAsync(new RegisterRequest("inactive@example.com", "Password1!", "John", "Doe", null, null, null));
         var user = await _context.Users.FirstAsync(u => u.Email == "inactive@example.com");
         user.IsActive = false;
         await _context.SaveChangesAsync();
@@ -220,7 +220,7 @@ public class AuthServiceTests : IDisposable
     public async Task GenerateJwtToken_ContainsRequiredClaims()
     {
         // Arrange
-        var request = new RegisterRequest("claims@example.com", "Password1!", "John", "Doe", null);
+        var request = new RegisterRequest("claims@example.com", "Password1!", "John", "Doe", null, null, null);
 
         // Act
         var result = await _sut.RegisterAsync(request);
@@ -237,7 +237,7 @@ public class AuthServiceTests : IDisposable
     public async Task GenerateJwtToken_HasCorrectExpiry()
     {
         // Arrange
-        var request = new RegisterRequest("expiry@example.com", "Password1!", "John", "Doe", null);
+        var request = new RegisterRequest("expiry@example.com", "Password1!", "John", "Doe", null, null, null);
 
         // Act
         var result = await _sut.RegisterAsync(request);
@@ -257,7 +257,7 @@ public class AuthServiceTests : IDisposable
         var mockConfigNoSecret = new Mock<IConfiguration>();
         mockConfigNoSecret.Setup(c => c["Jwt:Secret"]).Returns((string?)null);
         var serviceNoSecret = new AuthService(_context, mockConfigNoSecret.Object);
-        var request = new RegisterRequest("nosecret@example.com", "Password1!", "John", "Doe", null);
+        var request = new RegisterRequest("nosecret@example.com", "Password1!", "John", "Doe", null, null, null);
 
         // Add user to database first (registration will fail at token generation)
         _context.Users.Add(new User
@@ -271,7 +271,7 @@ public class AuthServiceTests : IDisposable
         await _context.SaveChangesAsync();
 
         // Act
-        var act = () => serviceNoSecret.RegisterAsync(new RegisterRequest("nosecret2@example.com", "Password1!", "Test", "User", null));
+        var act = () => serviceNoSecret.RegisterAsync(new RegisterRequest("nosecret2@example.com", "Password1!", "Test", "User", null, null, null));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -286,7 +286,7 @@ public class AuthServiceTests : IDisposable
     public async Task LogoutAsync_ReturnsTrue()
     {
         // Arrange
-        var registerResult = await _sut.RegisterAsync(new RegisterRequest("logout@example.com", "Password1!", "John", "Doe", null));
+        var registerResult = await _sut.RegisterAsync(new RegisterRequest("logout@example.com", "Password1!", "John", "Doe", null, null, null));
 
         // Act
         var result = await _sut.LogoutAsync(registerResult.User.Id);

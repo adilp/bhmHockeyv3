@@ -11,10 +11,12 @@ namespace BHMHockey.Api.Controllers;
 public class EventsController : ControllerBase
 {
     private readonly IEventService _eventService;
+    private readonly IWaitlistService _waitlistService;
 
-    public EventsController(IEventService eventService)
+    public EventsController(IEventService eventService, IWaitlistService waitlistService)
     {
         _eventService = eventService;
+        _waitlistService = waitlistService;
     }
 
     #region Authentication Helpers
@@ -144,23 +146,18 @@ public class EventsController : ControllerBase
     /// <summary>
     /// Register for an event. Requires authentication.
     /// Optionally specify position if user has multiple positions in their profile.
+    /// Returns registration result including waitlist status if event is full.
     /// </summary>
     [Authorize]
     [HttpPost("{id:guid}/register")]
-    public async Task<IActionResult> Register(Guid id, [FromBody] RegisterForEventRequest? request)
+    public async Task<ActionResult<RegistrationResultDto>> Register(Guid id, [FromBody] RegisterForEventRequest? request)
     {
         var userId = GetCurrentUserId();
 
         try
         {
-            var success = await _eventService.RegisterAsync(id, userId, request?.Position);
-
-            if (!success)
-            {
-                return BadRequest(new { message = "Already registered for this event" });
-            }
-
-            return Ok(new { message = "Successfully registered" });
+            var result = await _eventService.RegisterAsync(id, userId, request?.Position);
+            return Ok(result);
         }
         catch (InvalidOperationException ex)
         {
@@ -194,6 +191,53 @@ public class EventsController : ControllerBase
     {
         var registrations = await _eventService.GetRegistrationsAsync(id);
         return Ok(registrations);
+    }
+
+    /// <summary>
+    /// Get waitlist for an event. Organizers only.
+    /// </summary>
+    [Authorize]
+    [HttpGet("{id:guid}/waitlist")]
+    public async Task<ActionResult<List<EventRegistrationDto>>> GetWaitlist(Guid id)
+    {
+        var userId = GetCurrentUserId();
+
+        // Verify user can manage this event
+        if (!await _eventService.CanUserManageEventAsync(id, userId))
+        {
+            return Forbid();
+        }
+
+        var waitlist = await _waitlistService.GetWaitlistAsync(id);
+
+        var dtos = waitlist.Select(r => new EventRegistrationDto(
+            r.Id,
+            r.EventId,
+            new UserDto(
+                r.User.Id,
+                r.User.Email,
+                r.User.FirstName,
+                r.User.LastName,
+                r.User.PhoneNumber,
+                r.User.Positions,
+                r.User.VenmoHandle,
+                r.User.Role,
+                r.User.CreatedAt
+            ),
+            r.Status,
+            r.RegisteredAt,
+            r.RegisteredPosition,
+            r.PaymentStatus,
+            r.PaymentMarkedAt,
+            r.PaymentVerifiedAt,
+            r.TeamAssignment,
+            r.WaitlistPosition,
+            r.PromotedAt,
+            r.PaymentDeadlineAt,
+            r.IsWaitlisted
+        )).ToList();
+
+        return Ok(dtos);
     }
 
     #endregion

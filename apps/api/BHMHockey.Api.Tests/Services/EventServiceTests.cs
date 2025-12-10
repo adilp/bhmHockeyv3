@@ -22,6 +22,7 @@ public class EventServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
     private readonly Mock<INotificationService> _mockNotificationService;
+    private readonly Mock<IWaitlistService> _mockWaitlistService;
     private readonly OrganizationAdminService _adminService;
     private readonly EventService _sut;
 
@@ -32,8 +33,14 @@ public class EventServiceTests : IDisposable
             .Options;
         _context = new AppDbContext(options);
         _mockNotificationService = new Mock<INotificationService>();
+        _mockWaitlistService = new Mock<IWaitlistService>();
         _adminService = new OrganizationAdminService(_context);
-        _sut = new EventService(_context, _mockNotificationService.Object, _adminService);
+
+        // Default mock setup for waitlist service
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(1);
+
+        _sut = new EventService(_context, _mockNotificationService.Object, _adminService, _mockWaitlistService.Object);
     }
 
     public void Dispose()
@@ -176,7 +183,8 @@ public class EventServiceTests : IDisposable
         var result = await _sut.RegisterAsync(evt.Id, user.Id);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().Be("Registered");
+        result.WaitlistPosition.Should().BeNull();
         var registration = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == user.Id);
         registration.Should().NotBeNull();
@@ -184,7 +192,7 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task RegisterAsync_WhenAlreadyRegistered_ReturnsFalse()
+    public async Task RegisterAsync_WhenAlreadyRegistered_ThrowsException()
     {
         // Arrange
         var creator = await CreateTestUser("creator@example.com");
@@ -192,11 +200,10 @@ public class EventServiceTests : IDisposable
         var evt = await CreateTestEvent(creator.Id);
         await CreateRegistration(evt.Id, user.Id, "Registered");
 
-        // Act
-        var result = await _sut.RegisterAsync(evt.Id, user.Id);
-
-        // Assert
-        result.Should().BeFalse();
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.RegisterAsync(evt.Id, user.Id));
+        exception.Message.Should().Be("Already registered for this event");
 
         // Verify no duplicate was created
         var registrationCount = await _context.EventRegistrations
@@ -205,7 +212,7 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task RegisterAsync_WhenEventFull_ThrowsInvalidOperationException()
+    public async Task RegisterAsync_WhenEventFull_AddsToWaitlist()
     {
         // Arrange
         var creator = await CreateTestUser("creator@example.com");
@@ -219,9 +226,19 @@ public class EventServiceTests : IDisposable
 
         var newUser = await CreateTestUser("new@example.com");
 
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _sut.RegisterAsync(evt.Id, newUser.Id));
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, newUser.Id);
+
+        // Assert
+        result.Status.Should().Be("Waitlisted");
+        result.WaitlistPosition.Should().Be(1);
+        result.Message.Should().Contain("waitlist");
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == newUser.Id);
+        registration.Should().NotBeNull();
+        registration!.Status.Should().Be("Waitlisted");
+        registration.WaitlistPosition.Should().Be(1);
     }
 
     [Fact]
@@ -239,7 +256,7 @@ public class EventServiceTests : IDisposable
         var result = await _sut.RegisterAsync(evt.Id, user.Id);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().Be("Registered");
         var registration = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == user.Id);
         registration.Should().NotBeNull();
@@ -283,6 +300,51 @@ public class EventServiceTests : IDisposable
 
         // Assert
         result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CancelRegistrationAsync_WhenRegistered_TriggersPromotion()
+    {
+        // Arrange - Registered user cancels, waitlisted user should be promoted
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+
+        await CreateRegistration(evt.Id, registeredUser.Id, "Registered");
+        await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+
+        // Setup mock to verify promotion is called
+        _mockWaitlistService.Setup(w => w.PromoteNextFromWaitlistAsync(evt.Id))
+            .ReturnsAsync((EventRegistration?)null);
+
+        // Act
+        await _sut.CancelRegistrationAsync(evt.Id, registeredUser.Id);
+
+        // Assert - Promotion should be triggered
+        _mockWaitlistService.Verify(
+            w => w.PromoteNextFromWaitlistAsync(evt.Id),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelRegistrationAsync_WhenWaitlisted_UpdatesWaitlistPositions()
+    {
+        // Arrange - Waitlisted user cancels, remaining waitlist should be renumbered
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+
+        // Act
+        await _sut.CancelRegistrationAsync(evt.Id, waitlistedUser.Id);
+
+        // Assert - Waitlist positions should be updated
+        _mockWaitlistService.Verify(
+            w => w.UpdateWaitlistPositionsAsync(evt.Id),
+            Times.Once);
     }
 
     [Fact]
@@ -834,7 +896,7 @@ public class EventServiceTests : IDisposable
         var result = await _sut.RegisterAsync(evt.Id, user.Id);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().Be("Registered");
     }
 
     [Fact]
@@ -849,7 +911,7 @@ public class EventServiceTests : IDisposable
         var result = await _sut.RegisterAsync(evt.Id, user.Id);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().Be("Registered");
     }
 
     #endregion
@@ -1244,6 +1306,71 @@ public class EventServiceTests : IDisposable
 
     #endregion
 
+    #region CanUserManageEventAsync Tests
+
+    [Fact]
+    public async Task CanUserManageEventAsync_EventNotFound_ReturnsFalse()
+    {
+        // Arrange - Non-existent event
+        var user = await CreateTestUser();
+        var nonExistentEventId = Guid.NewGuid();
+
+        // Act
+        var result = await _sut.CanUserManageEventAsync(nonExistentEventId, user.Id);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CanUserManageEventAsync_AsCreator_ReturnsTrue()
+    {
+        // Arrange - Standalone event, creator should be able to manage
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Act
+        var result = await _sut.CanUserManageEventAsync(evt.Id, creator.Id);
+
+        // Assert
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CanUserManageEventAsync_AsNonCreator_ReturnsFalse()
+    {
+        // Arrange - Standalone event, non-creator should NOT be able to manage
+        var creator = await CreateTestUser("creator@example.com");
+        var otherUser = await CreateTestUser("other@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Act
+        var result = await _sut.CanUserManageEventAsync(evt.Id, otherUser.Id);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CanUserManageEventAsync_AsOrgAdmin_ReturnsTrue()
+    {
+        // Arrange - Org-linked event, org admin should be able to manage
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(eventCreator.Id, organizationId: org.Id);
+
+        // Act
+        var result = await _sut.CanUserManageEventAsync(evt.Id, orgAdmin.Id);
+
+        // Assert
+        result.Should().BeTrue();
+    }
+
+    #endregion
+
     #region Concurrency Tests
 
     [Fact]
@@ -1265,20 +1392,9 @@ public class EventServiceTests : IDisposable
         var task1 = _sut.RegisterAsync(evt.Id, user1.Id);
         var task2 = _sut.RegisterAsync(evt.Id, user2.Id);
 
-        var results = await Task.WhenAll(
-            Task.Run(async () =>
-            {
-                try { return await task1; }
-                catch (InvalidOperationException) { return false; }
-            }),
-            Task.Run(async () =>
-            {
-                try { return await task2; }
-                catch (InvalidOperationException) { return false; }
-            })
-        );
+        var results = await Task.WhenAll(task1, task2);
 
-        // Assert - At most one should succeed, total registrations should not exceed max
+        // Assert - At most one should succeed (get registered), the other goes to waitlist
         var finalRegisteredCount = await _context.EventRegistrations
             .CountAsync(r => r.EventId == evt.Id && r.Status == "Registered");
 
@@ -1286,12 +1402,12 @@ public class EventServiceTests : IDisposable
         finalRegisteredCount.Should().BeLessOrEqualTo(2,
             "Concurrent registrations should not exceed MaxPlayers");
 
-        // At least one should have succeeded (the slot was available)
-        results.Should().Contain(true, "At least one registration should succeed");
+        // At least one should have been registered
+        results.Should().Contain(r => r.Status == "Registered", "At least one registration should succeed");
     }
 
     [Fact]
-    public async Task RegisterAsync_SequentialRegistrationsForLastSlot_SecondFails()
+    public async Task RegisterAsync_SequentialRegistrationsForLastSlot_SecondGoesToWaitlist()
     {
         // Arrange - Sequential version to verify the basic logic works
         var creator = await CreateTestUser("creator@example.com");
@@ -1307,12 +1423,13 @@ public class EventServiceTests : IDisposable
         // Act - Sequential registrations
         var result1 = await _sut.RegisterAsync(evt.Id, user1.Id);
 
-        // Assert - First succeeds
-        result1.Should().BeTrue();
+        // Assert - First succeeds (gets the last slot)
+        result1.Status.Should().Be("Registered");
 
-        // Second should throw (event full)
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _sut.RegisterAsync(evt.Id, user2.Id));
+        // Second goes to waitlist (event full)
+        var result2 = await _sut.RegisterAsync(evt.Id, user2.Id);
+        result2.Status.Should().Be("Waitlisted");
+        result2.WaitlistPosition.Should().Be(1);
 
         // Verify final count
         var finalCount = await _context.EventRegistrations

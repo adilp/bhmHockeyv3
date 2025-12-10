@@ -5,6 +5,7 @@ using System.Text;
 using System.Web;
 using BHMHockey.Api.Data;
 using BHMHockey.Api.Services;
+using BHMHockey.Api.Services.Background;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -124,6 +125,10 @@ builder.Services.AddScoped<IOrganizationService, OrganizationService>();
 builder.Services.AddScoped<IOrganizationAdminService, OrganizationAdminService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IWaitlistService, WaitlistService>();
+
+// Background Services
+builder.Services.AddHostedService<WaitlistBackgroundService>();
 
 // Health Checks
 builder.Services.AddHealthChecks()
