@@ -1,11 +1,16 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
+import { View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { initializeApiClient } from '@bhmhockey/api-client';
 import { getApiUrl } from '../config/api';
 import { colors } from '../theme';
 import { useAuthStore } from '../stores/authStore';
+import { EnvBanner } from '../components';
 
-export default function RootLayout() {
+function RootLayoutContent() {
+  const insets = useSafeAreaInsets();
+
   useEffect(() => {
     // Initialize API client on app startup
     initializeApiClient({
@@ -23,23 +28,34 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.bg.darkest,
-        },
-        headerTintColor: colors.primary.teal,
-        headerTitleStyle: {
-          color: colors.text.primary,
-          fontWeight: '600',
-        },
-        contentStyle: {
-          backgroundColor: colors.bg.darkest,
-        },
-      }}
-    >
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-    </Stack>
+    <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.bg.darkest }}>
+      <EnvBanner />
+      <Stack
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: colors.bg.darkest,
+          },
+          headerTintColor: colors.primary.teal,
+          headerTitleStyle: {
+            color: colors.text.primary,
+            fontWeight: '600',
+          },
+          contentStyle: {
+            backgroundColor: colors.bg.darkest,
+          },
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      </Stack>
+    </View>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <RootLayoutContent />
+    </SafeAreaProvider>
   );
 }
