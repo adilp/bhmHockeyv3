@@ -31,16 +31,36 @@ export default function HomeScreen() {
   const availableGames = useMemo(() =>
     events.filter(e =>
       !e.isRegistered &&
-      e.registeredCount < e.maxPlayers &&
+      !e.amIWaitlisted &&
       e.status === 'Published'
     ),
     [events]
+  );
+
+  // Waitlisted events (from events list since they're not in myRegistrations)
+  const myWaitlistedGames = useMemo(() =>
+    events.filter(e => e.amIWaitlisted),
+    [events]
+  );
+
+  // Combined: registered + waitlisted
+  const myUpcomingGames = useMemo(() =>
+    [...myRegistrations, ...myWaitlistedGames].sort(
+      (a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+    ),
+    [myRegistrations, myWaitlistedGames]
   );
 
   const myOrganizedGames = useMemo(() =>
     events.filter(e => e.canManage),
     [events]
   );
+
+  // Helper to determine EventCard variant
+  const getEventVariant = (event: typeof events[0]) => {
+    if (event.amIWaitlisted) return 'waitlisted' as const;
+    return 'registered' as const;
+  };
 
   const handleEventPress = (eventId: string) => {
     router.push(`/events/${eventId}`);
@@ -109,17 +129,17 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Section 2: My Registered Games */}
+      {/* Section 2: My Upcoming Games (registered + waitlisted) */}
       <View style={styles.section}>
-        <SectionHeader title="My Registered Games" count={myRegistrations.length} />
-        {myRegistrations.length === 0 ? (
+        <SectionHeader title="My Upcoming Games" count={myUpcomingGames.length} />
+        {myUpcomingGames.length === 0 ? (
           <EmptyState message="You haven't registered for any games yet" />
         ) : (
-          myRegistrations.map(event => (
+          myUpcomingGames.map(event => (
             <EventCard
               key={event.id}
               event={event}
-              variant="registered"
+              variant={getEventVariant(event)}
               onPress={() => handleEventPress(event.id)}
             />
           ))

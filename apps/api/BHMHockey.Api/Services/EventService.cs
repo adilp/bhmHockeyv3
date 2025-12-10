@@ -522,9 +522,10 @@ public class EventService : IEventService
 
     public async Task<List<EventRegistrationDto>> GetRegistrationsAsync(Guid eventId)
     {
+        // Include both registered and waitlisted users (exclude cancelled)
         var registrations = await _context.EventRegistrations
             .Include(r => r.User)
-            .Where(r => r.EventId == eventId && r.Status == "Registered")
+            .Where(r => r.EventId == eventId && (r.Status == "Registered" || r.Status == "Waitlisted"))
             .ToListAsync();
 
         return registrations.Select(r => new EventRegistrationDto(

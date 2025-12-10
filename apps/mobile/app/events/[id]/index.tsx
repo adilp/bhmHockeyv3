@@ -85,12 +85,20 @@ export default function EventDetailScreen() {
       return;
     }
 
-    if (positionCount === 1) {
-      const position = positions?.goalie ? 'Goalie' : 'Skater';
-      const success = await register(id, position as Position);
-      if (success) {
+    // Helper to show result message
+    const showResultMessage = (result: { status: string; waitlistPosition?: number | null; message: string } | null, position: string) => {
+      if (!result) return;
+      if (result.status === 'Waitlisted') {
+        Alert.alert('Added to Waitlist', `You're #${result.waitlistPosition} on the waitlist as a ${position}. We'll notify you when a spot opens up!`);
+      } else {
         Alert.alert('Success', `You have been registered as a ${position}!`);
       }
+    };
+
+    if (positionCount === 1) {
+      const position = positions?.goalie ? 'Goalie' : 'Skater';
+      const result = await register(id, position as Position);
+      showResultMessage(result, position);
       return;
     }
 
@@ -103,11 +111,11 @@ export default function EventDetailScreen() {
         },
         async (buttonIndex) => {
           if (buttonIndex === 1) {
-            const success = await register(id, 'Goalie');
-            if (success) Alert.alert('Success', 'You have been registered as a Goalie!');
+            const result = await register(id, 'Goalie');
+            showResultMessage(result, 'Goalie');
           } else if (buttonIndex === 2) {
-            const success = await register(id, 'Skater');
-            if (success) Alert.alert('Success', 'You have been registered as a Skater!');
+            const result = await register(id, 'Skater');
+            showResultMessage(result, 'Skater');
           }
         }
       );
@@ -120,15 +128,15 @@ export default function EventDetailScreen() {
           {
             text: 'Goalie',
             onPress: async () => {
-              const success = await register(id, 'Goalie');
-              if (success) Alert.alert('Success', 'You have been registered as a Goalie!');
+              const result = await register(id, 'Goalie');
+              showResultMessage(result, 'Goalie');
             },
           },
           {
             text: 'Skater',
             onPress: async () => {
-              const success = await register(id, 'Skater');
-              if (success) Alert.alert('Success', 'You have been registered as a Skater!');
+              const result = await register(id, 'Skater');
+              showResultMessage(result, 'Skater');
             },
           },
         ]
@@ -139,17 +147,26 @@ export default function EventDetailScreen() {
   const handleCancelRegistration = async () => {
     if (!id) return;
 
+    const isWaitlisted = selectedEvent?.amIWaitlisted;
+    const title = isWaitlisted ? 'Leave Waitlist' : 'Cancel Registration';
+    const message = isWaitlisted
+      ? 'Are you sure you want to leave the waitlist?'
+      : 'Are you sure you want to cancel your registration?';
+    const successMessage = isWaitlisted
+      ? 'You have been removed from the waitlist.'
+      : 'Your registration has been cancelled.';
+
     Alert.alert(
-      'Cancel Registration',
-      'Are you sure you want to cancel your registration?',
+      title,
+      message,
       [
         { text: 'No', style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: 'Yes',
           style: 'destructive',
           onPress: async () => {
             const success = await cancelRegistration(id);
-            if (success) Alert.alert('Cancelled', 'Your registration has been cancelled.');
+            if (success) Alert.alert('Done', successMessage);
           },
         },
       ]
@@ -212,7 +229,9 @@ export default function EventDetailScreen() {
 
   const spotsLeft = selectedEvent.maxPlayers - selectedEvent.registeredCount;
   const isFull = spotsLeft <= 0;
-  const canRegister = isAuthenticated && !selectedEvent.isRegistered && !isFull;
+  const isWaitlisted = selectedEvent.amIWaitlisted;
+  // Can register (or join waitlist) if authenticated and not already registered/waitlisted
+  const canRegister = isAuthenticated && !selectedEvent.isRegistered && !isWaitlisted;
 
   return (
     <>
@@ -246,6 +265,9 @@ export default function EventDetailScreen() {
           )}
           {selectedEvent.isRegistered && (
             <Badge variant="green">You're Registered</Badge>
+          )}
+          {isWaitlisted && (
+            <Badge variant="warning">#{selectedEvent.myWaitlistPosition} on Waitlist</Badge>
           )}
           {selectedEvent.myTeamAssignment && (
             <View style={[
@@ -324,6 +346,7 @@ export default function EventDetailScreen() {
             </View>
             <Text style={styles.progressText}>
               {selectedEvent.registeredCount} / {selectedEvent.maxPlayers} registered
+              {selectedEvent.waitlistCount > 0 && ` · ${selectedEvent.waitlistCount} on waitlist`}
             </Text>
           </View>
         </View>
@@ -412,14 +435,17 @@ export default function EventDetailScreen() {
             <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRegistration}>
               <Text style={styles.cancelButtonText}>Cancel Registration</Text>
             </TouchableOpacity>
+          ) : isWaitlisted ? (
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRegistration}>
+              <Text style={styles.cancelButtonText}>Leave Waitlist</Text>
+            </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.registerButton, !canRegister && styles.disabledButton]}
+              style={[styles.registerButton, isFull && styles.waitlistButton]}
               onPress={handleRegister}
-              disabled={!canRegister}
             >
-              <Text style={[styles.registerButtonText, !canRegister && styles.disabledButtonText]}>
-                {isFull ? 'Event is Full' : 'Register for Event'}
+              <Text style={[styles.registerButtonText, isFull && styles.waitlistButtonText]}>
+                {isFull ? 'Join Waitlist' : 'Register for Event'}
               </Text>
             </TouchableOpacity>
           )}
@@ -621,6 +647,12 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     color: colors.text.subtle,
+  },
+  waitlistButton: {
+    backgroundColor: colors.status.warning,
+  },
+  waitlistButtonText: {
+    color: colors.bg.darkest,
   },
   loginPrompt: {
     padding: spacing.lg,

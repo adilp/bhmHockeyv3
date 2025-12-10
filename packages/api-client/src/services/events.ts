@@ -7,6 +7,7 @@ import type {
   UpdatePaymentStatusRequest,
   UpdateTeamAssignmentRequest,
   RegisterForEventRequest,
+  RegistrationResultDto,
   Position,
   TeamAssignment
 } from '@bhmhockey/shared';
@@ -60,10 +61,12 @@ export const eventService = {
    * Register for event
    * @param eventId Event ID to register for
    * @param position Optional position (required if user has multiple positions in profile)
+   * @returns Registration result with status (Registered or Waitlisted) and waitlist position if applicable
    */
-  async register(eventId: string, position?: Position): Promise<void> {
+  async register(eventId: string, position?: Position): Promise<RegistrationResultDto> {
     const body: RegisterForEventRequest = position ? { position } : {};
-    await apiClient.instance.post(`/events/${eventId}/register`, body);
+    const response = await apiClient.instance.post<RegistrationResultDto>(`/events/${eventId}/register`, body);
+    return response.data;
   },
 
   /**

@@ -4,7 +4,7 @@ import { Badge } from './Badge';
 import { SkillLevelBadges } from './SkillLevelBadges';
 import type { EventDto, SkillLevel } from '@bhmhockey/shared';
 
-export type EventCardVariant = 'available' | 'registered' | 'organizing';
+export type EventCardVariant = 'available' | 'registered' | 'waitlisted' | 'organizing';
 
 interface EventCardProps {
   event: EventDto;
@@ -16,6 +16,7 @@ interface EventCardProps {
 const variantColors: Record<EventCardVariant, string | null> = {
   available: null,
   registered: colors.primary.green,
+  waitlisted: colors.status.warning,
   organizing: colors.primary.purple,
 };
 
@@ -81,10 +82,13 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
         {/* Footer badges */}
         <View style={styles.footer}>
           {variant === 'available' && (
-            <AvailableBadges spotsLeft={spotsLeft} />
+            <AvailableBadges spotsLeft={spotsLeft} waitlistCount={event.waitlistCount} />
           )}
           {variant === 'registered' && (
             <RegisteredBadges event={event} />
+          )}
+          {variant === 'waitlisted' && (
+            <WaitlistedBadges event={event} />
           )}
           {variant === 'organizing' && (
             <OrganizingBadges event={event} />
@@ -108,9 +112,21 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
 }
 
 // Sub-components for different badge configurations
-function AvailableBadges({ spotsLeft }: { spotsLeft: number }) {
+function AvailableBadges({ spotsLeft, waitlistCount }: { spotsLeft: number; waitlistCount: number }) {
+  // Show "Full" and waitlist count when no spots
+  if (spotsLeft <= 0) {
+    return (
+      <View style={styles.availableBadges}>
+        <Badge variant="error">Full</Badge>
+        {waitlistCount > 0 && (
+          <Badge variant="warning">{waitlistCount} on waitlist</Badge>
+        )}
+      </View>
+    );
+  }
+
   // Only show badge when 2 or fewer spots remain
-  if (spotsLeft <= 2 && spotsLeft > 0) {
+  if (spotsLeft <= 2) {
     return (
       <Badge variant="error">
         {spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left
@@ -118,6 +134,16 @@ function AvailableBadges({ spotsLeft }: { spotsLeft: number }) {
     );
   }
   return null;
+}
+
+function WaitlistedBadges({ event }: { event: EventDto }) {
+  return (
+    <View style={styles.waitlistedStats}>
+      <Badge variant="warning">
+        #{event.myWaitlistPosition} on waitlist
+      </Badge>
+    </View>
+  );
 }
 
 function RegisteredBadges({ event }: { event: EventDto }) {
@@ -152,6 +178,9 @@ function OrganizingBadges({ event }: { event: EventDto }) {
       <Badge variant="purple">{event.registeredCount}/{event.maxPlayers}</Badge>
       {event.cost > 0 && event.unpaidCount !== undefined && event.unpaidCount > 0 && (
         <Badge variant="error">{event.unpaidCount} unpaid</Badge>
+      )}
+      {event.waitlistCount > 0 && (
+        <Badge variant="warning">{event.waitlistCount} waitlist</Badge>
       )}
     </View>
   );
@@ -220,6 +249,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   registeredStats: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  waitlistedStats: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  availableBadges: {
     flexDirection: 'row',
     gap: spacing.sm,
     alignItems: 'center',

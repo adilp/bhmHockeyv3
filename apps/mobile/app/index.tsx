@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter, Redirect } from 'expo-router';
+import { Redirect } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '../stores/authStore';
 import { colors } from '../theme';
@@ -9,10 +9,11 @@ import {
   savePushTokenToBackend,
   addNotificationReceivedListener,
   addNotificationResponseReceivedListener,
+  handleNotificationData,
+  handleForegroundNotification,
 } from '../utils/notifications';
 
 export default function IndexScreen() {
-  const router = useRouter();
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
@@ -45,17 +46,15 @@ export default function IndexScreen() {
     // Listen for notifications received while app is in foreground
     notificationListener.current = addNotificationReceivedListener((notification) => {
       console.log('Notification received:', notification);
+      const data = notification.request.content.data;
+      handleForegroundNotification(data);
     });
 
     // Listen for user tapping on a notification
     responseListener.current = addNotificationResponseReceivedListener((response) => {
       console.log('Notification tapped:', response);
       const data = response.notification.request.content.data;
-
-      // Navigate to event detail if notification contains eventId
-      if (data?.eventId) {
-        router.push(`/events/${data.eventId}`);
-      }
+      handleNotificationData(data);
     });
 
     return () => {

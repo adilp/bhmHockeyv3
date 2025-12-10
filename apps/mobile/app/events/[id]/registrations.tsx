@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -13,15 +13,28 @@ import { eventService } from '@bhmhockey/api-client';
 import type { EventRegistrationDto, TeamAssignment } from '@bhmhockey/shared';
 import { useEventStore } from '../../../stores/eventStore';
 import { getPaymentStatusInfo } from '../../../utils/venmo';
-import { EmptyState } from '../../../components';
+import { EmptyState, SectionHeader, Badge } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
 
 export default function EventRegistrationsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
-  const [registrations, setRegistrations] = useState<EventRegistrationDto[]>([]);
+  const [allRegistrations, setAllRegistrations] = useState<EventRegistrationDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { updatePaymentStatus, updateTeamAssignment, selectedEvent, fetchEventById } = useEventStore();
+
+  // Filter into registered and waitlisted
+  const registrations = useMemo(() =>
+    allRegistrations.filter(r => !r.isWaitlisted),
+    [allRegistrations]
+  );
+
+  const waitlist = useMemo(() =>
+    allRegistrations.filter(r => r.isWaitlisted).sort(
+      (a, b) => (a.waitlistPosition ?? 999) - (b.waitlistPosition ?? 999)
+    ),
+    [allRegistrations]
+  );
 
   useEffect(() => {
     navigation.setOptions({
@@ -50,7 +63,7 @@ export default function EventRegistrationsScreen() {
     if (!id) return;
     try {
       const data = await eventService.getRegistrations(id);
-      setRegistrations(data);
+      setAllRegistrations(data);
     } catch (error) {
       Alert.alert('Error', 'Failed to load registrations');
     }
@@ -225,8 +238,25 @@ export default function EventRegistrationsScreen() {
     );
   }
 
+  const renderWaitlistItem = (item: EventRegistrationDto) => (
+    <View key={item.id} style={styles.waitlistRow}>
+      <View style={styles.positionBadge}>
+        <Text style={styles.positionText}>#{item.waitlistPosition}</Text>
+      </View>
+      <View style={styles.waitlistUserInfo}>
+        <Text style={styles.userName}>
+          {item.user.firstName} {item.user.lastName}
+        </Text>
+        <Text style={styles.userMeta}>
+          {item.registeredPosition || 'Player'}
+        </Text>
+      </View>
+      <Badge variant="warning">Waitlisted</Badge>
+    </View>
+  );
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       {/* Summary Header */}
       {selectedEvent && (
         <View style={styles.summaryHeader}>
@@ -263,23 +293,46 @@ export default function EventRegistrationsScreen() {
               </View>
             </>
           )}
+          {waitlist.length > 0 && (
+            <View style={styles.statBox}>
+              <Text style={[styles.statValue, { color: colors.status.warning }]}>
+                {waitlist.length}
+              </Text>
+              <Text style={styles.statLabel}>Waitlist</Text>
+            </View>
+          )}
         </View>
       )}
 
-      <FlatList
-        data={registrations}
-        keyExtractor={(item) => item.id}
-        renderItem={renderRegistration}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
+      {/* Registered Players Section */}
+      <View style={styles.section}>
+        <SectionHeader title="Registered Players" count={registrations.length} />
+        {registrations.length === 0 ? (
           <EmptyState
             icon="👥"
             title="No Registrations"
             message="No one has registered for this event yet"
           />
-        }
-      />
-    </View>
+        ) : (
+          registrations.map(item => (
+            <View key={item.id}>{renderRegistration({ item })}</View>
+          ))
+        )}
+      </View>
+
+      {/* Waitlist Section */}
+      {waitlist.length > 0 && (
+        <View style={styles.section}>
+          <SectionHeader title="Waitlist" count={waitlist.length} />
+          <View style={styles.waitlistSection}>
+            {waitlist.map(renderWaitlistItem)}
+          </View>
+        </View>
+      )}
+
+      {/* Bottom padding */}
+      <View style={{ height: 40 }} />
+    </ScrollView>
   );
 }
 
@@ -431,5 +484,41 @@ const styles = StyleSheet.create({
   },
   teamWhiteText: {
     color: colors.bg.darkest,
+  },
+  // Section styles
+  section: {
+    padding: spacing.md,
+  },
+  // Waitlist styles
+  waitlistSection: {
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  waitlistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+  },
+  positionBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.status.warningSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  positionText: {
+    color: colors.status.warning,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  waitlistUserInfo: {
+    flex: 1,
   },
 });

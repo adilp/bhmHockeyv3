@@ -124,10 +124,17 @@ export interface EventRegistration {
   registeredAt: string;
 }
 
-export type RegistrationStatus = 'Registered' | 'Cancelled';
+export type RegistrationStatus = 'Registered' | 'Waitlisted' | 'Cancelled';
 
 // Payment status for event registrations (Phase 4)
 export type PaymentStatus = 'Pending' | 'MarkedPaid' | 'Verified';
+
+// Registration result for register endpoint (Phase 5 - includes waitlist info)
+export interface RegistrationResultDto {
+  status: 'Registered' | 'Waitlisted';
+  waitlistPosition: number | null;
+  message: string;
+}
 
 // Team assignment for events
 export type TeamAssignment = 'Black' | 'White';
@@ -160,6 +167,11 @@ export interface EventDto {
   myTeamAssignment?: TeamAssignment; // Current user's team ("Black" or "White")
   // Organizer fields (only populated when canManage = true)
   unpaidCount?: number;          // Count of registrations with PaymentStatus != "Verified"
+  // Waitlist fields (Phase 5)
+  waitlistCount: number;         // Number of people on waitlist
+  myWaitlistPosition?: number;   // Current user's waitlist position (null if not waitlisted)
+  myPaymentDeadline?: string;    // Current user's payment deadline after promotion (ISO date string)
+  amIWaitlisted: boolean;        // Convenience flag - true if current user is on waitlist
 }
 
 // EventRegistrationDto - API response for registration with user details
@@ -177,6 +189,11 @@ export interface EventRegistrationDto {
   paymentVerifiedAt?: string;
   // Team assignment
   teamAssignment?: TeamAssignment;
+  // Waitlist fields (Phase 5)
+  waitlistPosition?: number;     // Position in waitlist (1 = first, null = not waitlisted)
+  promotedAt?: string;           // When user was promoted from waitlist (ISO date string)
+  paymentDeadlineAt?: string;    // Deadline to pay after promotion (ISO date string)
+  isWaitlisted: boolean;         // True if Status == "Waitlisted"
 }
 
 // Event request types

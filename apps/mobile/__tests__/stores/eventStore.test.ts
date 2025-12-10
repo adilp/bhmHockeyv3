@@ -29,7 +29,15 @@ jest.mock('@bhmhockey/api-client', () => ({
 
 // Import after mocking
 import { useEventStore } from '../../stores/eventStore';
-import type { EventDto } from '@bhmhockey/shared';
+import type { EventDto, RegistrationResultDto } from '@bhmhockey/shared';
+
+// Helper to create mock registration result
+const createMockRegistrationResult = (overrides: Partial<RegistrationResultDto> = {}): RegistrationResultDto => ({
+  status: 'Registered',
+  waitlistPosition: null,
+  message: 'Successfully registered for the event',
+  ...overrides,
+});
 
 const createMockEvent = (overrides: Partial<EventDto> = {}): EventDto => ({
   id: 'event-1',
@@ -49,6 +57,9 @@ const createMockEvent = (overrides: Partial<EventDto> = {}): EventDto => ({
   isRegistered: false,
   canManage: false,
   createdAt: new Date().toISOString(),
+  // Waitlist fields (Phase 5)
+  waitlistCount: 0,
+  amIWaitlisted: false,
   ...overrides,
 });
 
@@ -111,12 +122,12 @@ describe('eventStore', () => {
   });
 
   describe('register', () => {
-    it('optimistically updates UI before API response', async () => {
-      const event = createMockEvent({ id: 'event-1', isRegistered: false, registeredCount: 5 });
+    it('optimistically updates UI before API response when room available', async () => {
+      const event = createMockEvent({ id: 'event-1', isRegistered: false, registeredCount: 5, maxPlayers: 10 });
       useEventStore.setState({ events: [event] });
 
       // Don't resolve the promise yet
-      let resolveRegister: (value?: unknown) => void;
+      let resolveRegister: (value: RegistrationResultDto) => void;
       mockRegister.mockReturnValue(
         new Promise((resolve) => {
           resolveRegister = resolve;
@@ -126,7 +137,7 @@ describe('eventStore', () => {
       // Start registration (don't await)
       const registerPromise = useEventStore.getState().register('event-1');
 
-      // Check optimistic update happened immediately
+      // Check optimistic update happened immediately (because there's room)
       const updatedEvent = useEventStore.getState().events.find((e) => e.id === 'event-1');
       expect(updatedEvent?.isRegistered).toBe(true);
       expect(updatedEvent?.registeredCount).toBe(6);
@@ -134,23 +145,56 @@ describe('eventStore', () => {
       // processingEventId should be set
       expect(useEventStore.getState().processingEventId).toBe('event-1');
 
-      // Now resolve
-      resolveRegister!();
+      // Now resolve with registered result
+      resolveRegister!(createMockRegistrationResult());
       await registerPromise;
 
       // processingEventId should be cleared
       expect(useEventStore.getState().processingEventId).toBeNull();
     });
 
+    it('does not optimistically update when event is full', async () => {
+      const event = createMockEvent({ id: 'event-1', isRegistered: false, registeredCount: 10, maxPlayers: 10 });
+      useEventStore.setState({ events: [event] });
+
+      // Don't resolve the promise yet
+      let resolveRegister: (value: RegistrationResultDto) => void;
+      mockRegister.mockReturnValue(
+        new Promise((resolve) => {
+          resolveRegister = resolve;
+        })
+      );
+
+      // Start registration (don't await)
+      const registerPromise = useEventStore.getState().register('event-1');
+
+      // Check NO optimistic update happened (event is full)
+      const updatedEvent = useEventStore.getState().events.find((e) => e.id === 'event-1');
+      expect(updatedEvent?.isRegistered).toBe(false);
+      expect(updatedEvent?.registeredCount).toBe(10);
+
+      // processingEventId should still be set
+      expect(useEventStore.getState().processingEventId).toBe('event-1');
+
+      // Resolve with waitlisted result
+      resolveRegister!(createMockRegistrationResult({ status: 'Waitlisted', waitlistPosition: 1 }));
+      await registerPromise;
+
+      // Should now show waitlisted status
+      const finalEvent = useEventStore.getState().events.find((e) => e.id === 'event-1');
+      expect(finalEvent?.amIWaitlisted).toBe(true);
+      expect(finalEvent?.myWaitlistPosition).toBe(1);
+    });
+
     it('rolls back optimistic update on API error', async () => {
-      const event = createMockEvent({ id: 'event-1', isRegistered: false, registeredCount: 5 });
+      const event = createMockEvent({ id: 'event-1', isRegistered: false, registeredCount: 5, maxPlayers: 10 });
       useEventStore.setState({ events: [event] });
       mockRegister.mockRejectedValue(new Error('Registration failed'));
 
       const result = await useEventStore.getState().register('event-1');
 
-      // Should return false on failure
-      expect(result).toBe(false);
+      // Should return null on failure
+      expect(result).toBeNull();
 
       // Check rollback occurred
       const rolledBackEvent = useEventStore.getState().events.find((e) => e.id === 'event-1');
@@ -161,9 +205,9 @@ describe('eventStore', () => {
     });
 
     it('updates myRegistrations after successful registration', async () => {
-      const event = createMockEvent({ id: 'event-1', isRegistered: false });
+      const event = createMockEvent({ id: 'event-1', isRegistered: false, maxPlayers: 10 });
       useEventStore.setState({ events: [event], myRegistrations: [] });
-      mockRegister.mockResolvedValue(undefined);
+      mockRegister.mockResolvedValue(createMockRegistrationResult());
 
       await useEventStore.getState().register('event-1');
 
@@ -173,14 +217,26 @@ describe('eventStore', () => {
     });
 
     it('also updates selectedEvent if it matches', async () => {
-      const event = createMockEvent({ id: 'event-1', isRegistered: false, registeredCount: 5 });
+      const event = createMockEvent({ id: 'event-1', isRegistered: false, registeredCount: 5, maxPlayers: 10 });
       useEventStore.setState({ events: [event], selectedEvent: event });
-      mockRegister.mockResolvedValue(undefined);
+      mockRegister.mockResolvedValue(createMockRegistrationResult());
 
       await useEventStore.getState().register('event-1');
 
       expect(useEventStore.getState().selectedEvent?.isRegistered).toBe(true);
       expect(useEventStore.getState().selectedEvent?.registeredCount).toBe(6);
+    });
+
+    it('returns RegistrationResultDto on success', async () => {
+      const event = createMockEvent({ id: 'event-1', isRegistered: false, maxPlayers: 10 });
+      useEventStore.setState({ events: [event] });
+      const expectedResult = createMockRegistrationResult();
+      mockRegister.mockResolvedValue(expectedResult);
+
+      const result = await useEventStore.getState().register('event-1');
+
+      expect(result).toEqual(expectedResult);
+      expect(result?.status).toBe('Registered');
     });
   });
 
@@ -354,10 +410,10 @@ describe('eventStore', () => {
 
   describe('processingEventId prevents double-clicks', () => {
     it('tracks which event is being processed', async () => {
-      const event = createMockEvent({ id: 'event-1' });
+      const event = createMockEvent({ id: 'event-1', maxPlayers: 10 });
       useEventStore.setState({ events: [event] });
 
-      let resolveRegister: (value?: unknown) => void;
+      let resolveRegister: (value: RegistrationResultDto) => void;
       mockRegister.mockReturnValue(
         new Promise((resolve) => {
           resolveRegister = resolve;
@@ -370,7 +426,7 @@ describe('eventStore', () => {
       // processingEventId should be set
       expect(useEventStore.getState().processingEventId).toBe('event-1');
 
-      resolveRegister!();
+      resolveRegister!(createMockRegistrationResult());
       await promise;
 
       // Should be cleared after completion

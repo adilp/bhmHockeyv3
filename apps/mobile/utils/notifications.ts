@@ -1,8 +1,10 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import { userService } from '@bhmhockey/api-client';
+import { router } from 'expo-router';
+import { useEventStore } from '../stores/eventStore';
 
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
@@ -119,4 +121,76 @@ export function addNotificationResponseReceivedListener(
  */
 export async function getLastNotificationResponse(): Promise<Notifications.NotificationResponse | null> {
   return await Notifications.getLastNotificationResponseAsync();
+}
+
+// Notification data type definitions
+interface NotificationData {
+  type?: string;
+  eventId?: string;
+  [key: string]: any;
+}
+
+/**
+ * Handle notification data based on type
+ * Called when user taps on a notification
+ */
+export function handleNotificationData(data: NotificationData | null) {
+  if (!data) return;
+
+  switch (data.type) {
+    case 'waitlist_promoted':
+      handlePromotedNotification(data);
+      break;
+
+    case 'new_event':
+      // Existing handler - navigate to event detail
+      if (data.eventId) {
+        router.push(`/events/${data.eventId}`);
+      }
+      break;
+
+    default:
+      // Unknown notification type - navigate to event if eventId present
+      if (data.eventId) {
+        router.push(`/events/${data.eventId}`);
+      }
+  }
+}
+
+/**
+ * Handle foreground notification (when app is open)
+ * Refreshes data without navigating
+ */
+export function handleForegroundNotification(data: NotificationData | null) {
+  if (!data) return;
+
+  // For promotion notifications in foreground, refresh data silently
+  if (data.type === 'waitlist_promoted' && data.eventId) {
+    useEventStore.getState().fetchEventById(data.eventId);
+    useEventStore.getState().fetchMyRegistrations();
+  }
+}
+
+/**
+ * Handle waitlist promotion notification
+ * Navigates to event detail and shows celebratory alert
+ */
+function handlePromotedNotification(data: NotificationData) {
+  if (!data.eventId) return;
+
+  // Navigate to event detail
+  router.push(`/events/${data.eventId}`);
+
+  // Refresh event data after navigation completes
+  setTimeout(() => {
+    useEventStore.getState().fetchEventById(data.eventId!);
+    useEventStore.getState().fetchMyRegistrations();
+  }, 500);
+
+  // Show celebratory alert
+  Alert.alert(
+    'You Got a Spot!',
+    'A spot opened up and you\'ve been promoted from the waitlist. Pay now to secure your spot!',
+    [{ text: 'View Event', style: 'default' }]
+  );
 }

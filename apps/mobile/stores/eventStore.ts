@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventDto, CreateEventRequest, Position, TeamAssignment } from '@bhmhockey/shared';
+import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto } from '@bhmhockey/shared';
 
 interface EventState {
   // State
@@ -17,7 +17,7 @@ interface EventState {
   fetchEventById: (id: string) => Promise<void>;
   fetchMyRegistrations: () => Promise<void>;
   createEvent: (data: CreateEventRequest) => Promise<EventDto | null>;
-  register: (eventId: string, position?: Position) => Promise<boolean>;
+  register: (eventId: string, position?: Position) => Promise<RegistrationResultDto | null>;
   cancelRegistration: (eventId: string) => Promise<boolean>;
   clearSelectedEvent: () => void;
   clearError: () => void;
@@ -101,37 +101,72 @@ export const useEventStore = create<EventState>((set, get) => ({
   },
 
   // Register for event (with optimistic update)
-  register: async (eventId: string, position?: Position) => {
+  register: async (eventId: string, position?: Position): Promise<RegistrationResultDto | null> => {
     const { events, selectedEvent, myRegistrations } = get();
+    const targetEvent = events.find(e => e.id === eventId) || selectedEvent;
 
-    // Helper to update event registration state
-    const updateEvent = (event: EventDto): EventDto => ({
+    // Check if there's room for optimistic update
+    const hasRoom = targetEvent ? targetEvent.registeredCount < targetEvent.maxPlayers : false;
+
+    // Helper to update event for registered status
+    const updateEventAsRegistered = (event: EventDto): EventDto => ({
       ...event,
       isRegistered: true,
       registeredCount: event.registeredCount + 1,
-      // Set payment status to Pending for paid events
       myPaymentStatus: event.cost > 0 ? 'Pending' : undefined,
+      amIWaitlisted: false,
+      myWaitlistPosition: undefined,
     });
 
-    // Optimistic update + track processing
-    set({
-      processingEventId: eventId,
-      events: events.map(e => e.id === eventId ? updateEvent(e) : e),
-      selectedEvent: selectedEvent?.id === eventId ? updateEvent(selectedEvent) : selectedEvent,
+    // Helper to update event for waitlisted status
+    const updateEventAsWaitlisted = (event: EventDto, waitlistPosition: number): EventDto => ({
+      ...event,
+      isRegistered: false,
+      amIWaitlisted: true,
+      myWaitlistPosition: waitlistPosition,
+      waitlistCount: event.waitlistCount + 1,
     });
+
+    // Only do optimistic update if there's room
+    if (hasRoom) {
+      set({
+        processingEventId: eventId,
+        events: events.map(e => e.id === eventId ? updateEventAsRegistered(e) : e),
+        selectedEvent: selectedEvent?.id === eventId ? updateEventAsRegistered(selectedEvent) : selectedEvent,
+      });
+    } else {
+      // Just show loading, no optimistic update for potential waitlist
+      set({ processingEventId: eventId });
+    }
 
     try {
-      await eventService.register(eventId, position);
+      const result = await eventService.register(eventId, position);
 
-      // Add to my registrations
-      const registeredEvent = events.find(e => e.id === eventId);
-      if (registeredEvent) {
-        set({ myRegistrations: [...myRegistrations, updateEvent(registeredEvent)], processingEventId: null });
-      } else {
-        set({ processingEventId: null });
+      // Update state based on actual result
+      if (result.status === 'Registered') {
+        const registeredEvent = events.find(e => e.id === eventId);
+        if (registeredEvent) {
+          const updatedEvent = updateEventAsRegistered(registeredEvent);
+          set({
+            events: events.map(e => e.id === eventId ? updatedEvent : e),
+            selectedEvent: selectedEvent?.id === eventId ? updateEventAsRegistered(selectedEvent) : selectedEvent,
+            myRegistrations: [...myRegistrations, updatedEvent],
+            processingEventId: null,
+          });
+        } else {
+          set({ processingEventId: null });
+        }
+      } else if (result.status === 'Waitlisted') {
+        // User was added to waitlist
+        const waitlistPosition = result.waitlistPosition ?? 1;
+        set({
+          events: events.map(e => e.id === eventId ? updateEventAsWaitlisted(e, waitlistPosition) : e),
+          selectedEvent: selectedEvent?.id === eventId ? updateEventAsWaitlisted(selectedEvent, waitlistPosition) : selectedEvent,
+          processingEventId: null,
+        });
       }
 
-      return true;
+      return result;
     } catch (error: any) {
       // Rollback on failure
       const errorMessage = error?.response?.data?.message || error?.message || 'Failed to register';
@@ -141,27 +176,42 @@ export const useEventStore = create<EventState>((set, get) => ({
         processingEventId: null,
         error: errorMessage
       });
-      return false;
+      return null;
     }
   },
 
   // Cancel registration (with optimistic update)
   cancelRegistration: async (eventId: string) => {
     const { events, selectedEvent, myRegistrations } = get();
+    const targetEvent = events.find(e => e.id === eventId) || selectedEvent;
+    const wasWaitlisted = targetEvent?.amIWaitlisted ?? false;
 
-    // Helper to update event registration state
-    const updateEvent = (event: EventDto): EventDto => ({
+    // Helper to update event when cancelling a registered user
+    const updateEventCancelRegistered = (event: EventDto): EventDto => ({
       ...event,
       isRegistered: false,
       registeredCount: Math.max(0, event.registeredCount - 1),
+      myPaymentStatus: undefined,
+      myTeamAssignment: undefined,
     });
+
+    // Helper to update event when cancelling a waitlisted user
+    const updateEventCancelWaitlisted = (event: EventDto): EventDto => ({
+      ...event,
+      amIWaitlisted: false,
+      myWaitlistPosition: undefined,
+      waitlistCount: Math.max(0, event.waitlistCount - 1),
+    });
+
+    // Choose update function based on current status
+    const updateEvent = wasWaitlisted ? updateEventCancelWaitlisted : updateEventCancelRegistered;
 
     // Optimistic update + track processing
     set({
       processingEventId: eventId,
       events: events.map(e => e.id === eventId ? updateEvent(e) : e),
       selectedEvent: selectedEvent?.id === eventId ? updateEvent(selectedEvent) : selectedEvent,
-      myRegistrations: myRegistrations.filter(e => e.id !== eventId),
+      myRegistrations: wasWaitlisted ? myRegistrations : myRegistrations.filter(e => e.id !== eventId),
     });
 
     try {

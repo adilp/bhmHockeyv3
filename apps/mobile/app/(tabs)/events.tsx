@@ -20,6 +20,7 @@ import type { EventCardVariant } from '../../components';
 function getEventVariant(event: EventDto): EventCardVariant {
   if (event.canManage) return 'organizing';
   if (event.isRegistered) return 'registered';
+  if (event.amIWaitlisted) return 'waitlisted';
   return 'available';
 }
 

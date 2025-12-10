@@ -8,6 +8,7 @@ export type {
   EventStatus,
   EventRegistration,
   RegistrationStatus,
+  RegistrationResultDto,
   LoginRequest,
   RegisterRequest,
   AuthResponse,
