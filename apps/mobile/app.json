@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bhmhockey.app",
+      "buildNumber": "1",
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
           "venmo"
@@ -28,7 +29,9 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0D1117"
       },
-      "package": "com.bhmhockey.app"
+      "package": "com.bhmhockey.app",
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 1  
     },
     "web": {
       "favicon": "./assets/favicon.png"
