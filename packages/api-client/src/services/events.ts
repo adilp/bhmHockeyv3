@@ -130,4 +130,16 @@ export const eventService = {
       { teamAssignment }
     );
   },
+
+  // Registration management (organizer)
+
+  /**
+   * Remove a registration (organizer only)
+   * Works for both registered and waitlisted users
+   */
+  async removeRegistration(eventId: string, registrationId: string): Promise<void> {
+    await apiClient.instance.delete(
+      `/events/${eventId}/registrations/${registrationId}`
+    );
+  },
 };

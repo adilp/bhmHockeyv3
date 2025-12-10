@@ -21,7 +21,7 @@ export default function EventRegistrationsScreen() {
   const navigation = useNavigation();
   const [allRegistrations, setAllRegistrations] = useState<EventRegistrationDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { updatePaymentStatus, updateTeamAssignment, selectedEvent, fetchEventById } = useEventStore();
+  const { updatePaymentStatus, updateTeamAssignment, removeRegistration, selectedEvent, fetchEventById } = useEventStore();
 
   // Filter into registered and waitlisted
   const registrations = useMemo(() =>
@@ -148,6 +148,29 @@ export default function EventRegistrationsScreen() {
     );
   };
 
+  const handleRemove = async (registration: EventRegistrationDto) => {
+    if (!id) return;
+
+    const isWaitlisted = registration.isWaitlisted;
+    const userName = `${registration.user.firstName} ${registration.user.lastName}`;
+
+    Alert.alert(
+      isWaitlisted ? 'Remove from Waitlist' : 'Remove Registration',
+      `Are you sure you want to remove ${userName}?${!isWaitlisted ? '\n\nThe next person on the waitlist will be promoted.' : ''}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await removeRegistration(id, registration.id);
+            if (success) await loadRegistrations();
+          },
+        },
+      ]
+    );
+  };
+
   const renderRegistration = ({ item }: { item: EventRegistrationDto }) => {
     const statusInfo = getPaymentStatusInfo(item.paymentStatus);
     // Show payment actions if event has a cost (check selectedEvent or assume paid if paymentStatus exists)
@@ -226,6 +249,14 @@ export default function EventRegistrationsScreen() {
             )}
           </View>
         )}
+
+        {/* Remove button */}
+        <TouchableOpacity
+          style={styles.removeButton}
+          onPress={() => handleRemove(item)}
+        >
+          <Text style={styles.removeButtonText}>Remove</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -251,7 +282,12 @@ export default function EventRegistrationsScreen() {
           {item.registeredPosition || 'Player'}
         </Text>
       </View>
-      <Badge variant="warning">Waitlisted</Badge>
+      <TouchableOpacity
+        style={styles.removeButtonSmall}
+        onPress={() => handleRemove(item)}
+      >
+        <Text style={styles.removeButtonText}>Remove</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -520,5 +556,29 @@ const styles = StyleSheet.create({
   },
   waitlistUserInfo: {
     flex: 1,
+  },
+  // Remove button styles
+  removeButton: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.status.error,
+    marginTop: spacing.sm,
+    alignSelf: 'flex-end',
+  },
+  removeButtonSmall: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.status.error,
+  },
+  removeButtonText: {
+    color: colors.status.error,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

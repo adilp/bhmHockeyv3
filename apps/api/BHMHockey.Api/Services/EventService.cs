@@ -314,6 +314,7 @@ public class EventService : IEventService
     {
         var evt = await _context.Events
             .Include(e => e.Registrations)
+            .Include(e => e.Creator)
             .FirstOrDefaultAsync(e => e.Id == eventId);
 
         if (evt == null)
@@ -384,6 +385,9 @@ public class EventService : IEventService
             }
 
             await _context.SaveChangesAsync();
+
+            // Notify organizer about new waitlist entry
+            await NotifyOrganizerWaitlistJoinedAsync(evt, user, waitlistPosition);
 
             return new RegistrationResultDto(
                 "Waitlisted",
@@ -753,5 +757,70 @@ public class EventService : IEventService
         await _context.SaveChangesAsync();
 
         return true;
+    }
+
+    // Organizer registration management
+    public async Task<bool> RemoveRegistrationAsync(Guid eventId, Guid registrationId, Guid organizerId)
+    {
+        // Verify the organizer can manage this event
+        var evt = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+        if (evt == null) return false;
+
+        if (!await CanUserManageEventAsync(evt, organizerId)) return false;
+
+        var registration = await _context.EventRegistrations
+            .Include(r => r.User)
+            .Include(r => r.Event)
+            .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId);
+
+        if (registration == null) return false;
+
+        // Can only remove registered or waitlisted users
+        if (registration.Status != "Registered" && registration.Status != "Waitlisted")
+        {
+            return false;
+        }
+
+        var wasRegistered = registration.Status == "Registered";
+        var wasWaitlisted = registration.Status == "Waitlisted";
+
+        // Cancel the registration
+        registration.Status = "Cancelled";
+        registration.WaitlistPosition = null;
+        registration.PaymentDeadlineAt = null;
+
+        await _context.SaveChangesAsync();
+
+        // If a registered user was removed, promote next from waitlist
+        if (wasRegistered)
+        {
+            await _waitlistService.PromoteNextFromWaitlistAsync(eventId);
+        }
+        // If a waitlisted user was removed, renumber the waitlist
+        else if (wasWaitlisted)
+        {
+            await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
+        }
+
+        return true;
+    }
+
+    // Notification helpers
+    private async Task NotifyOrganizerWaitlistJoinedAsync(Event evt, User user, int waitlistPosition)
+    {
+        if (string.IsNullOrEmpty(evt.Creator.PushToken))
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+        var userName = $"{user.FirstName} {user.LastName}".Trim();
+        if (string.IsNullOrEmpty(userName)) userName = user.Email;
+
+        await _notificationService.SendPushNotificationAsync(
+            evt.Creator.PushToken,
+            "New Waitlist Entry",
+            $"{userName} joined the waitlist (#{waitlistPosition}) for {eventName}",
+            new { eventId = evt.Id.ToString(), type = "waitlist_joined" });
     }
 }

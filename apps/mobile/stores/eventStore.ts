@@ -28,6 +28,9 @@ interface EventState {
 
   // Team assignment actions
   updateTeamAssignment: (eventId: string, registrationId: string, team: TeamAssignment) => Promise<boolean>;
+
+  // Registration management (organizer)
+  removeRegistration: (eventId: string, registrationId: string) => Promise<boolean>;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
@@ -295,6 +298,23 @@ export const useEventStore = create<EventState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to update team assignment',
+      });
+      return false;
+    }
+  },
+
+  // Registration management (organizer)
+
+  // Remove a registration (organizer only)
+  removeRegistration: async (eventId: string, registrationId: string) => {
+    try {
+      await eventService.removeRegistration(eventId, registrationId);
+      // Refresh event data to get updated registrations
+      await get().fetchEventById(eventId);
+      return true;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to remove registration',
       });
       return false;
     }

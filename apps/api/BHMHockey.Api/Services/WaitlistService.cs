@@ -39,6 +39,7 @@ public class WaitlistService : IWaitlistService
             .OrderBy(r => r.WaitlistPosition)
             .Include(r => r.User)
             .Include(r => r.Event)
+                .ThenInclude(e => e.Creator)
             .FirstOrDefaultAsync();
 
         if (nextInLine == null)
@@ -63,8 +64,9 @@ public class WaitlistService : IWaitlistService
 
         await _context.SaveChangesAsync();
 
-        // Send push notification
+        // Send push notifications
         await NotifyUserPromotedAsync(nextInLine);
+        await NotifyOrganizerUserPromotedAsync(nextInLine);
 
         // Update remaining waitlist positions
         await UpdateWaitlistPositionsAsync(eventId);
@@ -106,20 +108,16 @@ public class WaitlistService : IWaitlistService
         foreach (var registration in expiredRegistrations)
         {
             _logger.LogInformation(
-                "Payment deadline expired for user {UserId} on event {EventId}. Auto-cancelling.",
+                "Payment deadline expired for user {UserId} on event {EventId}. Sending reminder.",
                 registration.UserId, registration.EventId);
 
-            // Cancel the registration
-            registration.Status = "Cancelled";
+            // Clear the deadline so we only send one reminder
             registration.PaymentDeadlineAt = null;
 
-            // Notify user of cancellation
-            await NotifyPaymentDeadlineExpiredAsync(registration);
+            // Send payment reminder
+            await NotifyPaymentReminderAsync(registration);
 
             await _context.SaveChangesAsync();
-
-            // Promote next person
-            await PromoteNextFromWaitlistAsync(registration.EventId);
         }
     }
 
@@ -168,7 +166,7 @@ public class WaitlistService : IWaitlistService
             new { eventId = registration.EventId.ToString(), type = "waitlist_promoted" });
     }
 
-    private async Task NotifyPaymentDeadlineExpiredAsync(EventRegistration registration)
+    private async Task NotifyPaymentReminderAsync(EventRegistration registration)
     {
         if (string.IsNullOrEmpty(registration.User.PushToken))
         {
@@ -179,8 +177,26 @@ public class WaitlistService : IWaitlistService
 
         await _notificationService.SendPushNotificationAsync(
             registration.User.PushToken,
-            "Registration Expired",
-            $"Your registration for {eventName} was cancelled due to missed payment deadline.",
-            new { eventId = registration.EventId.ToString(), type = "payment_deadline_expired" });
+            "Payment Reminder",
+            $"Don't forget to pay for {eventName}! Pay now to secure your spot.",
+            new { eventId = registration.EventId.ToString(), type = "payment_reminder" });
+    }
+
+    private async Task NotifyOrganizerUserPromotedAsync(EventRegistration registration)
+    {
+        if (string.IsNullOrEmpty(registration.Event.Creator.PushToken))
+        {
+            return;
+        }
+
+        var eventName = registration.Event.Name ?? $"Event on {registration.Event.EventDate:MMM d}";
+        var userName = $"{registration.User.FirstName} {registration.User.LastName}".Trim();
+        if (string.IsNullOrEmpty(userName)) userName = registration.User.Email;
+
+        await _notificationService.SendPushNotificationAsync(
+            registration.Event.Creator.PushToken,
+            "Waitlist Promotion",
+            $"{userName} was promoted from the waitlist for {eventName}",
+            new { eventId = registration.EventId.ToString(), type = "waitlist_promotion" });
     }
 }

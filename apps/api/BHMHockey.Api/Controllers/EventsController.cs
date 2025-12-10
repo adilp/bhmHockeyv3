@@ -294,6 +294,29 @@ public class EventsController : ControllerBase
 
     #endregion
 
+    #region Registration Management (Organizer)
+
+    /// <summary>
+    /// Remove a registration (organizer only). Works for both registered and waitlisted users.
+    /// </summary>
+    [Authorize]
+    [HttpDelete("{eventId:guid}/registrations/{registrationId:guid}")]
+    public async Task<IActionResult> RemoveRegistration(Guid eventId, Guid registrationId)
+    {
+        var userId = GetCurrentUserId();
+
+        var success = await _eventService.RemoveRegistrationAsync(eventId, registrationId, userId);
+
+        if (!success)
+        {
+            return NotFound(new { message = "Event or registration not found, or you are not the organizer." });
+        }
+
+        return Ok(new { message = "Registration removed successfully" });
+    }
+
+    #endregion
+
     #region Team Assignment
 
     /// <summary>

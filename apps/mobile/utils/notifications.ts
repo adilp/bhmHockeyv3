@@ -142,6 +142,19 @@ export function handleNotificationData(data: NotificationData | null) {
       handlePromotedNotification(data);
       break;
 
+    case 'waitlist_joined':
+    case 'waitlist_promotion':
+      // Organizer notifications - navigate to registrations list
+      handleOrganizerWaitlistNotification(data);
+      break;
+
+    case 'payment_reminder':
+      // Payment reminder - navigate to event detail
+      if (data.eventId) {
+        router.push(`/events/${data.eventId}`);
+      }
+      break;
+
     case 'new_event':
       // Existing handler - navigate to event detail
       if (data.eventId) {
@@ -193,4 +206,20 @@ function handlePromotedNotification(data: NotificationData) {
     'A spot opened up and you\'ve been promoted from the waitlist. Pay now to secure your spot!',
     [{ text: 'View Event', style: 'default' }]
   );
+}
+
+/**
+ * Handle organizer waitlist notifications (joined/promoted)
+ * Navigates to event registrations list
+ */
+function handleOrganizerWaitlistNotification(data: NotificationData) {
+  if (!data.eventId) return;
+
+  // Navigate to event registrations list
+  router.push(`/events/${data.eventId}/registrations`);
+
+  // Refresh event data after navigation completes
+  setTimeout(() => {
+    useEventStore.getState().fetchEventById(data.eventId!);
+  }, 500);
 }

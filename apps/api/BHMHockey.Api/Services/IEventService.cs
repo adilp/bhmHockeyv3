@@ -22,6 +22,9 @@ public interface IEventService
     // Team assignment methods
     Task<bool> UpdateTeamAssignmentAsync(Guid eventId, Guid registrationId, string teamAssignment, Guid organizerId);
 
+    // Organizer registration management
+    Task<bool> RemoveRegistrationAsync(Guid eventId, Guid registrationId, Guid organizerId);
+
     // Authorization helpers
     Task<bool> CanUserManageEventAsync(Guid eventId, Guid userId);
 }
