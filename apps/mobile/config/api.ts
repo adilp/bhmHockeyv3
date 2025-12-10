@@ -59,7 +59,7 @@ export function getApiUrl(): string {
   }
 
   // Production URL from config
-  return configuredUrl || 'https://your-app.ondigitalocean.app/api';
+  return configuredUrl || 'https://bhmhockey-mb3md.ondigitalocean.app/api';
 }
 
 /**

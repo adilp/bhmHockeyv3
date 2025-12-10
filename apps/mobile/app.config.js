@@ -8,7 +8,7 @@ export default ({ config }) => {
       // API URL configuration
       apiUrl: process.env.API_URL || (isDev
         ? 'http://localhost:5001/api'
-        : 'https://your-app.ondigitalocean.app/api'),
+        : 'https://bhmhockey-mb3md.ondigitalocean.app/api'),
       // Environment
       environment: isDev ? 'development' : 'production',
     }

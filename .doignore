@@ -1,0 +1,8 @@
+# Ignore everything except what's needed for the API build
+packages/
+apps/mobile/
+node_modules/
+*.md
+docs/
+android/
+ios/

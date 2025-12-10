@@ -48,8 +48,6 @@
       "router": {
         "origin": false
       },
-      "apiUrl": "https://bhmhockey-mb3md.ondigitalocean.app/api",
-      "environment": "development",
       "eas": {
         "projectId": "f6225f7a-0181-4b8c-b44a-cea3e0017cfa"
       }
