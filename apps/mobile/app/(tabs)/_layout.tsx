@@ -5,13 +5,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.bg.darkest,
-        },
-        headerTintColor: colors.text.primary,
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.bg.dark,
           borderTopColor: colors.border.default,
@@ -23,28 +17,24 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
           tabBarLabel: 'Home',
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
-          title: 'Organizations',
           tabBarLabel: 'Orgs',
         }}
       />
       <Tabs.Screen
         name="events"
         options={{
-          title: 'My Events',
           tabBarLabel: 'Events',
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
           tabBarLabel: 'Profile',
         }}
       />
