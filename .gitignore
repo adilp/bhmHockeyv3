@@ -24,7 +24,7 @@ obj/
 *.pdb
 
 # Entity Framework
-**/Migrations/*.Designer.cs
+# NOTE: Do NOT ignore *.Designer.cs - they are required for EF Core migrations!
 **/Migrations/*.cs.bak
 
 # Expo / React Native
