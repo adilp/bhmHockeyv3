@@ -32,6 +32,12 @@ if (!string.IsNullOrEmpty(databaseUrl))
     // Output: Host=host;Port=port;Database=database;Username=user;Password=pass;SSL Mode=Require;Trust Server Certificate=true
     connectionString = ConvertDatabaseUrl(databaseUrl);
     Console.WriteLine("📦 Using DATABASE_URL from environment");
+    // Log connection details (mask password for security)
+    var uri = new Uri(databaseUrl.Replace("postgres://", "postgresql://"));
+    Console.WriteLine($"📦 Database Host: {uri.Host}");
+    Console.WriteLine($"📦 Database Port: {uri.Port}");
+    Console.WriteLine($"📦 Database Name: {uri.AbsolutePath.TrimStart('/')}");
+    Console.WriteLine($"📦 Database User: {uri.UserInfo.Split(':')[0]}");
 }
 else
 {
@@ -136,14 +142,40 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
     try
     {
+        logger.LogInformation("🔄 Starting database migration...");
+        Console.WriteLine("🔄 Starting database migration...");
+
+        var pendingMigrations = db.Database.GetPendingMigrations().ToList();
+        if (pendingMigrations.Any())
+        {
+            logger.LogInformation("📋 Pending migrations: {Migrations}", string.Join(", ", pendingMigrations));
+            Console.WriteLine($"📋 Pending migrations: {string.Join(", ", pendingMigrations)}");
+        }
+        else
+        {
+            logger.LogInformation("✅ No pending migrations");
+            Console.WriteLine("✅ No pending migrations");
+        }
+
         db.Database.Migrate();
+
+        logger.LogInformation("✅ Database migration completed successfully");
+        Console.WriteLine("✅ Database migration completed successfully");
     }
     catch (Exception ex)
     {
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating the database.");
+        logger.LogError(ex, "❌ An error occurred while migrating the database: {Message}", ex.Message);
+        Console.WriteLine($"❌ Migration error: {ex.Message}");
+        Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+        // Re-throw in production to prevent app from starting with broken DB
+        if (!app.Environment.IsDevelopment())
+        {
+            throw;
+        }
     }
 }
 
