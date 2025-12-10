@@ -1,17 +1,15 @@
 # DigitalOcean App Platform Configuration for BHM Hockey
 #
+# IMPORTANT: This is for App Platform, NOT Functions!
+# Create your app at: https://cloud.digitalocean.com/apps
+#
 # Deploy: doctl apps create --spec .do/app.yaml
 # Update: doctl apps update YOUR_APP_ID --spec .do/app.yaml
 #
-# IMPORTANT: Before deploying, update controller routes!
-# All controllers must use [Route("[controller]")] NOT [Route("api/[controller]")]
-# The /api prefix is handled by DO ingress routing below.
+# If DO auto-detects "Functions" components, DELETE them and only keep the Docker service.
 
 name: bhmhockey
 region: nyc
-
-features:
-  - buildpack-stack=ubuntu-22
 
 # Managed PostgreSQL Database
 databases:
