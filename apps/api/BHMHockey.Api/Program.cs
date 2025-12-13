@@ -221,6 +221,81 @@ app.MapGet("/", () => new
     status = "running"
 });
 
+// Privacy Policy page (required for App Store submission)
+app.MapGet("/privacy", () => Results.Content(@"
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Privacy Policy - BHM Hockey</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            line-height: 1.6;
+            color: #333;
+            background: #f9f9f9;
+        }
+        h1 { color: #0D1117; }
+        h2 { color: #00D9C0; margin-top: 30px; }
+        .updated { color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Privacy Policy</h1>
+    <p class='updated'>Last updated: December 2025</p>
+
+    <h2>Information We Collect</h2>
+    <p>BHM Hockey collects the following information to provide our services:</p>
+    <ul>
+        <li><strong>Account Information:</strong> Email address, name, and password for this app (encrypted)</li>
+        <li><strong>Profile Information:</strong> Skill level, playing position, and Venmo handle (optional)</li>
+        <li><strong>Device Information:</strong> Push notification tokens to send event notifications</li>
+    </ul>
+
+    <h2>How We Use Your Information</h2>
+    <p>Your information is used solely to:</p>
+    <ul>
+        <li>Authenticate your account and provide app functionality</li>
+        <li>Display your name to other users in event registrations</li>
+        <li>Send push notifications about events you're registered for or organizations you follow</li>
+        <li>Facilitate payments between event organizers and participants via Venmo</li>
+    </ul>
+
+    <h2>Data Sharing</h2>
+    <p>We do not sell, trade, or share your personal information with third parties, except:</p>
+    <ul>
+        <li>Your name and Venmo handle may be visible to event organizers for payment coordination</li>
+        <li>We use Expo's push notification service to deliver notifications to your device</li>
+    </ul>
+
+    <h2>Data Security</h2>
+    <p>Your data is stored securely on encrypted servers. Passwords are hashed using industry-standard encryption and are never stored in plain text.</p>
+
+    <h2>Data Retention</h2>
+    <p>Your data is retained as long as your account is active. You may request deletion of your account and associated data at any time.</p>
+
+    <h2>Your Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+        <li>Access your personal data through the app</li>
+        <li>Update or correct your information</li>
+        <li>Request deletion of your account</li>
+        <li>Opt out of push notifications through your device settings</li>
+    </ul>
+
+    <h2>Contact Us</h2>
+    <p>For questions about this privacy policy or to request data deletion, please contact us at: <strong>adilpatel420@gmail.com</strong></p>
+
+    <h2>Changes to This Policy</h2>
+    <p>We may update this privacy policy from time to time. We will notify users of any material changes through the app.</p>
+</body>
+</html>
+", "text/html"));
+
 app.Run();
 
 // Helper function to convert DATABASE_URL to .NET connection string
