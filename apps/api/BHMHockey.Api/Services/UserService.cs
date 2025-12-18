@@ -129,4 +129,20 @@ public class UserService : IUserService
 
         await _context.SaveChangesAsync();
     }
+
+    public async Task DeleteAccountAsync(Guid userId)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found");
+        }
+
+        // Soft delete - deactivate the account instead of hard deleting
+        // This preserves all associated data (events, organizations, registrations)
+        user.IsActive = false;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+    }
 }

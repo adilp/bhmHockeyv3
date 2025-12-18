@@ -2,7 +2,7 @@
   "expo": {
     "name": "BHM Hockey",
     "slug": "bhm-hockey",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -21,7 +21,11 @@
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
           "venmo"
-        ]
+        ],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "NSUserNotificationsUsageDescription": "BHM Hockey sends notifications about new events, registration updates, and payment reminders."
       }
     },
     "android": {
@@ -31,7 +35,7 @@
       },
       "package": "com.bhmhockey.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 1  
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -55,6 +59,10 @@
         "projectId": "f6225f7a-0181-4b8c-b44a-cea3e0017cfa"
       }
     },
-    "owner": "adilp"
+    "owner": "adilp",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/f6225f7a-0181-4b8c-b44a-cea3e0017cfa"
+    }
   }
 }

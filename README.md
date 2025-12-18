@@ -12,8 +12,11 @@ yarn install
 yarn dev
 
 # Or run separately:
-yarn api      # Start API on http://0.0.0.0:5001
-yarn mobile   # Start Expo dev server
+yarn api      # Start API on http://0.0.0.0:5001 have to run from the api folder
+yarn mobile   # Start Expo dev server, have to run in the root foldr
+
+# to run non dev simulator, have to run in the mobile folder:
+npx expo run:ios
 ```
 
 ## Project Structure

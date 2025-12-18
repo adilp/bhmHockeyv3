@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { userService } from '@bhmhockey/api-client';
@@ -109,6 +110,49 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            // Second confirmation
+            Alert.alert(
+              'Final Confirmation',
+              'This will permanently delete your account and all associated data. Type DELETE to confirm.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, Delete My Account',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      setSaving(true);
+                      await userService.deleteAccount();
+                      await logout();
+                      router.replace('/(auth)/login');
+                      Alert.alert('Account Deleted', 'Your account has been successfully deleted.');
+                    } catch (error: any) {
+                      console.error('Failed to delete account:', error);
+                      const message = error?.response?.data?.message || 'Failed to delete account. Please try again.';
+                      Alert.alert('Error', message);
+                    } finally {
+                      setSaving(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -194,6 +238,21 @@ export default function ProfileScreen() {
         >
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={handleDeleteAccount}
+          disabled={saving}
+        >
+          <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.linkButton}
+          onPress={() => Linking.openURL('https://bhmhockey-mb3md.ondigitalocean.app/privacy')}
+        >
+          <Text style={styles.linkButtonText}>Privacy Policy</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -262,5 +321,27 @@ const styles = StyleSheet.create({
     color: colors.status.error,
     fontSize: 16,
     fontWeight: '600',
+  },
+  deleteAccountButton: {
+    backgroundColor: colors.status.error,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  deleteAccountButtonText: {
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  linkButton: {
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  linkButtonText: {
+    color: colors.text.muted,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });

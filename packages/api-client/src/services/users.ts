@@ -27,4 +27,12 @@ export const userService = {
   async updatePushToken(token: string): Promise<void> {
     await apiClient.instance.put('/users/me/push-token', { pushToken: token });
   },
+
+  /**
+   * Delete user account
+   * This permanently deletes the user and all associated data
+   */
+  async deleteAccount(): Promise<void> {
+    await apiClient.instance.delete('/users/me');
+  },
 };

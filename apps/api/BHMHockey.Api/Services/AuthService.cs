@@ -22,9 +22,11 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
     {
-        // Check if user already exists
-        if (await _context.Users.AnyAsync(u => u.Email == request.Email))
+        // Check if user already exists (including deactivated accounts)
+        var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        if (existingUser != null)
         {
+            // Same error message whether active or deactivated to not leak account status
             throw new InvalidOperationException("User with this email already exists");
         }
 
@@ -67,7 +69,7 @@ public class AuthService : IAuthService
 
         if (!user.IsActive)
         {
-            throw new UnauthorizedAccessException("Account is inactive");
+            throw new UnauthorizedAccessException("This account has been deleted");
         }
 
         var token = GenerateJwtToken(user);

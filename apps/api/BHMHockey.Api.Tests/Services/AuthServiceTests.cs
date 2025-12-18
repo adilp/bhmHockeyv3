@@ -209,7 +209,7 @@ public class AuthServiceTests : IDisposable
 
         // Assert
         await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("*inactive*");
+            .WithMessage("*deleted*");
     }
 
     #endregion
