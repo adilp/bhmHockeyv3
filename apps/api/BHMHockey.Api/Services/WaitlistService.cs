@@ -163,7 +163,11 @@ public class WaitlistService : IWaitlistService
             registration.User.PushToken,
             "You're In!",
             $"A spot opened up for {eventName}.{deadlineText}",
-            new { eventId = registration.EventId.ToString(), type = "waitlist_promoted" });
+            new { eventId = registration.EventId.ToString(), type = "waitlist_promoted" },
+            userId: registration.UserId,
+            type: "waitlist_promoted",
+            organizationId: registration.Event.OrganizationId,
+            eventId: registration.EventId);
     }
 
     private async Task NotifyPaymentReminderAsync(EventRegistration registration)
@@ -179,7 +183,11 @@ public class WaitlistService : IWaitlistService
             registration.User.PushToken,
             "Payment Reminder",
             $"Don't forget to pay for {eventName}! Pay now to secure your spot.",
-            new { eventId = registration.EventId.ToString(), type = "payment_reminder" });
+            new { eventId = registration.EventId.ToString(), type = "payment_reminder" },
+            userId: registration.UserId,
+            type: "payment_reminder",
+            organizationId: registration.Event.OrganizationId,
+            eventId: registration.EventId);
     }
 
     private async Task NotifyOrganizerUserPromotedAsync(EventRegistration registration)
@@ -197,6 +205,10 @@ public class WaitlistService : IWaitlistService
             registration.Event.Creator.PushToken,
             "Waitlist Promotion",
             $"{userName} was promoted from the waitlist for {eventName}",
-            new { eventId = registration.EventId.ToString(), type = "waitlist_promotion" });
+            new { eventId = registration.EventId.ToString(), type = "waitlist_promotion" },
+            userId: registration.Event.CreatorId,
+            type: "waitlist_promotion",
+            organizationId: registration.Event.OrganizationId,
+            eventId: registration.EventId);
     }
 }

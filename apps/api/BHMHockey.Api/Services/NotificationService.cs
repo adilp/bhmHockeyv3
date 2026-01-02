@@ -12,23 +12,73 @@ public class NotificationService : INotificationService
     private readonly IConfiguration _configuration;
     private readonly ILogger<NotificationService> _logger;
     private readonly HttpClient _httpClient;
+    private readonly INotificationPersistenceService _persistenceService;
     private const string ExpoPushUrl = "https://exp.host/--/api/v2/push/send";
 
     public NotificationService(
         AppDbContext context,
         IConfiguration configuration,
         ILogger<NotificationService> logger,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        INotificationPersistenceService persistenceService)
     {
         _context = context;
         _configuration = configuration;
         _logger = logger;
         _httpClient = httpClientFactory.CreateClient("ExpoPush");
+        _persistenceService = persistenceService;
     }
 
-    public async Task SendPushNotificationAsync(string pushToken, string title, string body, object? data = null)
+    public async Task SendPushNotificationAsync(
+        string pushToken,
+        string title,
+        string body,
+        object? data = null,
+        Guid? userId = null,
+        string? type = null,
+        Guid? organizationId = null,
+        Guid? eventId = null)
     {
+        // Send push notification
         await SendBatchPushNotificationsAsync(new List<string> { pushToken }, title, body, data);
+
+        // Persist to database if userId is provided
+        if (userId.HasValue && !string.IsNullOrEmpty(type))
+        {
+            try
+            {
+                var dataDict = ConvertToDataDictionary(data);
+                await _persistenceService.CreateAsync(
+                    userId.Value,
+                    type,
+                    title,
+                    body,
+                    dataDict,
+                    organizationId,
+                    eventId);
+            }
+            catch (Exception ex)
+            {
+                // Don't fail the push notification if persistence fails
+                _logger.LogError(ex, "Failed to persist notification for user {UserId}", userId);
+            }
+        }
+    }
+
+    private static Dictionary<string, string>? ConvertToDataDictionary(object? data)
+    {
+        if (data == null) return null;
+
+        try
+        {
+            var json = JsonSerializer.Serialize(data);
+            var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+            return dict?.ToDictionary(k => k.Key, v => v.Value?.ToString() ?? string.Empty);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task SendBatchPushNotificationsAsync(List<string> pushTokens, string title, string body, object? data = null)
@@ -92,21 +142,56 @@ public class NotificationService : INotificationService
         }
     }
 
-    public async Task NotifyOrganizationSubscribersAsync(Guid organizationId, string title, string body, object? data = null)
+    public async Task NotifyOrganizationSubscribersAsync(
+        Guid organizationId,
+        string title,
+        string body,
+        object? data = null,
+        string? type = null,
+        Guid? eventId = null)
     {
+        // Get all subscribers with notifications enabled
         var subscribers = await _context.OrganizationSubscriptions
             .Include(s => s.User)
             .Where(s => s.OrganizationId == organizationId && s.NotificationEnabled)
-            .Where(s => s.User.PushToken != null)
-            .Select(s => s.User.PushToken!)
+            .Select(s => new { s.UserId, s.User.PushToken })
             .ToListAsync();
 
-        _logger.LogInformation("Found {Count} subscribers with push tokens for organization {OrgId}",
-            subscribers.Count, organizationId);
+        var pushTokens = subscribers
+            .Where(s => !string.IsNullOrEmpty(s.PushToken))
+            .Select(s => s.PushToken!)
+            .ToList();
 
-        if (subscribers.Any())
+        _logger.LogInformation("Found {Count} subscribers ({PushCount} with push tokens) for organization {OrgId}",
+            subscribers.Count, pushTokens.Count, organizationId);
+
+        // Send push notifications to those with tokens
+        if (pushTokens.Any())
         {
-            await SendBatchPushNotificationsAsync(subscribers, title, body, data);
+            await SendBatchPushNotificationsAsync(pushTokens, title, body, data);
+        }
+
+        // Persist notifications for ALL subscribers (even those without push tokens)
+        if (!string.IsNullOrEmpty(type) && subscribers.Any())
+        {
+            try
+            {
+                var dataDict = ConvertToDataDictionary(data);
+                var userIds = subscribers.Select(s => s.UserId);
+                await _persistenceService.CreateBatchAsync(
+                    userIds,
+                    type,
+                    title,
+                    body,
+                    dataDict,
+                    organizationId,
+                    eventId);
+            }
+            catch (Exception ex)
+            {
+                // Don't fail if persistence fails
+                _logger.LogError(ex, "Failed to persist notifications for organization {OrgId}", organizationId);
+            }
         }
     }
 }

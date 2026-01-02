@@ -113,7 +113,9 @@ public class EventService : IEventService
                 evt.OrganizationId.Value,
                 $"New Event: {evt.Name}",
                 $"{orgName} posted a new event on {evt.EventDate:MMM d} at {evt.Venue ?? "TBD"}",
-                new { eventId = evt.Id.ToString(), type = "new_event" }
+                new { eventId = evt.Id.ToString(), type = "new_event" },
+                type: "new_event",
+                eventId: evt.Id
             );
         }
 
@@ -821,6 +823,10 @@ public class EventService : IEventService
             evt.Creator.PushToken,
             "New Waitlist Entry",
             $"{userName} joined the waitlist (#{waitlistPosition}) for {eventName}",
-            new { eventId = evt.Id.ToString(), type = "waitlist_joined" });
+            new { eventId = evt.Id.ToString(), type = "waitlist_joined" },
+            userId: evt.CreatorId,
+            type: "waitlist_joined",
+            organizationId: evt.OrganizationId,
+            eventId: evt.Id);
     }
 }

@@ -6,6 +6,7 @@ export { authService } from './services/auth';
 export { userService } from './services/users';
 export { organizationService } from './services/organizations';
 export { eventService } from './services/events';
+export { notificationService } from './services/notifications';
 
 // Export storage
 export { authStorage } from './storage/auth';

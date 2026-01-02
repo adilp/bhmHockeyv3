@@ -286,3 +286,37 @@ export interface ApiError {
   errors?: Record<string, string[]>;
   statusCode: number;
 }
+
+// Notification types (Phase: In-App Notification Center)
+export type NotificationType =
+  | 'new_event'
+  | 'waitlist_promoted'
+  | 'waitlist_joined'
+  | 'waitlist_promotion'
+  | 'payment_reminder'
+  | 'game_reminder'
+  | 'organizer_payment_reminder';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  organizationId?: string;
+  eventId?: string;
+  isRead: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface NotificationListResponse {
+  notifications: Notification[];
+  unreadCount: number;
+  totalCount: number;
+  hasMore: boolean;
+}
+
+export interface UnreadCountResponse {
+  unreadCount: number;
+}

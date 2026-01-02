@@ -63,7 +63,11 @@ public class EventReminderService : IEventReminderService
                     registration.User.PushToken!,
                     "Game Starting Soon!",
                     $"{eventName} starts at {eventTime}. {teamInfo}",
-                    new { eventId = evt.Id.ToString(), type = "game_reminder" });
+                    new { eventId = evt.Id.ToString(), type = "game_reminder" },
+                    userId: registration.UserId,
+                    type: "game_reminder",
+                    organizationId: evt.OrganizationId,
+                    eventId: evt.Id);
             }
 
             // Mark reminder as sent
@@ -124,7 +128,11 @@ public class EventReminderService : IEventReminderService
                 evt.Creator.PushToken,
                 "Unpaid Players Reminder",
                 $"{playerText} not paid for {eventName}. Game starts in less than 5 hours!",
-                new { eventId = evt.Id.ToString(), type = "organizer_payment_reminder" });
+                new { eventId = evt.Id.ToString(), type = "organizer_payment_reminder" },
+                userId: evt.CreatorId,
+                type: "organizer_payment_reminder",
+                organizationId: evt.OrganizationId,
+                eventId: evt.Id);
 
             evt.OrganizerPaymentReminderSentAt = now;
             await _context.SaveChangesAsync();

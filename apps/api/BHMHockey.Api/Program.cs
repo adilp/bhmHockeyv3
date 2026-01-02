@@ -127,10 +127,12 @@ builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IWaitlistService, WaitlistService>();
 builder.Services.AddScoped<IEventReminderService, EventReminderService>();
+builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
 
 // Background Services
 builder.Services.AddHostedService<WaitlistBackgroundService>();
 builder.Services.AddHostedService<EventReminderBackgroundService>();
+builder.Services.AddHostedService<NotificationCleanupBackgroundService>();
 
 // Health Checks
 builder.Services.AddHealthChecks()

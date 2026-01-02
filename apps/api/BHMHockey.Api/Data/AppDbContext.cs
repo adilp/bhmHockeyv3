@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<OrganizationAdmin> OrganizationAdmins { get; set; }
     public DbSet<Event> Events { get; set; }
     public DbSet<EventRegistration> EventRegistrations { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -178,6 +179,40 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Notification configuration
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // Index for fetching user's notifications ordered by date
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+
+            // Index for unread count queries
+            entity.HasIndex(e => new { e.UserId, e.ReadAt });
+
+            // Index for cleanup job (delete old notifications)
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.Property(e => e.Type).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Body).HasMaxLength(1000);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Organization)
+                .WithMany()
+                .HasForeignKey(e => e.OrganizationId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.Event)
+                .WithMany()
+                .HasForeignKey(e => e.EventId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
