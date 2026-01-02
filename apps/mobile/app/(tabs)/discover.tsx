@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -26,10 +26,17 @@ export default function OrganizationsScreen() {
     subscribe,
     unsubscribe,
   } = useOrganizationStore();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchOrganizations();
   }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchOrganizations();
+    setRefreshing(false);
+  }, [fetchOrganizations]);
 
   // Split organizations into "My Organizations" (admin) and "Other Organizations"
   const { myOrganizations, otherOrganizations } = useMemo(() => {
@@ -93,8 +100,8 @@ export default function OrganizationsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
-            onRefresh={fetchOrganizations}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
             tintColor={colors.primary.teal}
             colors={[colors.primary.teal]}
             progressBackgroundColor={colors.bg.dark}

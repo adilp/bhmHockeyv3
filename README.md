@@ -17,6 +17,13 @@ yarn mobile   # Start Expo dev server, have to run in the root foldr
 
 # to run non dev simulator, have to run in the mobile folder:
 npx expo run:ios
+
+#Submitting OTA:
+cd apps/mobile
+
+# Publish the update (use "production" to match your live app)
+eas update --branch production --message "Add account deletion and privacy policy"
+
 ```
 
 ## Project Structure
