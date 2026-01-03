@@ -16,6 +16,7 @@ import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Badge, SkillLevelBadges } from '../../components';
 import { colors, spacing, radius } from '../../theme';
+import { shareOrganizationInvite } from '../../utils/share';
 import type { Organization, OrganizationMember } from '@bhmhockey/shared';
 
 export default function OrganizationDetailScreen() {
@@ -192,6 +193,11 @@ export default function OrganizationDetailScreen() {
     );
   };
 
+  const handleShareInvite = async () => {
+    if (!organization) return;
+    await shareOrganizationInvite(organization.id, organization.name);
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -339,6 +345,16 @@ export default function OrganizationDetailScreen() {
               ? "You'll be notified when new events are posted"
               : 'Join to get notified about new events'}
           </Text>
+        )}
+
+        {/* Share Invite Button - visible to all members */}
+        {(organization.isSubscribed || isAdmin) && (
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={handleShareInvite}
+          >
+            <Text style={styles.shareButtonText}>Share Invite</Text>
+          </TouchableOpacity>
         )}
 
         <View style={{ height: 40 }} />
@@ -591,6 +607,21 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
+  },
+  shareButton: {
+    backgroundColor: colors.bg.hover,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  shareButtonText: {
+    color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   // Modal styles
   modalOverlay: {

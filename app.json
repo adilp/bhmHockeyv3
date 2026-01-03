@@ -1,0 +1,8 @@
+{
+  "android": {
+    "package": "com.adilp.bhmhockey"
+  },
+  "ios": {
+    "bundleIdentifier": "com.adilp.bhmhockey"
+  }
+}

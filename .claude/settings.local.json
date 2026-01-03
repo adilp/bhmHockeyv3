@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__digitalocean__apps-list",
+      "mcp__digitalocean__db-cluster-list",
+      "mcp__digitalocean__apps-get-info",
+      "mcp__digitalocean__apps-get-deployment-status",
+      "mcp__digitalocean__apps-get-logs",
+      "WebFetch(domain:docs.expo.dev)"
+    ]
+  }
+}
