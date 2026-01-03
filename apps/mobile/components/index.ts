@@ -26,3 +26,6 @@ export type { PositionState } from './PositionSelector';
 
 // Utility components
 export { EnvBanner } from './EnvBanner';
+
+// Notification components
+export { NotificationItem } from './NotificationItem';

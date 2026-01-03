@@ -2,13 +2,14 @@
 
 ## 📋 Project Status
 
-**Overall Status**: Phase 4 Complete ✅ + Multi-Admin ✅ | Ready for Phase 5 (Waitlist)
+**Overall Status**: Phase 4 Complete ✅ + Multi-Admin ✅ + Notification Center ✅ | Ready for Phase 5 (Waitlist)
 - Full-stack monorepo operational
 - Mobile app (Expo SDK 54, React Native) successfully connects to .NET 8 API
 - Complete authentication flow working (register, login, logout)
 - Organizations with multi-admin support (any admin can manage org and events)
 - Events with registration and Venmo payment tracking working
 - Push notifications for new events working
+- In-app notification center with persistence (30-day retention)
 - Database: PostgreSQL on port 5433 (OrbStack)
 - API running: `http://0.0.0.0:5001`
 - **164+ backend tests passing**
@@ -60,6 +61,16 @@
 - New API endpoints: GET/POST/DELETE `/api/organizations/{id}/admins`
 - 33 new tests covering authorization and business rules
 
+**In-App Notification Center** ✅ DONE (2026-01-02)
+- All notifications persisted to database (not just push)
+- "Alerts" tab in mobile app with unread badge count
+- Notification history with pagination and pull-to-refresh
+- Mark as read (single or all), delete notifications
+- Deep link navigation when tapping notifications
+- 30-day auto-cleanup via background job
+- API endpoints: GET/PUT/DELETE `/api/notifications`
+- Extensible for future muting by org or notification type
+
 ---
 
 ## 🏗️ Tech Stack
@@ -84,6 +95,54 @@ cd apps/mobile && npx expo start    # Starts Metro bundler on port 8081
 # In another terminal, test API health
 curl http://localhost:5001/health
 ```
+
+## 📲 OTA Updates (EAS Update)
+
+Push JavaScript/asset updates without going through the app store:
+
+```bash
+cd apps/mobile
+
+# Publish OTA update to production branch
+npx eas-cli update --branch production --message "Description of changes"
+
+# List published updates
+npx eas-cli update:list
+
+# View specific update details
+npx eas-cli update:view <update-id>
+```
+
+**What OTA CAN update:** JavaScript, styles, images, navigation
+**What OTA CANNOT update:** Native code, new libraries, iOS/Android config
+
+After publishing, users must restart the app **twice** to receive the update.
+
+## 🏗️ Native Builds (EAS Build)
+
+If you changed native code (added a library, modified Podfile, etc.), you need a new app store build:
+
+```bash
+cd apps/mobile
+
+# Build for iOS App Store
+npx eas-cli build --platform ios --profile production
+
+# Build for Android Play Store
+npx eas-cli build --platform android --profile production
+
+# Build both platforms
+npx eas-cli build --platform all --profile production
+
+# List recent builds
+npx eas-cli build:list
+
+# Submit to app stores (after build completes)
+npx eas-cli submit --platform ios
+npx eas-cli submit --platform android
+```
+
+**Tip:** Install globally to use `eas` directly: `npm install -g eas-cli`
 
 ## 🎯 Architecture Overview
 
