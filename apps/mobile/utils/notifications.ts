@@ -5,6 +5,7 @@ import { Platform, Alert } from 'react-native';
 import { userService } from '@bhmhockey/api-client';
 import { router } from 'expo-router';
 import { useEventStore } from '../stores/eventStore';
+import { useNotificationStore } from '../stores/notificationStore';
 
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
@@ -198,9 +199,14 @@ export function handleNotificationData(data: NotificationData | null) {
  * Refreshes data without navigating
  */
 export function handleForegroundNotification(data: NotificationData | null) {
+  console.log('🔔 Foreground notification received, refreshing unread count');
+
+  // Always refresh unread count when a push notification is received
+  useNotificationStore.getState().fetchUnreadCount();
+
   if (!data) return;
 
-  // For promotion notifications in foreground, refresh data silently
+  // For promotion notifications in foreground, refresh event data silently
   if (data.type === 'waitlist_promoted' && data.eventId) {
     useEventStore.getState().fetchEventById(data.eventId);
     useEventStore.getState().fetchMyRegistrations();

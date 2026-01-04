@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
@@ -9,6 +10,7 @@ export default function TabLayout() {
   const unreadCount = useNotificationStore((state) => state.unreadCount);
   const fetchUnreadCount = useNotificationStore((state) => state.fetchUnreadCount);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const appState = useRef(AppState.currentState);
 
   // Fetch unread count on mount and when auth changes
   useEffect(() => {
@@ -16,6 +18,23 @@ export default function TabLayout() {
       fetchUnreadCount();
     }
   }, [isAuthenticated]);
+
+  // Refresh unread count when app comes back to foreground
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      // App came to foreground from background
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('🔔 App resumed - refreshing notification count');
+        if (isAuthenticated) {
+          fetchUnreadCount();
+        }
+      }
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [isAuthenticated, fetchUnreadCount]);
 
   return (
     <Tabs
