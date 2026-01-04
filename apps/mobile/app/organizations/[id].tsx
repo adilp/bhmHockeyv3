@@ -10,7 +10,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useNavigation, Stack, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { organizationService } from '@bhmhockey/api-client';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -22,17 +22,8 @@ import type { Organization, OrganizationMember } from '@bhmhockey/shared';
 export default function OrganizationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const navigation = useNavigation();
   const { user } = useAuthStore();
 
-  // Handle back navigation - go to home if no history (e.g., deep link)
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)');
-    }
-  };
   const { subscribe, unsubscribe } = useOrganizationStore();
 
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -63,7 +54,7 @@ export default function OrganizationDetailScreen() {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to load organization');
-      handleBack();
+      router.back();
     } finally {
       setIsLoading(false);
     }
@@ -218,11 +209,6 @@ export default function OrganizationDetailScreen() {
           headerStyle: { backgroundColor: colors.bg.dark },
           headerTintColor: colors.text.primary,
           headerBackTitle: 'Back',
-          headerLeft: () => (
-            <TouchableOpacity onPress={handleBack} style={styles.headerBackButton}>
-              <Text style={styles.headerBackText}>‹ Back</Text>
-            </TouchableOpacity>
-          ),
           headerRight: isAdmin ? () => (
             <TouchableOpacity
               onPress={() => router.push(`/organizations/edit?id=${id}`)}
@@ -243,6 +229,7 @@ export default function OrganizationDetailScreen() {
           <Text style={styles.errorText}>Organization not found</Text>
         </View>
       ) : (
+        <>
       <ScrollView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -428,6 +415,7 @@ export default function OrganizationDetailScreen() {
           </View>
         </Pressable>
       </Modal>
+        </>
       )}
     </>
   );
@@ -709,14 +697,5 @@ const styles = StyleSheet.create({
     color: colors.primary.teal,
     fontSize: 16,
     fontWeight: '600',
-  },
-  headerBackButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  headerBackText: {
-    color: colors.primary.teal,
-    fontSize: 17,
-    fontWeight: '400',
   },
 });

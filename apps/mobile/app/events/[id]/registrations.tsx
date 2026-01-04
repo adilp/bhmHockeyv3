@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { eventService } from '@bhmhockey/api-client';
 import type { EventRegistrationDto, TeamAssignment } from '@bhmhockey/shared';
 import { useEventStore } from '../../../stores/eventStore';
@@ -18,18 +18,7 @@ import { colors, spacing, radius } from '../../../theme';
 
 export default function EventRegistrationsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const navigation = useNavigation();
-  const router = useRouter();
   const [allRegistrations, setAllRegistrations] = useState<EventRegistrationDto[]>([]);
-
-  // Handle back navigation - go to home if no history (e.g., deep link)
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)');
-    }
-  };
   const [isLoading, setIsLoading] = useState(true);
   const { updatePaymentStatus, updateTeamAssignment, removeRegistration, selectedEvent, fetchEventById } = useEventStore();
 
@@ -47,16 +36,6 @@ export default function EventRegistrationsScreen() {
   );
 
   useEffect(() => {
-    navigation.setOptions({
-      title: 'Registrations',
-      headerStyle: { backgroundColor: colors.bg.dark },
-      headerTintColor: colors.text.primary,
-      headerLeft: () => (
-        <TouchableOpacity onPress={handleBack} style={styles.headerBackButton}>
-          <Text style={styles.headerBackText}>‹ Back</Text>
-        </TouchableOpacity>
-      ),
-    });
     loadData();
   }, [id]);
 
@@ -582,14 +561,5 @@ const styles = StyleSheet.create({
     color: colors.status.error,
     fontSize: 12,
     fontWeight: '600',
-  },
-  headerBackButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  headerBackText: {
-    color: colors.primary.teal,
-    fontSize: 17,
-    fontWeight: '400',
   },
 });

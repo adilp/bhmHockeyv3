@@ -33,7 +33,7 @@ function RootLayoutContent() {
       <Stack
         screenOptions={{
           headerStyle: {
-            backgroundColor: colors.bg.darkest,
+            backgroundColor: colors.bg.dark,
           },
           headerTintColor: colors.primary.teal,
           headerTitleStyle: {
@@ -43,12 +43,21 @@ function RootLayoutContent() {
           contentStyle: {
             backgroundColor: colors.bg.darkest,
           },
+          headerBackTitle: 'Back',
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="events" options={{ headerShown: false }} />
-        <Stack.Screen name="organizations" options={{ headerShown: false }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        {/* Event screens */}
+        <Stack.Screen name="events/create" options={{ title: 'Create Event', presentation: 'modal' }} />
+        <Stack.Screen name="events/edit" options={{ title: 'Edit Event' }} />
+        <Stack.Screen name="events/[id]" options={{ title: 'Event' }} />
+        <Stack.Screen name="events/[id]/registrations" options={{ title: 'Registrations' }} />
+        {/* Organization screens */}
+        <Stack.Screen name="organizations/create" options={{ title: 'Create Organization', presentation: 'modal' }} />
+        <Stack.Screen name="organizations/[id]" options={{ title: 'Organization' }} />
+        <Stack.Screen name="organizations/edit" options={{ title: 'Edit Organization' }} />
       </Stack>
     </View>
   );

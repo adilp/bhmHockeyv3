@@ -10,7 +10,7 @@ import {
   ActionSheetIOS,
   Platform,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useNavigation, useFocusEffect, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-router';
 import { useEventStore } from '../../../stores/eventStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { openVenmoPayment, getPaymentStatusInfo } from '../../../utils/venmo';
@@ -21,17 +21,8 @@ import type { Position } from '@bhmhockey/shared';
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const navigation = useNavigation();
   const { isAuthenticated, user } = useAuthStore();
 
-  // Handle back navigation - go to home if no history (e.g., deep link)
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)');
-    }
-  };
   const {
     selectedEvent,
     isLoading,
@@ -233,11 +224,7 @@ export default function EventDetailScreen() {
           title: selectedEvent?.name || 'Event',
           headerStyle: { backgroundColor: colors.bg.dark },
           headerTintColor: colors.text.primary,
-          headerLeft: () => (
-            <TouchableOpacity onPress={handleBack} style={styles.headerBackButton}>
-              <Text style={styles.headerBackText}>‹ Back</Text>
-            </TouchableOpacity>
-          ),
+          headerBackTitle: 'Back',
           headerRight: selectedEvent?.canManage ? () => (
             <TouchableOpacity
               onPress={() => router.push(`/events/edit?id=${id}`)}
@@ -753,15 +740,6 @@ const styles = StyleSheet.create({
     color: colors.primary.teal,
     fontSize: 16,
     fontWeight: '600',
-  },
-  headerBackButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  headerBackText: {
-    color: colors.primary.teal,
-    fontSize: 17,
-    fontWeight: '400',
   },
   // Team badge styles
   teamBadge: {
