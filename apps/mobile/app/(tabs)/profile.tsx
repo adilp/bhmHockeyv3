@@ -8,8 +8,10 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
 import type { User, SkillLevel } from '@bhmhockey/shared';
@@ -253,6 +255,17 @@ export default function ProfileScreen() {
         >
           <Text style={styles.linkButtonText}>Privacy Policy</Text>
         </TouchableOpacity>
+
+        <View style={styles.versionInfo}>
+          <Text style={styles.versionText}>
+            v{Constants.expoConfig?.version || '?.?.?'} ({Platform.OS === 'ios'
+              ? `build ${Constants.expoConfig?.ios?.buildNumber || '?'}`
+              : `build ${Constants.expoConfig?.android?.versionCode || '?'}`})
+          </Text>
+          <Text style={styles.versionText}>
+            runtime {Constants.expoConfig?.runtimeVersion || '?'}
+          </Text>
+        </View>
       </View>
     </ScrollView>
   );
@@ -337,11 +350,23 @@ const styles = StyleSheet.create({
   linkButton: {
     alignItems: 'center',
     marginTop: spacing.lg,
-    marginBottom: spacing.xl,
   },
   linkButtonText: {
     color: colors.text.muted,
     fontSize: 14,
     textDecorationLine: 'underline',
+  },
+  versionInfo: {
+    alignItems: 'center',
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+  },
+  versionText: {
+    color: colors.text.subtle,
+    fontSize: 12,
+    marginBottom: spacing.xs,
   },
 });

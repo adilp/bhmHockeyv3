@@ -2,7 +2,7 @@
   "expo": {
     "name": "BHM Hockey",
     "slug": "bhm-hockey",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bhmhockey.app",
-      "buildNumber": "7",
+      "buildNumber": "8",
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
           "venmo"
@@ -35,7 +35,7 @@
       },
       "package": "com.bhmhockey.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "favicon": "./assets/favicon.png"
