@@ -14,9 +14,9 @@ import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-rou
 import { useEventStore } from '../../../stores/eventStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { openVenmoPayment, getPaymentStatusInfo } from '../../../utils/venmo';
-import { Badge } from '../../../components';
+import { Badge, SkillLevelBadges, OrgAvatar } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
-import type { Position } from '@bhmhockey/shared';
+import type { Position, SkillLevel } from '@bhmhockey/shared';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -273,12 +273,25 @@ export default function EventDetailScreen() {
       <ScrollView style={styles.container}>
       {/* Header Section */}
       <View style={styles.header}>
+        {/* Organization with avatar */}
+        <View style={styles.orgHeader}>
+          <OrgAvatar name={selectedEvent.organizationName || 'Pickup Game'} size="medium" />
+          <Text style={styles.organization}>
+            {selectedEvent.organizationName || 'Pickup Game'}
+          </Text>
+        </View>
+
         {selectedEvent.name && (
           <Text style={styles.title}>{selectedEvent.name}</Text>
         )}
-        <Text style={styles.organization}>
-          {selectedEvent.organizationName || 'Pickup Game'}
-        </Text>
+
+        {/* Skill level badges */}
+        {selectedEvent.skillLevels && selectedEvent.skillLevels.length > 0 && (
+          <View style={styles.skillLevelsRow}>
+            <SkillLevelBadges levels={selectedEvent.skillLevels as SkillLevel[]} size="medium" />
+          </View>
+        )}
+
         <View style={styles.badgeRow}>
           {selectedEvent.canManage && (
             <Badge variant="purple">Organizer</Badge>
@@ -533,15 +546,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
+  orgHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   organization: {
-    fontSize: 16,
-    color: colors.text.muted,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '500',
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  skillLevelsRow: {
+    marginTop: spacing.sm,
   },
   badgeRow: {
     flexDirection: 'row',

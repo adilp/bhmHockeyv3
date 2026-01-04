@@ -12,7 +12,11 @@ export { EmptyState } from './EmptyState';
 
 // Skill level components
 export { SkillLevelBadges, skillLevelColors } from './SkillLevelBadges';
+export { SkillLevelDots } from './SkillLevelDots';
 export { SkillLevelSelector } from './SkillLevelSelector';
+
+// Organization components
+export { OrgAvatar } from './OrgAvatar';
 
 // Form components
 export { EventForm } from './EventForm';

@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors, spacing, radius } from '../theme';
 import { Badge } from './Badge';
-import { SkillLevelBadges } from './SkillLevelBadges';
+import { SkillLevelDots } from './SkillLevelDots';
+import { OrgAvatar } from './OrgAvatar';
 import type { EventDto, SkillLevel } from '@bhmhockey/shared';
 
 export type EventCardVariant = 'available' | 'registered' | 'waitlisted' | 'organizing';
@@ -76,30 +77,30 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
       {accentColor && <View style={[styles.accent, { backgroundColor: accentColor }]} />}
 
       <View style={styles.content}>
-        {/* Date and venue - most important after cost */}
-        <Text style={styles.dateTime}>{formatDateTime(event.eventDate)}</Text>
-        {event.venue && (
-          <Text style={styles.venue} numberOfLines={1}>{event.venue}</Text>
-        )}
-
-        {/* Organization row with colored dot (only for registered/organizing) */}
+        {/* Organization row - most prominent, first thing users see */}
         <View style={styles.orgRow}>
-          {accentColor && <View style={[styles.orgDot, { backgroundColor: accentColor }]} />}
+          <OrgAvatar name={event.organizationName || 'Pickup'} size="small" />
           <Text style={styles.orgName} numberOfLines={1}>
             {event.organizationName || 'Pickup'}
           </Text>
         </View>
 
+        {/* Date and venue */}
+        <Text style={styles.dateTime}>{formatDateTime(event.eventDate)}</Text>
+        {event.venue && (
+          <Text style={styles.venue} numberOfLines={1}>{event.venue}</Text>
+        )}
+
+        {/* Skill level dots - subtle, under venue */}
+        {event.skillLevels && event.skillLevels.length > 0 && (
+          <View style={styles.skillDotsRow}>
+            <SkillLevelDots levels={event.skillLevels as SkillLevel[]} />
+          </View>
+        )}
+
         {/* Event name - only show if provided */}
         {event.name && (
           <Text style={styles.name} numberOfLines={1}>{event.name}</Text>
-        )}
-
-        {/* Skill level badges */}
-        {event.skillLevels && event.skillLevels.length > 0 && (
-          <View style={styles.skillLevels}>
-            <SkillLevelBadges levels={event.skillLevels as SkillLevel[]} size="small" />
-          </View>
         )}
 
         {/* Footer badges */}
@@ -240,18 +241,14 @@ const styles = StyleSheet.create({
   orgRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  orgDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: spacing.sm,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   orgName: {
     fontSize: 14,
-    fontWeight: '500',
-    color: colors.text.muted,
+    fontWeight: '600',
+    color: colors.text.primary,
+    flex: 1,
   },
   name: {
     fontSize: 13,
@@ -259,7 +256,7 @@ const styles = StyleSheet.create({
     color: colors.text.subtle,
     marginBottom: spacing.xs,
   },
-  skillLevels: {
+  skillDotsRow: {
     marginBottom: spacing.sm,
   },
   footer: {
