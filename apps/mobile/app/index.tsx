@@ -1,71 +1,19 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '../stores/authStore';
 import { colors } from '../theme';
-import {
-  registerForPushNotificationsAsync,
-  savePushTokenToBackend,
-  addNotificationReceivedListener,
-  addNotificationResponseReceivedListener,
-  handleNotificationData,
-  handleForegroundNotification,
-} from '../utils/notifications';
 
 export default function IndexScreen() {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
-  const notificationListener = useRef<Notifications.Subscription | null>(null);
-  const responseListener = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
     console.log('🔍 Index: checking auth...');
     checkAuth();
   }, []);
 
-  // Set up push notifications when authenticated
-  useEffect(() => {
-    console.log('🔔 Auth state changed, isAuthenticated:', isAuthenticated);
-    if (!isAuthenticated) {
-      console.log('🔔 Not authenticated, skipping push notification setup');
-      return;
-    }
-
-    console.log('🔔 Setting up push notifications...');
-
-    // Register for push notifications and save token to backend
-    registerForPushNotificationsAsync().then((token) => {
-      if (token) {
-        console.log('🔔 Got push token, saving to backend:', token);
-        savePushTokenToBackend(token);
-      } else {
-        console.log('🔔 No push token received (might be simulator or permissions denied)');
-      }
-    });
-
-    // Listen for notifications received while app is in foreground
-    notificationListener.current = addNotificationReceivedListener((notification) => {
-      console.log('Notification received:', notification);
-      const data = notification.request.content.data;
-      handleForegroundNotification(data);
-    });
-
-    // Listen for user tapping on a notification
-    responseListener.current = addNotificationResponseReceivedListener((response) => {
-      console.log('Notification tapped:', response);
-      const data = response.notification.request.content.data;
-      handleNotificationData(data);
-    });
-
-    return () => {
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-      }
-    };
-  }, [isAuthenticated]);
+  // Note: Push notification listeners are set up in _layout.tsx
+  // which stays mounted for the entire app lifecycle
 
   // Show loading while checking authentication
   if (isLoading) {

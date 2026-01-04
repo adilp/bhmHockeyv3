@@ -135,7 +135,15 @@ interface NotificationData {
  * Called when user taps on a notification
  */
 export function handleNotificationData(data: NotificationData | null) {
-  if (!data) return;
+  console.log('🔔 handleNotificationData called with:', JSON.stringify(data, null, 2));
+
+  if (!data) {
+    console.log('🔔 No notification data to handle');
+    return;
+  }
+
+  console.log('🔔 Notification type:', data.type);
+  console.log('🔔 Event ID:', data.eventId);
 
   switch (data.type) {
     case 'waitlist_promoted':
@@ -166,14 +174,21 @@ export function handleNotificationData(data: NotificationData | null) {
     case 'new_event':
       // Existing handler - navigate to event detail
       if (data.eventId) {
+        console.log('🔔 Navigating to event:', `/events/${data.eventId}`);
         router.push(`/events/${data.eventId}`);
+      } else {
+        console.log('🔔 new_event notification but no eventId');
       }
       break;
 
     default:
+      console.log('🔔 Unknown notification type, checking for eventId');
       // Unknown notification type - navigate to event if eventId present
       if (data.eventId) {
+        console.log('🔔 Navigating to event (default):', `/events/${data.eventId}`);
         router.push(`/events/${data.eventId}`);
+      } else {
+        console.log('🔔 No eventId in notification data');
       }
   }
 }
