@@ -46,6 +46,13 @@ export const organizationService = {
   },
 
   /**
+   * Delete organization (soft delete - sets IsActive to false)
+   */
+  async delete(id: string): Promise<void> {
+    await apiClient.instance.delete(`/organizations/${id}`);
+  },
+
+  /**
    * Subscribe to organization
    */
   async subscribe(organizationId: string): Promise<void> {

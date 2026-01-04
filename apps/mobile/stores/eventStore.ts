@@ -31,6 +31,9 @@ interface EventState {
 
   // Registration management (organizer)
   removeRegistration: (eventId: string, registrationId: string) => Promise<boolean>;
+
+  // Event management (organizer)
+  cancelEvent: (eventId: string) => Promise<boolean>;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
@@ -315,6 +318,27 @@ export const useEventStore = create<EventState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to remove registration',
+      });
+      return false;
+    }
+  },
+
+  // Cancel/delete event (organizer only) - soft delete
+  cancelEvent: async (eventId: string) => {
+    const { events, myRegistrations } = get();
+
+    try {
+      await eventService.cancel(eventId);
+      // Remove cancelled event from all lists
+      set({
+        events: events.filter(e => e.id !== eventId),
+        myRegistrations: myRegistrations.filter(e => e.id !== eventId),
+        selectedEvent: null,
+      });
+      return true;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to cancel event',
       });
       return false;
     }

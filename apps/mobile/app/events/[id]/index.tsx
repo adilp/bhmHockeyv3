@@ -33,6 +33,7 @@ export default function EventDetailScreen() {
     clearSelectedEvent,
     clearError,
     markPayment,
+    cancelEvent,
   } = useEventStore();
 
   useFocusEffect(
@@ -204,6 +205,29 @@ export default function EventDetailScreen() {
                 'Payment Marked',
                 'The organizer will verify your payment. You can check your Venmo app to confirm the transaction.'
               );
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteEvent = () => {
+    if (!id) return;
+
+    Alert.alert(
+      'Delete Event',
+      'Are you sure you want to delete this event? This action cannot be undone. All registrations will be cancelled.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await cancelEvent(id);
+            if (success) {
+              Alert.alert('Event Deleted', 'The event has been cancelled.');
+              router.back();
             }
           },
         },
@@ -464,6 +488,12 @@ export default function EventDetailScreen() {
             <Text style={styles.viewRegistrationsButtonText}>
               View Registrations ({selectedEvent.registeredCount})
             </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteEventButton}
+            onPress={handleDeleteEvent}
+          >
+            <Text style={styles.deleteEventButtonText}>Delete Event</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -729,6 +759,20 @@ const styles = StyleSheet.create({
   },
   viewRegistrationsButtonText: {
     color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteEventButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 14,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.status.error,
+    marginTop: spacing.sm,
+  },
+  deleteEventButtonText: {
+    color: colors.status.error,
     fontSize: 16,
     fontWeight: '600',
   },

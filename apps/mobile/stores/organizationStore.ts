@@ -16,6 +16,7 @@ interface OrganizationState {
   createOrganization: (data: CreateOrganizationRequest) => Promise<Organization>;
   subscribe: (organizationId: string) => Promise<void>;
   unsubscribe: (organizationId: string) => Promise<void>;
+  deleteOrganization: (organizationId: string) => Promise<boolean>;
   clearError: () => void;
 }
 
@@ -129,6 +130,26 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
         mySubscriptions,
         error: error instanceof Error ? error.message : 'Failed to unsubscribe'
       });
+    }
+  },
+
+  deleteOrganization: async (organizationId: string) => {
+    const { organizations, myOrganizations, mySubscriptions } = get();
+
+    try {
+      await organizationService.delete(organizationId);
+      // Remove deleted organization from all lists
+      set({
+        organizations: organizations.filter(org => org.id !== organizationId),
+        myOrganizations: myOrganizations.filter(org => org.id !== organizationId),
+        mySubscriptions: mySubscriptions.filter(sub => sub.organization.id !== organizationId),
+      });
+      return true;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to delete organization',
+      });
+      return false;
     }
   },
 

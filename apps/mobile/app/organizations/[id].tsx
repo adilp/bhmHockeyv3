@@ -24,7 +24,7 @@ export default function OrganizationDetailScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
 
-  const { subscribe, unsubscribe } = useOrganizationStore();
+  const { subscribe, unsubscribe, deleteOrganization } = useOrganizationStore();
 
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
@@ -199,6 +199,29 @@ export default function OrganizationDetailScreen() {
     await shareOrganizationInvite(organization.id, organization.name);
   };
 
+  const handleDeleteOrganization = () => {
+    if (!id || !organization) return;
+
+    Alert.alert(
+      'Delete Organization',
+      `Are you sure you want to delete "${organization.name}"? This action cannot be undone. All members will be removed and upcoming events will be cancelled.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await deleteOrganization(id);
+            if (success) {
+              Alert.alert('Organization Deleted', 'The organization has been deleted.');
+              router.back();
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const isAdmin = organization?.isAdmin;
 
   return (
@@ -350,6 +373,16 @@ export default function OrganizationDetailScreen() {
             onPress={handleShareInvite}
           >
             <Text style={styles.shareButtonText}>Share Invite</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Delete Organization Button - visible to admins only */}
+        {isAdmin && (
+          <TouchableOpacity
+            style={styles.deleteOrgButton}
+            onPress={handleDeleteOrganization}
+          >
+            <Text style={styles.deleteOrgButtonText}>Delete Organization</Text>
           </TouchableOpacity>
         )}
 
@@ -618,6 +651,21 @@ const styles = StyleSheet.create({
   },
   shareButtonText: {
     color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteOrgButton: {
+    backgroundColor: 'transparent',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.status.error,
+  },
+  deleteOrgButtonText: {
+    color: colors.status.error,
     fontSize: 16,
     fontWeight: '600',
   },
