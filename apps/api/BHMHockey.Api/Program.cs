@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Web;
 using BHMHockey.Api.Data;
 using BHMHockey.Api.Services;
@@ -17,7 +19,13 @@ if (builder.Environment.IsDevelopment())
 }
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Ensure DateTime is serialized in ISO 8601 format with UTC "Z" suffix
+        options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
+        options.JsonSerializerOptions.Converters.Add(new UtcNullableDateTimeConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -331,4 +339,43 @@ static string ConvertDatabaseUrl(string databaseUrl)
     }
 
     return connectionStringBuilder.ToString();
+}
+
+/// <summary>
+/// Custom JSON converter that ensures DateTime values are serialized with "Z" suffix for UTC.
+/// This fixes timezone issues when JavaScript parses the date string.
+/// </summary>
+public class UtcDateTimeConverter : JsonConverter<DateTime>
+{
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return DateTime.Parse(reader.GetString()!).ToUniversalTime();
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+    {
+        // Always write as UTC with "Z" suffix
+        writer.WriteStringValue(value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+    }
+}
+
+/// <summary>
+/// Custom JSON converter for nullable DateTime values.
+/// </summary>
+public class UtcNullableDateTimeConverter : JsonConverter<DateTime?>
+{
+    public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+        return DateTime.Parse(reader.GetString()!).ToUniversalTime();
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
+    {
+        if (value.HasValue)
+            writer.WriteStringValue(value.Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+        else
+            writer.WriteNullValue();
+    }
 }
