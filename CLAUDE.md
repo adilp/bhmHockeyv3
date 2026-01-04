@@ -144,6 +144,32 @@ npx eas-cli submit --platform android
 
 **Tip:** Install globally to use `eas` directly: `npm install -g eas-cli`
 
+### ⚠️ Version Number Sync (IMPORTANT)
+
+Since this project has a native `ios/` folder committed to git, **you must update version numbers in TWO places** when bumping versions:
+
+1. **`apps/mobile/app.json`** - Expo config
+   ```json
+   "version": "1.0.3",
+   "ios": { "buildNumber": "8" },
+   "android": { "versionCode": 3 }
+   ```
+
+2. **`apps/mobile/ios/BHMHockey/Info.plist`** - Native iOS config
+   ```xml
+   <key>CFBundleShortVersionString</key>
+   <string>1.0.3</string>
+   <key>CFBundleVersion</key>
+   <string>8</string>
+   ```
+
+**Why:** EAS Build reads from the native `ios/` folder when it exists. If these are out of sync, builds will have wrong version numbers.
+
+**Workflow:**
+- Use **EAS Build** for App Store/Play Store distribution and OTA updates
+- Use **Xcode** for local physical device testing
+- Always commit `ios/` folder changes after version bumps
+
 ## 🎯 Architecture Overview
 
 **Monorepo Structure:**
