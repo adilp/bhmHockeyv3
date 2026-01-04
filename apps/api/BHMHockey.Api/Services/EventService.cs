@@ -107,12 +107,13 @@ public class EventService : IEventService
         {
             evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
 
-            // Notify organization subscribers about the new event
+            // Notify organization subscribers about the new game
             var orgName = evt.Organization?.Name ?? "An organization";
+            var venueText = !string.IsNullOrWhiteSpace(evt.Venue) ? $" - {evt.Venue}" : "";
             await _notificationService.NotifyOrganizationSubscribersAsync(
                 evt.OrganizationId.Value,
-                $"New Event: {evt.Name}",
-                $"{orgName} posted a new event on {evt.EventDate:MMM d} at {evt.Venue ?? "TBD"}",
+                $"New Game: {evt.Name}",
+                $"{orgName} posted a new game on {evt.EventDate:MMM d} at {evt.EventDate:h:mm tt}{venueText}",
                 new { eventId = evt.Id.ToString(), type = "new_event" },
                 type: "new_event",
                 eventId: evt.Id
