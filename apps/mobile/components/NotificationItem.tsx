@@ -20,7 +20,10 @@ const typeConfig: Record<NotificationType, { icon: string; color: string }> = {
 };
 
 function formatTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
+  // Notification timestamps are stored as UTC but may not have "Z" suffix
+  // Append "Z" to ensure correct UTC parsing
+  const utcDateString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
+  const date = new Date(utcDateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / (1000 * 60));

@@ -186,11 +186,22 @@ export function EventForm({
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    // Format date as local time (not UTC) so it displays as the user entered it
+    const formatLocalDateTime = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    };
+
     const formData: EventFormData = {
       organizationId: selectedOrgId || undefined,
       name: name.trim() || undefined,
       description: description.trim() || undefined,
-      eventDate: eventDate.toISOString(),
+      eventDate: formatLocalDateTime(eventDate),
       duration: duration.trim() ? parseInt(duration, 10) : undefined,
       venue: venue.trim() || undefined,
       maxPlayers: parseInt(maxPlayers, 10),

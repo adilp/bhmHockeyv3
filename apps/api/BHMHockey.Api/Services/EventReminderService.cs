@@ -9,6 +9,9 @@ public class EventReminderService : IEventReminderService
     private readonly INotificationService _notificationService;
     private readonly ILogger<EventReminderService> _logger;
 
+    // Central Time Zone (for local community app)
+    private static readonly TimeZoneInfo CentralTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+
     // Send player reminders 1 hour before event
     private static readonly TimeSpan PlayerReminderWindow = TimeSpan.FromHours(1);
     // Send organizer payment reminders 5 hours before event
@@ -26,7 +29,8 @@ public class EventReminderService : IEventReminderService
 
     public async Task SendPlayerRemindersAsync()
     {
-        var now = DateTime.UtcNow;
+        // Use Central Time since all users are in the same timezone
+        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, CentralTimeZone);
         var reminderCutoff = now.Add(PlayerReminderWindow);
 
         // Find events starting within the next hour that haven't had reminders sent
@@ -82,7 +86,8 @@ public class EventReminderService : IEventReminderService
 
     public async Task SendOrganizerPaymentRemindersAsync()
     {
-        var now = DateTime.UtcNow;
+        // Use Central Time since all users are in the same timezone
+        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, CentralTimeZone);
         var reminderCutoff = now.Add(OrganizerPaymentReminderWindow);
 
         // Find events with cost, starting within 5 hours, that haven't had organizer reminders sent
