@@ -34,6 +34,14 @@ public class OrganizationService : IOrganizationService
     {
         ValidateSkillLevels(request.SkillLevels);
 
+        // Check for duplicate name
+        var existingOrg = await _context.Organizations
+            .FirstOrDefaultAsync(o => o.Name == request.Name);
+        if (existingOrg != null)
+        {
+            throw new InvalidOperationException($"An organization with the name '{request.Name}' already exists.");
+        }
+
         var organization = new Organization
         {
             Name = request.Name,
@@ -103,7 +111,17 @@ public class OrganizationService : IOrganizationService
         var isAdmin = await _adminService.IsUserAdminAsync(id, userId);
         if (!isAdmin) return null;
 
-        if (request.Name != null) organization.Name = request.Name;
+        if (request.Name != null && request.Name != organization.Name)
+        {
+            // Check for duplicate name
+            var existingOrg = await _context.Organizations
+                .FirstOrDefaultAsync(o => o.Name == request.Name && o.Id != id);
+            if (existingOrg != null)
+            {
+                throw new InvalidOperationException($"An organization with the name '{request.Name}' already exists.");
+            }
+            organization.Name = request.Name;
+        }
         if (request.Description != null) organization.Description = request.Description;
         if (request.Location != null) organization.Location = request.Location;
         if (request.SkillLevels != null)

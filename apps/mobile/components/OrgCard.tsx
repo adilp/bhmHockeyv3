@@ -29,14 +29,16 @@ export function OrgCard({
       </View>
 
       <View style={styles.content}>
-        {/* Header row with name and badges */}
-        <View style={styles.headerRow}>
-          <View style={styles.nameRow}>
-            <Text style={styles.name} numberOfLines={1}>{name}</Text>
+        {/* Name row */}
+        <Text style={styles.name} numberOfLines={1}>{name}</Text>
+
+        {/* Badges row - Admin badge and skill levels */}
+        {(isAdmin || (skillLevels && skillLevels.length > 0)) && (
+          <View style={styles.badgesRow}>
             {isAdmin && <Badge variant="purple">Admin</Badge>}
+            <SkillLevelBadges levels={skillLevels} size="small" />
           </View>
-          <SkillLevelBadges levels={skillLevels} size="small" />
-        </View>
+        )}
 
         {/* Description */}
         {description && (
@@ -96,24 +98,18 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.xs,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: spacing.sm,
-    marginRight: spacing.sm,
-  },
   name: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
-    flexShrink: 1,
+    marginBottom: spacing.xs,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
   },
   description: {
     fontSize: 13,

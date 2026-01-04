@@ -220,34 +220,17 @@ export default function EventDetailScreen() {
     );
   };
 
-  if (isLoading || !selectedEvent) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary.teal} />
-        <Text style={styles.loadingText}>Loading event...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
-
-  const spotsLeft = selectedEvent.maxPlayers - selectedEvent.registeredCount;
+  const spotsLeft = selectedEvent ? selectedEvent.maxPlayers - selectedEvent.registeredCount : 0;
   const isFull = spotsLeft <= 0;
-  const isWaitlisted = selectedEvent.amIWaitlisted;
+  const isWaitlisted = selectedEvent?.amIWaitlisted;
   // Can register (or join waitlist) if authenticated and not already registered/waitlisted
-  const canRegister = isAuthenticated && !selectedEvent.isRegistered && !isWaitlisted;
+  const canRegister = isAuthenticated && selectedEvent && !selectedEvent.isRegistered && !isWaitlisted;
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: selectedEvent.name || 'Event',
+          title: selectedEvent?.name || 'Event',
           headerStyle: { backgroundColor: colors.bg.dark },
           headerTintColor: colors.text.primary,
           headerLeft: () => (
@@ -255,7 +238,7 @@ export default function EventDetailScreen() {
               <Text style={styles.headerBackText}>‹ Back</Text>
             </TouchableOpacity>
           ),
-          headerRight: selectedEvent.canManage ? () => (
+          headerRight: selectedEvent?.canManage ? () => (
             <TouchableOpacity
               onPress={() => router.push(`/events/edit?id=${id}`)}
               style={styles.headerButton}
@@ -265,6 +248,17 @@ export default function EventDetailScreen() {
           ) : undefined,
         }}
       />
+
+      {(isLoading || !selectedEvent) ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primary.teal} />
+          <Text style={styles.loadingText}>Loading event...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : (
       <ScrollView style={styles.container}>
       {/* Header Section */}
       <View style={styles.header}>
@@ -489,6 +483,7 @@ export default function EventDetailScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+      )}
     </>
   );
 }

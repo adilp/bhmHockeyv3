@@ -208,29 +208,13 @@ export default function OrganizationDetailScreen() {
     await shareOrganizationInvite(organization.id, organization.name);
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary.teal} />
-      </View>
-    );
-  }
-
-  if (!organization) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Organization not found</Text>
-      </View>
-    );
-  }
-
-  const isAdmin = organization.isAdmin;
+  const isAdmin = organization?.isAdmin;
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: organization.name,
+          title: organization?.name || 'Organization',
           headerStyle: { backgroundColor: colors.bg.dark },
           headerTintColor: colors.text.primary,
           headerBackTitle: 'Back',
@@ -250,6 +234,15 @@ export default function OrganizationDetailScreen() {
         }}
       />
 
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary.teal} />
+        </View>
+      ) : !organization ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>Organization not found</Text>
+        </View>
+      ) : (
       <ScrollView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -435,6 +428,7 @@ export default function OrganizationDetailScreen() {
           </View>
         </Pressable>
       </Modal>
+      )}
     </>
   );
 }

@@ -240,6 +240,9 @@ namespace BHMHockey.Api.Migrations
 
                     b.HasIndex("CreatorId");
 
+                    b.HasIndex("Name")
+                        .IsUnique();
+
                     b.ToTable("Organizations");
                 });
 
