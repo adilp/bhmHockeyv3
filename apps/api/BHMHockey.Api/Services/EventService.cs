@@ -13,9 +13,8 @@ public class EventService : IEventService
     private readonly IWaitlistService _waitlistService;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
-    // Central Time Zone (for local community app)
+    // Central Time Zone for displaying times to users (local community app)
     private static readonly TimeZoneInfo CentralTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
-    private static DateTime CentralTimeNow => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, CentralTimeZone);
 
     public EventService(
         AppDbContext context,
@@ -114,10 +113,12 @@ public class EventService : IEventService
             // Notify organization subscribers about the new game
             var orgName = evt.Organization?.Name ?? "An organization";
             var venueText = !string.IsNullOrWhiteSpace(evt.Venue) ? $" - {evt.Venue}" : "";
+            // Convert UTC to Central Time for display
+            var localEventDate = TimeZoneInfo.ConvertTimeFromUtc(evt.EventDate, CentralTimeZone);
             await _notificationService.NotifyOrganizationSubscribersAsync(
                 evt.OrganizationId.Value,
                 $"New Game: {evt.Name}",
-                $"{orgName} posted a new game on {evt.EventDate:MMM d} at {evt.EventDate:h:mm tt}{venueText}",
+                $"{orgName} posted a new game on {localEventDate:MMM d} at {localEventDate:h:mm tt}{venueText}",
                 new { eventId = evt.Id.ToString(), type = "new_event" },
                 type: "new_event",
                 eventId: evt.Id
@@ -140,7 +141,7 @@ public class EventService : IEventService
         var events = await _context.Events
             .Include(e => e.Organization)
             .Include(e => e.Registrations)
-            .Where(e => e.Status != "Cancelled" && e.EventDate >= CentralTimeNow)
+            .Where(e => e.Status != "Cancelled" && e.EventDate >= DateTime.UtcNow)
             .OrderBy(e => e.EventDate)
             .ToListAsync();
 
@@ -330,7 +331,7 @@ public class EventService : IEventService
         }
 
         // Check registration deadline
-        if (evt.RegistrationDeadline.HasValue && evt.RegistrationDeadline.Value < CentralTimeNow)
+        if (evt.RegistrationDeadline.HasValue && evt.RegistrationDeadline.Value < DateTime.UtcNow)
         {
             throw new InvalidOperationException("Registration deadline has passed");
         }
@@ -574,7 +575,7 @@ public class EventService : IEventService
             .ThenInclude(e => e.Organization)
             .Include(r => r.Event.Registrations)
             .Where(r => r.UserId == userId && r.Status == "Registered")
-            .Where(r => r.Event.EventDate >= CentralTimeNow)
+            .Where(r => r.Event.EventDate >= DateTime.UtcNow)
             .OrderBy(r => r.Event.EventDate)
             .ToListAsync();
 

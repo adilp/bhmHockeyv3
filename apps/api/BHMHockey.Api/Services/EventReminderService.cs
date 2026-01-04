@@ -9,7 +9,7 @@ public class EventReminderService : IEventReminderService
     private readonly INotificationService _notificationService;
     private readonly ILogger<EventReminderService> _logger;
 
-    // Central Time Zone (for local community app)
+    // Central Time Zone for displaying times to users (local community app)
     private static readonly TimeZoneInfo CentralTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
 
     // Send player reminders 1 hour before event
@@ -29,8 +29,7 @@ public class EventReminderService : IEventReminderService
 
     public async Task SendPlayerRemindersAsync()
     {
-        // Use Central Time since all users are in the same timezone
-        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, CentralTimeZone);
+        var now = DateTime.UtcNow;
         var reminderCutoff = now.Add(PlayerReminderWindow);
 
         // Find events starting within the next hour that haven't had reminders sent
@@ -50,7 +49,9 @@ public class EventReminderService : IEventReminderService
                 evt.Id, evt.EventDate);
 
             var eventName = evt.Name ?? $"Hockey Game";
-            var eventTime = evt.EventDate.ToString("h:mm tt");
+            // Convert UTC to Central Time for display
+            var localEventDate = TimeZoneInfo.ConvertTimeFromUtc(evt.EventDate, CentralTimeZone);
+            var eventTime = localEventDate.ToString("h:mm tt");
 
             // Send to each registered player with a push token
             var registeredPlayers = evt.Registrations
@@ -86,8 +87,7 @@ public class EventReminderService : IEventReminderService
 
     public async Task SendOrganizerPaymentRemindersAsync()
     {
-        // Use Central Time since all users are in the same timezone
-        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, CentralTimeZone);
+        var now = DateTime.UtcNow;
         var reminderCutoff = now.Add(OrganizerPaymentReminderWindow);
 
         // Find events with cost, starting within 5 hours, that haven't had organizer reminders sent
