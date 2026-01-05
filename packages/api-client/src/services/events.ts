@@ -6,6 +6,8 @@ import type {
   MarkPaymentRequest,
   UpdatePaymentStatusRequest,
   UpdateTeamAssignmentRequest,
+  UpdateRosterOrderRequest,
+  RosterOrderItem,
   RegisterForEventRequest,
   RegistrationResultDto,
   Position,
@@ -140,6 +142,19 @@ export const eventService = {
   async removeRegistration(eventId: string, registrationId: string): Promise<void> {
     await apiClient.instance.delete(
       `/events/${eventId}/registrations/${registrationId}`
+    );
+  },
+
+  // Roster order management (organizer)
+
+  /**
+   * Update roster order for all registrations (organizer only)
+   * Allows reordering players and changing teams in a single batch update
+   */
+  async updateRosterOrder(eventId: string, items: RosterOrderItem[]): Promise<void> {
+    await apiClient.instance.put(
+      `/events/${eventId}/roster-order`,
+      { items }
     );
   },
 };

@@ -8,18 +8,20 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useLocalSearchParams } from 'expo-router';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventRegistrationDto, TeamAssignment } from '@bhmhockey/shared';
+import type { EventRegistrationDto, TeamAssignment, RosterOrderItem } from '@bhmhockey/shared';
 import { useEventStore } from '../../../stores/eventStore';
-import { getPaymentStatusInfo } from '../../../utils/venmo';
-import { EmptyState, SectionHeader, Badge } from '../../../components';
+import { EmptyState, SectionHeader, DraggableRoster, PlayerDetailModal } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
 
 export default function EventRegistrationsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [allRegistrations, setAllRegistrations] = useState<EventRegistrationDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedPlayer, setSelectedPlayer] = useState<EventRegistrationDto | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const { updatePaymentStatus, updateTeamAssignment, removeRegistration, selectedEvent, fetchEventById } = useEventStore();
 
   // Filter into registered and waitlisted
@@ -63,18 +65,30 @@ export default function EventRegistrationsScreen() {
     }
   };
 
-  const handleMarkPaid = async (registrationId: string) => {
+  // Player modal handlers
+  const handlePlayerPress = (registration: EventRegistrationDto) => {
+    setSelectedPlayer(registration);
+    setIsModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalVisible(false);
+    setSelectedPlayer(null);
+  };
+
+  // Payment handlers (now called from modal)
+  const handleMarkPaid = async (registration: EventRegistrationDto) => {
     if (!id) return;
 
     Alert.alert(
       'Mark as Paid',
-      'Did you receive payment (cash, Venmo, or other)?',
+      `Mark payment from ${registration.user.firstName} as verified?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Yes, Mark Paid',
           onPress: async () => {
-            const success = await updatePaymentStatus(id, registrationId, 'Verified');
+            const success = await updatePaymentStatus(id, registration.id, 'Verified');
             if (success) await loadRegistrations();
           },
         },
@@ -82,18 +96,18 @@ export default function EventRegistrationsScreen() {
     );
   };
 
-  const handleVerifyPayment = async (registrationId: string) => {
+  const handleVerifyPayment = async (registration: EventRegistrationDto) => {
     if (!id) return;
 
     Alert.alert(
       'Verify Payment',
-      'Have you received this payment?',
+      `Verify payment from ${registration.user.firstName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Yes, Verify',
           onPress: async () => {
-            const success = await updatePaymentStatus(id, registrationId, 'Verified');
+            const success = await updatePaymentStatus(id, registration.id, 'Verified');
             if (success) await loadRegistrations();
           },
         },
@@ -101,19 +115,19 @@ export default function EventRegistrationsScreen() {
     );
   };
 
-  const handleResetPayment = async (registrationId: string) => {
+  const handleResetPayment = async (registration: EventRegistrationDto) => {
     if (!id) return;
 
     Alert.alert(
       'Reset Payment',
-      'Are you sure you want to reset this payment status to Pending?',
+      `Reset payment status for ${registration.user.firstName} to Unpaid?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reset',
           style: 'destructive',
           onPress: async () => {
-            const success = await updatePaymentStatus(id, registrationId, 'Pending');
+            const success = await updatePaymentStatus(id, registration.id, 'Pending');
             if (success) await loadRegistrations();
           },
         },
@@ -121,6 +135,7 @@ export default function EventRegistrationsScreen() {
     );
   };
 
+  // Team swap handler (from modal)
   const handleSwapTeam = async (registration: EventRegistrationDto) => {
     if (!id) return;
 
@@ -129,6 +144,7 @@ export default function EventRegistrationsScreen() {
     if (success) await loadRegistrations();
   };
 
+  // Remove handler (from modal)
   const handleRemove = async (registration: EventRegistrationDto) => {
     if (!id) return;
 
@@ -152,115 +168,30 @@ export default function EventRegistrationsScreen() {
     );
   };
 
-  const renderRegistration = ({ item }: { item: EventRegistrationDto }) => {
-    const statusInfo = getPaymentStatusInfo(item.paymentStatus);
-    // Show payment actions if event has a cost (check selectedEvent or assume paid if paymentStatus exists)
-    const showPaymentActions = (selectedEvent?.cost && selectedEvent.cost > 0) || item.paymentStatus;
-    const isBlackTeam = item.teamAssignment === 'Black';
+  // Roster order change handler
+  const handleRosterChange = async (items: RosterOrderItem[]) => {
+    if (!id) return;
 
-    return (
-      <View style={styles.registrationCard}>
-        {/* Avatar */}
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {item.user.firstName.charAt(0)}{item.user.lastName.charAt(0)}
-          </Text>
-        </View>
-
-        {/* User Info */}
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>
-            {item.user.firstName} {item.user.lastName}
-          </Text>
-          <Text style={styles.userMeta}>
-            {item.registeredPosition || 'Player'} • {item.user.email}
-          </Text>
-        </View>
-
-        {/* Team Badge - always tappable (only organizers can access this screen) */}
-        <TouchableOpacity
-          style={[
-            styles.teamBadge,
-            isBlackTeam ? styles.teamBlack : styles.teamWhite
-          ]}
-          onPress={() => handleSwapTeam(item)}
-        >
-          <Text style={[
-            styles.teamBadgeText,
-            isBlackTeam ? styles.teamBlackText : styles.teamWhiteText
-          ]}>
-            {item.teamAssignment ? `Team ${item.teamAssignment}` : 'TBD'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Payment Status & Actions */}
-        {showPaymentActions && (
-          <View style={styles.paymentSection}>
-            <View style={[styles.statusBadge, { backgroundColor: statusInfo.backgroundColor }]}>
-              <Text style={[styles.statusText, { color: statusInfo.color }]}>
-                {statusInfo.label}
-              </Text>
-            </View>
-
-            {item.paymentStatus === 'Pending' && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleMarkPaid(item.id)}
-              >
-                <Text style={styles.actionButtonText}>Mark Paid</Text>
-              </TouchableOpacity>
-            )}
-
-            {item.paymentStatus === 'MarkedPaid' && (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.verifyButton]}
-                onPress={() => handleVerifyPayment(item.id)}
-              >
-                <Text style={styles.actionButtonText}>Verify</Text>
-              </TouchableOpacity>
-            )}
-
-            {item.paymentStatus === 'Verified' && (
-              <TouchableOpacity
-                style={styles.resetButton}
-                onPress={() => handleResetPayment(item.id)}
-              >
-                <Text style={styles.resetButtonText}>Reset</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* Remove button */}
-        <TouchableOpacity
-          style={styles.removeButton}
-          onPress={() => handleRemove(item)}
-        >
-          <Text style={styles.removeButtonText}>Remove</Text>
-        </TouchableOpacity>
-      </View>
-    );
+    try {
+      await eventService.updateRosterOrder(id, items);
+      await loadRegistrations();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update roster order');
+    }
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary.teal} />
-      </View>
-    );
-  }
-
+  // Waitlist item render
   const renderWaitlistItem = (item: EventRegistrationDto) => (
     <View key={item.id} style={styles.waitlistRow}>
-      <View style={styles.positionBadge}>
-        <Text style={styles.positionText}>#{item.waitlistPosition}</Text>
+      <View style={styles.waitlistPositionBadge}>
+        <Text style={styles.waitlistPositionText}>#{item.waitlistPosition}</Text>
       </View>
       <View style={styles.waitlistUserInfo}>
-        <Text style={styles.userName}>
+        <Text style={styles.waitlistUserName}>
           {item.user.firstName} {item.user.lastName}
         </Text>
-        <Text style={styles.userMeta}>
-          {item.registeredPosition || 'Player'}
+        <Text style={styles.waitlistUserMeta}>
+          {item.registeredPosition || 'Skater'}
         </Text>
       </View>
       <TouchableOpacity
@@ -272,84 +203,99 @@ export default function EventRegistrationsScreen() {
     </View>
   );
 
-  return (
-    <ScrollView style={styles.container}>
-      {/* Summary Header */}
-      {selectedEvent && (
-        <View style={styles.summaryHeader}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{registrations.length}</Text>
-            <Text style={styles.statLabel}>Registered</Text>
-          </View>
-          {/* Team counts */}
-          <View style={styles.statBox}>
-            <Text style={[styles.statValue, { color: colors.text.primary }]}>
-              {registrations.filter(r => r.teamAssignment === 'Black').length}
-            </Text>
-            <Text style={styles.statLabel}>Black</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={[styles.statValue, { color: colors.text.secondary }]}>
-              {registrations.filter(r => r.teamAssignment === 'White').length}
-            </Text>
-            <Text style={styles.statLabel}>White</Text>
-          </View>
-          {selectedEvent.cost > 0 && (
-            <>
-              <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: colors.primary.green }]}>
-                  {registrations.filter(r => r.paymentStatus === 'Verified').length}
-                </Text>
-                <Text style={styles.statLabel}>Paid</Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: colors.status.error }]}>
-                  {registrations.filter(r => r.paymentStatus !== 'Verified').length}
-                </Text>
-                <Text style={styles.statLabel}>Unpaid</Text>
-              </View>
-            </>
-          )}
-          {waitlist.length > 0 && (
-            <View style={styles.statBox}>
-              <Text style={[styles.statValue, { color: colors.status.warning }]}>
-                {waitlist.length}
-              </Text>
-              <Text style={styles.statLabel}>Waitlist</Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* Registered Players Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Registered Players" count={registrations.length} />
-        {registrations.length === 0 ? (
-          <EmptyState
-            icon="👥"
-            title="No Registrations"
-            message="No one has registered for this event yet"
-          />
-        ) : (
-          registrations.map(item => (
-            <View key={item.id}>{renderRegistration({ item })}</View>
-          ))
-        )}
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.primary.teal} />
       </View>
+    );
+  }
 
-      {/* Waitlist Section */}
-      {waitlist.length > 0 && (
-        <View style={styles.section}>
-          <SectionHeader title="Waitlist" count={waitlist.length} />
-          <View style={styles.waitlistSection}>
-            {waitlist.map(renderWaitlistItem)}
+  // Always show payment status - useful for admins to track who paid
+  const showPayment = true;
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <ScrollView style={styles.scrollView}>
+        {/* Summary Header */}
+        {selectedEvent && (
+          <View style={styles.summaryHeader}>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{registrations.length}</Text>
+              <Text style={styles.statLabel}>Registered</Text>
+            </View>
+            {showPayment && (
+              <>
+                <View style={styles.statBox}>
+                  <Text style={[styles.statValue, { color: colors.primary.green }]}>
+                    {registrations.filter(r => r.paymentStatus === 'Verified').length}
+                  </Text>
+                  <Text style={styles.statLabel}>Paid</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={[styles.statValue, { color: colors.status.error }]}>
+                    {registrations.filter(r => r.paymentStatus !== 'Verified').length}
+                  </Text>
+                  <Text style={styles.statLabel}>Unpaid</Text>
+                </View>
+              </>
+            )}
+            {waitlist.length > 0 && (
+              <View style={styles.statBox}>
+                <Text style={[styles.statValue, { color: colors.status.warning }]}>
+                  {waitlist.length}
+                </Text>
+                <Text style={styles.statLabel}>Waitlist</Text>
+              </View>
+            )}
           </View>
-        </View>
-      )}
+        )}
 
-      {/* Bottom padding */}
-      <View style={{ height: 40 }} />
-    </ScrollView>
+        {/* Roster View */}
+        <View style={styles.section}>
+          {registrations.length === 0 ? (
+            <EmptyState
+              icon="👥"
+              title="No Registrations"
+              message="No one has registered for this event yet"
+            />
+          ) : (
+            <DraggableRoster
+              registrations={registrations}
+              showPayment={showPayment}
+              onPlayerPress={handlePlayerPress}
+              onRosterChange={handleRosterChange}
+            />
+          )}
+        </View>
+
+        {/* Waitlist Section */}
+        {waitlist.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader title="Waitlist" count={waitlist.length} />
+            <View style={styles.waitlistSection}>
+              {waitlist.map(renderWaitlistItem)}
+            </View>
+          </View>
+        )}
+
+        {/* Bottom padding */}
+        <View style={{ height: 40 }} />
+      </ScrollView>
+
+      {/* Player Detail Modal */}
+      <PlayerDetailModal
+        visible={isModalVisible}
+        registration={selectedPlayer}
+        showPayment={showPayment}
+        onClose={handleCloseModal}
+        onSwapTeam={handleSwapTeam}
+        onRemove={handleRemove}
+        onMarkPaid={handleMarkPaid}
+        onVerifyPayment={handleVerifyPayment}
+        onResetPayment={handleResetPayment}
+      />
+    </GestureHandlerRootView>
   );
 }
 
@@ -357,6 +303,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg.darkest,
+  },
+  scrollView: {
+    flex: 1,
   },
   centered: {
     flex: 1,
@@ -385,124 +334,6 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     marginTop: 2,
   },
-  list: {
-    padding: spacing.md,
-  },
-  registrationCard: {
-    backgroundColor: colors.bg.dark,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.bg.active,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  avatarText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text.muted,
-  },
-  userInfo: {
-    flex: 1,
-    minWidth: 150,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  userMeta: {
-    fontSize: 13,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  paymentSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    width: '100%',
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.default,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  actionButton: {
-    backgroundColor: colors.primary.teal,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    marginLeft: 'auto',
-  },
-  verifyButton: {
-    backgroundColor: colors.primary.green,
-  },
-  actionButtonText: {
-    color: colors.bg.darkest,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  resetButton: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.status.error,
-    marginLeft: 'auto',
-  },
-  resetButtonText: {
-    color: colors.status.error,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  // Team badge styles
-  teamBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
-    minWidth: 50,
-    alignItems: 'center',
-    marginLeft: spacing.sm,
-  },
-  teamBlack: {
-    backgroundColor: colors.bg.darkest,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  teamWhite: {
-    backgroundColor: colors.text.primary,
-  },
-  teamBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  teamBlackText: {
-    color: colors.text.primary,
-  },
-  teamWhiteText: {
-    color: colors.bg.darkest,
-  },
-  // Section styles
   section: {
     padding: spacing.md,
   },
@@ -521,7 +352,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
   },
-  positionBadge: {
+  waitlistPositionBadge: {
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -530,7 +361,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.sm,
   },
-  positionText: {
+  waitlistPositionText: {
     color: colors.status.warning,
     fontWeight: '700',
     fontSize: 12,
@@ -538,16 +369,15 @@ const styles = StyleSheet.create({
   waitlistUserInfo: {
     flex: 1,
   },
-  // Remove button styles
-  removeButton: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.status.error,
-    marginTop: spacing.sm,
-    alignSelf: 'flex-end',
+  waitlistUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  waitlistUserMeta: {
+    fontSize: 13,
+    color: colors.text.muted,
+    marginTop: 2,
   },
   removeButtonSmall: {
     backgroundColor: 'transparent',

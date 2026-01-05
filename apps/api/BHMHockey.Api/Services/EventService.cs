@@ -535,9 +535,13 @@ public class EventService : IEventService
     public async Task<List<EventRegistrationDto>> GetRegistrationsAsync(Guid eventId)
     {
         // Include both registered and waitlisted users (exclude cancelled)
+        // Order by RosterOrder (null values last), then by RegisteredAt
         var registrations = await _context.EventRegistrations
             .Include(r => r.User)
             .Where(r => r.EventId == eventId && (r.Status == "Registered" || r.Status == "Waitlisted"))
+            .OrderBy(r => r.RosterOrder == null ? 1 : 0)
+            .ThenBy(r => r.RosterOrder)
+            .ThenBy(r => r.RegisteredAt)
             .ToListAsync();
 
         return registrations.Select(r => new EventRegistrationDto(
@@ -561,11 +565,47 @@ public class EventService : IEventService
             r.PaymentMarkedAt,      // Phase 4
             r.PaymentVerifiedAt,    // Phase 4
             r.TeamAssignment,       // Team assignment
+            r.RosterOrder,          // Roster ordering
             r.WaitlistPosition,     // Phase 5 - Waitlist
             r.PromotedAt,           // Phase 5 - Waitlist
             r.PaymentDeadlineAt,    // Phase 5 - Waitlist
             r.IsWaitlisted          // Phase 5 - Waitlist
         )).ToList();
+    }
+
+    // Update roster order for multiple registrations (batch update)
+    public async Task<bool> UpdateRosterOrderAsync(Guid eventId, List<RosterOrderItem> items, Guid organizerId)
+    {
+        // Verify user can manage this event
+        var canManage = await CanUserManageEventAsync(eventId, organizerId);
+        if (!canManage)
+        {
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+        }
+
+        // Get all registrations for this event
+        var registrations = await _context.EventRegistrations
+            .Where(r => r.EventId == eventId && r.Status == "Registered")
+            .ToListAsync();
+
+        // Update each registration
+        foreach (var item in items)
+        {
+            var registration = registrations.FirstOrDefault(r => r.Id == item.RegistrationId);
+            if (registration != null)
+            {
+                // Validate team assignment
+                if (item.TeamAssignment != "Black" && item.TeamAssignment != "White")
+                {
+                    throw new InvalidOperationException($"Invalid team assignment: {item.TeamAssignment}");
+                }
+                registration.TeamAssignment = item.TeamAssignment;
+                registration.RosterOrder = item.RosterOrder;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+        return true;
     }
 
     public async Task<List<EventDto>> GetUserRegistrationsAsync(Guid userId)

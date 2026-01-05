@@ -76,6 +76,8 @@ public record EventRegistrationDto(
     DateTime? PaymentVerifiedAt,
     // Team assignment
     string? TeamAssignment,      // "Black" or "White"
+    // Roster ordering
+    int? RosterOrder,            // Order within team (lower = higher on roster)
     // Waitlist fields (Phase 5)
     int? WaitlistPosition,       // Position in waitlist (1 = first, null = not waitlisted)
     DateTime? PromotedAt,        // When user was promoted from waitlist
@@ -95,6 +97,17 @@ public record UpdatePaymentStatusRequest(
 // Team assignment request DTO
 public record UpdateTeamAssignmentRequest(
     string TeamAssignment        // "Black" or "White"
+);
+
+// Roster order update DTOs
+public record RosterOrderItem(
+    Guid RegistrationId,
+    string TeamAssignment,       // "Black" or "White"
+    int RosterOrder              // Order within team (0 = first)
+);
+
+public record UpdateRosterOrderRequest(
+    List<RosterOrderItem> Items  // All registrations with their new order
 );
 
 // Registration request DTO

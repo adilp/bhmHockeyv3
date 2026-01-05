@@ -189,6 +189,8 @@ export interface EventRegistrationDto {
   paymentVerifiedAt?: string;
   // Team assignment
   teamAssignment?: TeamAssignment;
+  // Roster ordering
+  rosterOrder?: number;          // Order within team (lower = higher on roster)
   // Waitlist fields (Phase 5)
   waitlistPosition?: number;     // Position in waitlist (1 = first, null = not waitlisted)
   promotedAt?: string;           // When user was promoted from waitlist (ISO date string)
@@ -237,6 +239,17 @@ export interface UpdatePaymentStatusRequest {
 // Team assignment request
 export interface UpdateTeamAssignmentRequest {
   teamAssignment: TeamAssignment;
+}
+
+// Roster order types
+export interface RosterOrderItem {
+  registrationId: string;
+  teamAssignment: TeamAssignment;
+  rosterOrder: number;
+}
+
+export interface UpdateRosterOrderRequest {
+  items: RosterOrderItem[];
 }
 
 // Auth types

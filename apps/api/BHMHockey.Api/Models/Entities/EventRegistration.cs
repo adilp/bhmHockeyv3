@@ -23,6 +23,9 @@ public class EventRegistration
     // Team assignment for games
     public string? TeamAssignment { get; set; } // "Black" or "White"
 
+    // Roster ordering (for drag-and-drop reordering)
+    public int? RosterOrder { get; set; } // Order within team (lower = higher on roster)
+
     // Waitlist fields (Phase 5)
     public int? WaitlistPosition { get; set; } // Position in waitlist (1 = first, null = not waitlisted)
     public DateTime? PromotedAt { get; set; } // When user was promoted from waitlist

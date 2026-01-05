@@ -33,3 +33,7 @@ export { EnvBanner } from './EnvBanner';
 
 // Notification components
 export { NotificationItem } from './NotificationItem';
+
+// Roster/Matchup components
+export { DraggableRoster } from './DraggableRoster';
+export { PlayerDetailModal } from './PlayerDetailModal';

@@ -231,6 +231,7 @@ public class EventsController : ControllerBase
             r.PaymentMarkedAt,
             r.PaymentVerifiedAt,
             r.TeamAssignment,
+            r.RosterOrder,
             r.WaitlistPosition,
             r.PromotedAt,
             r.PaymentDeadlineAt,
@@ -342,6 +343,44 @@ public class EventsController : ControllerBase
             }
 
             return Ok(new { message = $"Moved to Team {request.TeamAssignment}" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Roster Order
+
+    /// <summary>
+    /// Update roster order for all registrations (organizer only).
+    /// Allows reordering players and changing teams in a single batch update.
+    /// </summary>
+    [Authorize]
+    [HttpPut("{eventId:guid}/roster-order")]
+    public async Task<IActionResult> UpdateRosterOrder(
+        Guid eventId,
+        [FromBody] UpdateRosterOrderRequest request)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var success = await _eventService.UpdateRosterOrderAsync(
+                eventId, request.Items, userId);
+
+            if (!success)
+            {
+                return NotFound(new { message = "Event not found or you are not the organizer." });
+            }
+
+            return Ok(new { message = "Roster order updated successfully" });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (InvalidOperationException ex)
         {
