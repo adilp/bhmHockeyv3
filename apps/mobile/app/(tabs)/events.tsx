@@ -52,20 +52,27 @@ export default function EventsScreen() {
     fetchEvents();
   }, []);
 
-  // Filter events based on selected filter
+  // Filter events based on selected filter and sort by date
   const filteredEvents = useMemo(() => {
+    let filtered: EventDto[];
     switch (activeFilter) {
       case 'available':
-        return events.filter(e => !e.isRegistered && !e.canManage && !e.amIWaitlisted && e.registeredCount < e.maxPlayers);
+        filtered = events.filter(e => !e.isRegistered && !e.canManage && !e.amIWaitlisted && e.registeredCount < e.maxPlayers);
+        break;
       case 'registered':
-        return events.filter(e => e.isRegistered);
+        filtered = events.filter(e => e.isRegistered);
+        break;
       case 'organizing':
-        return events.filter(e => e.canManage);
+        filtered = events.filter(e => e.canManage);
+        break;
       case 'waitlisted':
-        return events.filter(e => e.amIWaitlisted);
+        filtered = events.filter(e => e.amIWaitlisted);
+        break;
       default:
-        return events;
+        filtered = [...events];
     }
+    // Sort by event date ascending (earliest first)
+    return filtered.sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
   }, [events, activeFilter]);
 
   const handleEventPress = (eventId: string) => {

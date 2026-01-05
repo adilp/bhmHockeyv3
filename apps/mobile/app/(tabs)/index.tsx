@@ -27,32 +27,32 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [fetchEvents, fetchMyRegistrations]);
 
-  // Derived data
+  // Helper to sort events by date (earliest first)
+  const sortByDate = (a: typeof events[0], b: typeof events[0]) =>
+    new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
+
+  // Derived data - all sorted by event date
   const availableGames = useMemo(() =>
-    events.filter(e =>
-      !e.isRegistered &&
-      !e.amIWaitlisted &&
-      e.status === 'Published'
-    ),
+    events
+      .filter(e => !e.isRegistered && !e.amIWaitlisted && e.status === 'Published')
+      .sort(sortByDate),
     [events]
   );
 
   // Waitlisted events (from events list since they're not in myRegistrations)
   const myWaitlistedGames = useMemo(() =>
-    events.filter(e => e.amIWaitlisted),
+    events.filter(e => e.amIWaitlisted).sort(sortByDate),
     [events]
   );
 
   // Combined: registered + waitlisted
   const myUpcomingGames = useMemo(() =>
-    [...myRegistrations, ...myWaitlistedGames].sort(
-      (a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
-    ),
+    [...myRegistrations, ...myWaitlistedGames].sort(sortByDate),
     [myRegistrations, myWaitlistedGames]
   );
 
   const myOrganizedGames = useMemo(() =>
-    events.filter(e => e.canManage),
+    events.filter(e => e.canManage).sort(sortByDate),
     [events]
   );
 

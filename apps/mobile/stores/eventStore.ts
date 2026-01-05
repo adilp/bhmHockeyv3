@@ -51,7 +51,11 @@ export const useEventStore = create<EventState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const events = await eventService.getAll(organizationId);
-      set({ events, isLoading: false });
+      // Sort by event date ascending (earliest first)
+      const sortedEvents = events.sort(
+        (a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+      );
+      set({ events: sortedEvents, isLoading: false });
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to load events',
@@ -78,7 +82,11 @@ export const useEventStore = create<EventState>((set, get) => ({
   fetchMyRegistrations: async () => {
     try {
       const myRegistrations = await eventService.getMyRegistrations();
-      set({ myRegistrations });
+      // Sort by event date ascending (earliest first)
+      const sortedRegistrations = myRegistrations.sort(
+        (a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+      );
+      set({ myRegistrations: sortedRegistrations });
     } catch (error) {
       // Silently fail - user might not be logged in
       console.log('Failed to fetch registrations:', error);
