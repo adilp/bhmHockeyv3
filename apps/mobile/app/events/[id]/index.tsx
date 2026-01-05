@@ -461,9 +461,25 @@ export default function EventDetailScreen() {
         </View>
       )}
 
-      {/* Action Button */}
+      {/* Organizer Tools Section */}
+      {selectedEvent.canManage && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Organizer Tools</Text>
+          <TouchableOpacity
+            style={styles.viewRegistrationsButton}
+            onPress={() => router.push(`/events/${id}/registrations`)}
+          >
+            <Text style={styles.viewRegistrationsButtonText}>
+              View Registrations ({selectedEvent.registeredCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Your Registration Section */}
       {isAuthenticated && (
-        <View style={styles.buttonContainer}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your Registration</Text>
           {selectedEvent.isRegistered ? (
             <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRegistration}>
               <Text style={styles.cancelButtonText}>Cancel Registration</Text>
@@ -491,23 +507,19 @@ export default function EventDetailScreen() {
         </View>
       )}
 
-      {/* Organizer Actions */}
+      {/* Danger Zone */}
       {selectedEvent.canManage && (
-        <View style={styles.organizerSection}>
-          <TouchableOpacity
-            style={styles.viewRegistrationsButton}
-            onPress={() => router.push(`/events/${id}/registrations`)}
-          >
-            <Text style={styles.viewRegistrationsButtonText}>
-              View Registrations ({selectedEvent.registeredCount})
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.dangerZone}>
+          <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
           <TouchableOpacity
             style={styles.deleteEventButton}
             onPress={handleDeleteEvent}
           >
             <Text style={styles.deleteEventButtonText}>Delete Event</Text>
           </TouchableOpacity>
+          <Text style={styles.dangerZoneWarning}>
+            Permanently deletes this event and cancels all registrations
+          </Text>
         </View>
       )}
 
@@ -771,8 +783,26 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontStyle: 'italic',
   },
-  organizerSection: {
-    paddingHorizontal: spacing.lg,
+  dangerZone: {
+    backgroundColor: 'rgba(248, 81, 73, 0.08)',
+    padding: spacing.md,
+    marginTop: spacing.xl,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(248, 81, 73, 0.3)',
+  },
+  dangerZoneTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.status.error,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.md,
+  },
+  dangerZoneWarning: {
+    fontSize: 12,
+    color: colors.text.muted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   viewRegistrationsButton: {
     backgroundColor: colors.primary.purple,
@@ -792,7 +822,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.status.error,
-    marginTop: spacing.sm,
   },
   deleteEventButtonText: {
     color: colors.status.error,
