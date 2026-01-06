@@ -349,6 +349,21 @@ export default function EventDetailScreen() {
         </View>
       )}
 
+      {/* Organizer Tools Section - positioned in thumb zone for quick access */}
+      {selectedEvent.canManage && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Organizer Tools</Text>
+          <TouchableOpacity
+            style={styles.viewRegistrationsButton}
+            onPress={() => router.push(`/events/${id}/registrations`)}
+          >
+            <Text style={styles.viewRegistrationsButtonText}>
+              View Registrations ({selectedEvent.registeredCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Description Section */}
       {selectedEvent.description && (
         <View style={styles.section}>
@@ -458,21 +473,6 @@ export default function EventDetailScreen() {
           <Text style={styles.deadlineText}>
             {formatDate(selectedEvent.registrationDeadline)} at {formatTime(selectedEvent.registrationDeadline)}
           </Text>
-        </View>
-      )}
-
-      {/* Organizer Tools Section */}
-      {selectedEvent.canManage && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Organizer Tools</Text>
-          <TouchableOpacity
-            style={styles.viewRegistrationsButton}
-            onPress={() => router.push(`/events/${id}/registrations`)}
-          >
-            <Text style={styles.viewRegistrationsButtonText}>
-              View Registrations ({selectedEvent.registeredCount})
-            </Text>
-          </TouchableOpacity>
         </View>
       )}
 
