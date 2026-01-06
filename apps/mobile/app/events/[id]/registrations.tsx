@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ export default function EventRegistrationsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<EventRegistrationDto | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const isUpdatingRoster = useRef(false);
   const { updatePaymentStatus, updateTeamAssignment, removeRegistration, selectedEvent, fetchEventById } = useEventStore();
 
   // Filter into registered and waitlisted
@@ -168,15 +169,47 @@ export default function EventRegistrationsScreen() {
     );
   };
 
-  // Roster order change handler
+  // Roster order change handler with optimistic update and concurrency guard
   const handleRosterChange = async (items: RosterOrderItem[]) => {
     if (!id) return;
 
+    // Prevent concurrent updates
+    if (isUpdatingRoster.current) return;
+    isUpdatingRoster.current = true;
+
+    // Optimistic update: immediately update local state
+    setAllRegistrations(prev => {
+      // Create a map of registration ID -> new values
+      const updateMap = new Map(
+        items.map(item => [item.registrationId, {
+          teamAssignment: item.teamAssignment,
+          rosterOrder: item.rosterOrder
+        }])
+      );
+
+      // Update each registration with its new team/order
+      return prev.map(reg => {
+        const update = updateMap.get(reg.id);
+        if (update) {
+          return {
+            ...reg,
+            teamAssignment: update.teamAssignment,
+            rosterOrder: update.rosterOrder,
+          };
+        }
+        return reg;
+      });
+    });
+
+    // Save to API in background
     try {
       await eventService.updateRosterOrder(id, items);
-      await loadRegistrations();
     } catch (error) {
-      Alert.alert('Error', 'Failed to update roster order');
+      Alert.alert('Error', 'Failed to save roster order. Please try again.');
+      // Refetch to restore correct state on error
+      await loadRegistrations();
+    } finally {
+      isUpdatingRoster.current = false;
     }
   };
 

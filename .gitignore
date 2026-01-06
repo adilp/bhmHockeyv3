@@ -65,3 +65,17 @@ yarn-error.log*
 .cache/
 temp/
 tmp/
+
+# Firebase / Google Cloud credentials
+**/google-services.json
+**/GoogleService-Info.plist
+bhm-hockey-*.json
+*-firebase-adminsdk-*.json
+*serviceaccount*.json
+*service-account*.json
+
+# Android build artifacts
+apps/mobile/android/
+
+# Legal documents (not sensitive but not needed in repo)
+*.pdf

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,15 +10,17 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   runOnJS,
+  SharedValue,
 } from 'react-native-reanimated';
 import type { EventRegistrationDto, TeamAssignment, RosterOrderItem } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const ROW_HEIGHT = 56;
-const SPRING_CONFIG = { damping: 15, stiffness: 150 };
+const SLOT_BADGE_WIDTH = 32;
+const CONTAINER_PADDING = spacing.md; // 16px on each side = 32 total
+const CELL_MARGIN = spacing.xs; // margin between cells and badge
 
 interface DraggableRosterProps {
   registrations: EventRegistrationDto[];
@@ -36,6 +38,13 @@ interface RosterSlot {
   whitePlayer: EventRegistrationDto | null;
 }
 
+interface DragInfo {
+  registration: EventRegistrationDto;
+  side: 'left' | 'right';
+  sourceSlotIndex: number;
+  startY: number;
+}
+
 const getPaymentInfo = (status?: string): { label: string; color: string; bgColor: string } => {
   switch (status) {
     case 'Verified':
@@ -48,143 +57,145 @@ const getPaymentInfo = (status?: string): { label: string; color: string; bgColo
   }
 };
 
-// Individual draggable player cell
-function DraggablePlayer({
+// Static player cell (non-draggable, just displays)
+function PlayerCell({
   registration,
   showPayment,
   side,
-  onTap,
-  onDragEnd,
-  totalSlots,
-  isGoalie,
+  onPress,
+  onLongPress,
 }: {
   registration: EventRegistrationDto;
   showPayment: boolean;
   side: 'left' | 'right';
-  onTap: () => void;
-  onDragEnd: (reg: EventRegistrationDto, newTeam: TeamAssignment, newSlotIndex: number) => void;
-  totalSlots: number;
-  isGoalie: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
 }) {
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const isDragging = useSharedValue(false);
-
-  const handleDragComplete = useCallback(
-    (absoluteY: number, absoluteX: number) => {
-      // Determine which slot based on Y position
-      const rowIndex = Math.floor(absoluteY / ROW_HEIGHT);
-      const targetSlotIndex = Math.max(0, Math.min(rowIndex, totalSlots - 1));
-
-      // Determine which team based on X position
-      const screenCenter = SCREEN_WIDTH / 2;
-      const targetTeam: TeamAssignment = absoluteX < screenCenter ? 'Black' : 'White';
-
-      // Goalies can only go to goalie slot (index 0)
-      // Skaters can only go to skater slots (index > 0)
-      if (isGoalie && targetSlotIndex !== 0) {
-        return; // Invalid drop for goalie
-      }
-      if (!isGoalie && targetSlotIndex === 0) {
-        return; // Invalid drop for skater
-      }
-
-      onDragEnd(registration, targetTeam, targetSlotIndex);
-    },
-    [totalSlots, isGoalie, registration, onDragEnd]
-  );
-
-  // Long press + drag gesture
-  const dragGesture = Gesture.Pan()
-    .activateAfterLongPress(250)
-    .onStart(() => {
-      'worklet';
-      isDragging.value = true;
-      scale.value = withSpring(1.08, SPRING_CONFIG);
-    })
-    .onUpdate((event) => {
-      'worklet';
-      translateX.value = event.translationX;
-      translateY.value = event.translationY;
-    })
-    .onEnd((event) => {
-      'worklet';
-      runOnJS(handleDragComplete)(event.absoluteY, event.absoluteX);
-      translateX.value = withSpring(0, SPRING_CONFIG);
-      translateY.value = withSpring(0, SPRING_CONFIG);
-      scale.value = withSpring(1, SPRING_CONFIG);
-      isDragging.value = false;
-    })
-    .onFinalize(() => {
-      'worklet';
-      translateX.value = withSpring(0, SPRING_CONFIG);
-      translateY.value = withSpring(0, SPRING_CONFIG);
-      scale.value = withSpring(1, SPRING_CONFIG);
-      isDragging.value = false;
-    });
-
-  const animatedStyle = useAnimatedStyle(() => {
-    'worklet';
-    return {
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { scale: scale.value },
-      ],
-      zIndex: isDragging.value ? 100 : 0,
-      elevation: isDragging.value ? 10 : 0,
-    };
-  });
-
   const { user, paymentStatus } = registration;
   const fullName = `${user.firstName} ${user.lastName}`;
   const paymentInfo = getPaymentInfo(paymentStatus);
 
   return (
-    <GestureDetector gesture={dragGesture}>
-      <Animated.View style={[styles.animatedWrapper, animatedStyle]}>
-        <Pressable
-          style={[
-            styles.playerCell,
-            side === 'left' ? styles.playerCellLeft : styles.playerCellRight,
-          ]}
-          onPress={onTap}
-        >
-          {/* Left side: Name then Badge */}
-          {side === 'left' && (
-            <>
-              <Text style={[styles.playerName, styles.playerNameLeft]} numberOfLines={1}>
-                {fullName}
+    <Pressable
+      style={[
+        styles.playerCell,
+        side === 'left' ? styles.playerCellLeft : styles.playerCellRight,
+      ]}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={200}
+    >
+      {side === 'left' && (
+        <>
+          <Text style={[styles.playerName, styles.playerNameLeft]} numberOfLines={1}>
+            {fullName}
+          </Text>
+          {showPayment && (
+            <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
+              <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
+                {paymentInfo.label}
               </Text>
-              {showPayment && (
-                <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-                  <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
-                    {paymentInfo.label}
-                  </Text>
-                </View>
-              )}
-            </>
+            </View>
           )}
+        </>
+      )}
+      {side === 'right' && (
+        <>
+          {showPayment && (
+            <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
+              <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
+                {paymentInfo.label}
+              </Text>
+            </View>
+          )}
+          <Text style={[styles.playerName, styles.playerNameRight]} numberOfLines={1}>
+            {fullName}
+          </Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
 
-          {/* Right side: Badge then Name */}
-          {side === 'right' && (
-            <>
-              {showPayment && (
-                <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-                  <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
-                    {paymentInfo.label}
-                  </Text>
-                </View>
-              )}
-              <Text style={[styles.playerName, styles.playerNameRight]} numberOfLines={1}>
-                {fullName}
-              </Text>
-            </>
-          )}
-        </Pressable>
-      </Animated.View>
-    </GestureDetector>
+// Drag overlay - follows finger during drag
+function DragOverlay({
+  dragInfo,
+  showPayment,
+  translateX,
+  translateY,
+}: {
+  dragInfo: DragInfo;
+  showPayment: boolean;
+  translateX: SharedValue<number>;
+  translateY: SharedValue<number>;
+}) {
+  const { registration, side, startY } = dragInfo;
+  const { user, paymentStatus } = registration;
+  const fullName = `${user.firstName} ${user.lastName}`;
+  const paymentInfo = getPaymentInfo(paymentStatus);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ] as const,
+  }));
+
+  // Calculate initial position based on side
+  const cellWidth = (SCREEN_WIDTH - CONTAINER_PADDING * 2 - SLOT_BADGE_WIDTH - CELL_MARGIN * 4) / 2;
+  const leftPosition = side === 'left'
+    ? CELL_MARGIN
+    : SCREEN_WIDTH / 2 + SLOT_BADGE_WIDTH / 2 + CELL_MARGIN;
+
+  return (
+    <Animated.View
+      style={[
+        styles.dragOverlay,
+        {
+          top: startY,
+          left: leftPosition,
+          width: cellWidth,
+        },
+        animatedStyle,
+      ]}
+    >
+      <View
+        style={[
+          styles.playerCell,
+          styles.playerCellDragging,
+          { marginRight: 0, marginLeft: 0 },
+        ]}
+      >
+        {side === 'left' && (
+          <>
+            <Text style={[styles.playerName, styles.playerNameLeft]} numberOfLines={1}>
+              {fullName}
+            </Text>
+            {showPayment && (
+              <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
+                <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
+                  {paymentInfo.label}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+        {side === 'right' && (
+          <>
+            {showPayment && (
+              <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
+                <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
+                  {paymentInfo.label}
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.playerName, styles.playerNameRight]} numberOfLines={1}>
+              {fullName}
+            </Text>
+          </>
+        )}
+      </View>
+    </Animated.View>
   );
 }
 
@@ -202,65 +213,25 @@ function EmptySlot({ side }: { side: 'left' | 'right' }) {
   );
 }
 
-// Matchup row (one slot with players from both teams)
-function MatchupRow({
-  slot,
-  showPayment,
-  onPlayerPress,
-  onDragEnd,
-  totalSlots,
-}: {
-  slot: RosterSlot;
-  showPayment: boolean;
-  onPlayerPress: (registration: EventRegistrationDto) => void;
-  onDragEnd: (reg: EventRegistrationDto, newTeam: TeamAssignment, newSlotIndex: number) => void;
-  totalSlots: number;
-}) {
-  const slotLabel = slot.type === 'goalie' ? 'G' : `${slot.index}`;
-  const isGoalieSlot = slot.type === 'goalie';
-
+// Source placeholder - shows where the dragged player came FROM (ghost style)
+function SourcePlaceholder({ side }: { side: 'left' | 'right' }) {
   return (
-    <View style={styles.matchupRow}>
-      {/* Black Team (Left) */}
-      <View style={styles.playerSide}>
-        {slot.blackPlayer ? (
-          <DraggablePlayer
-            registration={slot.blackPlayer}
-            showPayment={showPayment}
-            side="left"
-            onTap={() => onPlayerPress(slot.blackPlayer!)}
-            onDragEnd={onDragEnd}
-            totalSlots={totalSlots}
-            isGoalie={slot.blackPlayer.registeredPosition === 'Goalie'}
-          />
-        ) : (
-          <EmptySlot side="left" />
-        )}
-      </View>
+    <View
+      style={[
+        styles.sourcePlaceholder,
+        side === 'left' ? styles.playerCellLeft : styles.playerCellRight,
+      ]}
+    >
+      <View style={styles.sourcePlaceholderInner} />
+    </View>
+  );
+}
 
-      {/* Center Slot Badge */}
-      <View style={[styles.slotBadge, isGoalieSlot && styles.slotBadgeGoalie]}>
-        <Text style={[styles.slotBadgeText, isGoalieSlot && styles.slotBadgeTextGoalie]}>
-          {slotLabel}
-        </Text>
-      </View>
-
-      {/* White Team (Right) */}
-      <View style={styles.playerSide}>
-        {slot.whitePlayer ? (
-          <DraggablePlayer
-            registration={slot.whitePlayer}
-            showPayment={showPayment}
-            side="right"
-            onTap={() => onPlayerPress(slot.whitePlayer!)}
-            onDragEnd={onDragEnd}
-            totalSlots={totalSlots}
-            isGoalie={slot.whitePlayer.registeredPosition === 'Goalie'}
-          />
-        ) : (
-          <EmptySlot side="right" />
-        )}
-      </View>
+// Drop placeholder (teal dashed)
+function DropPlaceholder() {
+  return (
+    <View style={styles.dropPlaceholder}>
+      <View style={styles.dropPlaceholderInner} />
     </View>
   );
 }
@@ -271,146 +242,331 @@ export function DraggableRoster({
   onPlayerPress,
   onRosterChange,
 }: DraggableRosterProps) {
-  // Separate goalies and skaters, sorted by roster order
-  const blackGoalies = registrations
-    .filter(r => r.teamAssignment === 'Black' && r.registeredPosition === 'Goalie')
-    .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+  const rosterRef = useRef<View>(null);
+  const [rosterTopOffset, setRosterTopOffset] = useState(0);
 
-  const whiteGoalies = registrations
-    .filter(r => r.teamAssignment === 'White' && r.registeredPosition === 'Goalie')
-    .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+  // Drag state
+  const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
+  const [hoverSlotIndex, setHoverSlotIndex] = useState(-1);
+  const [hoverTeam, setHoverTeam] = useState<TeamAssignment | null>(null);
 
-  const blackSkaters = registrations
-    .filter(r => r.teamAssignment === 'Black' && r.registeredPosition !== 'Goalie')
-    .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+  // Shared values for overlay position
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
 
-  const whiteSkaters = registrations
-    .filter(r => r.teamAssignment === 'White' && r.registeredPosition !== 'Goalie')
-    .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-
-  // Build slot structure
-  const slots: RosterSlot[] = [];
-
-  // Goalie slot (always first)
-  slots.push({
-    type: 'goalie',
-    index: 0,
-    blackPlayer: blackGoalies[0] || null,
-    whitePlayer: whiteGoalies[0] || null,
-  });
-
-  // Skater slots
-  const maxSkaters = Math.max(blackSkaters.length, whiteSkaters.length, 1);
-  for (let i = 0; i < maxSkaters; i++) {
-    slots.push({
-      type: 'skater',
-      index: i + 1,
-      blackPlayer: blackSkaters[i] || null,
-      whitePlayer: whiteSkaters[i] || null,
+  const handleRosterLayout = useCallback(() => {
+    rosterRef.current?.measureInWindow((x, y) => {
+      setRosterTopOffset(y);
     });
-  }
+  }, []);
 
-  // Handle drag end - update roster
-  const handleDragEnd = useCallback(
-    (reg: EventRegistrationDto, newTeam: TeamAssignment, newSlotIndex: number) => {
-      const isGoalie = reg.registeredPosition === 'Goalie';
-      const currentTeam = reg.teamAssignment as TeamAssignment;
+  // Build slots (memoized for performance)
+  const slots = useMemo(() => {
+    const blackGoalies = registrations
+      .filter(r => r.teamAssignment === 'Black' && r.registeredPosition === 'Goalie')
+      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+    const whiteGoalies = registrations
+      .filter(r => r.teamAssignment === 'White' && r.registeredPosition === 'Goalie')
+      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+    const blackSkaters = registrations
+      .filter(r => r.teamAssignment === 'Black' && r.registeredPosition !== 'Goalie')
+      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+    const whiteSkaters = registrations
+      .filter(r => r.teamAssignment === 'White' && r.registeredPosition !== 'Goalie')
+      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
 
-      // Get all players grouped
-      const allBlackGoalies = [...blackGoalies];
-      const allWhiteGoalies = [...whiteGoalies];
-      const allBlackSkaters = [...blackSkaters];
-      const allWhiteSkaters = [...whiteSkaters];
+    const result: RosterSlot[] = [];
+    result.push({
+      type: 'goalie',
+      index: 0,
+      blackPlayer: blackGoalies[0] || null,
+      whitePlayer: whiteGoalies[0] || null,
+    });
+    const maxSkaters = Math.max(blackSkaters.length, whiteSkaters.length, 1);
+    for (let i = 0; i < maxSkaters; i++) {
+      result.push({
+        type: 'skater',
+        index: i + 1,
+        blackPlayer: blackSkaters[i] || null,
+        whitePlayer: whiteSkaters[i] || null,
+      });
+    }
+    return result;
+  }, [registrations]);
 
-      // Remove from current position
-      if (isGoalie) {
-        if (currentTeam === 'Black') {
-          const idx = allBlackGoalies.findIndex(r => r.id === reg.id);
-          if (idx >= 0) allBlackGoalies.splice(idx, 1);
-        } else {
-          const idx = allWhiteGoalies.findIndex(r => r.id === reg.id);
-          if (idx >= 0) allWhiteGoalies.splice(idx, 1);
-        }
+  // Handlers called from worklet via runOnJS
+  const handleDragMove = useCallback((absY: number, absX: number) => {
+    const relativeY = absY - rosterTopOffset;
+    const rowIndex = Math.floor(relativeY / ROW_HEIGHT);
+    const targetSlotIndex = Math.max(0, Math.min(rowIndex, slots.length - 1));
+    const screenCenter = SCREEN_WIDTH / 2;
+    const targetTeam: TeamAssignment = absX < screenCenter ? 'Black' : 'White';
+
+    setHoverSlotIndex(targetSlotIndex);
+    setHoverTeam(targetTeam);
+  }, [slots.length, rosterTopOffset]);
+
+  const handleDragEnd = useCallback((absY: number, absX: number) => {
+    if (!dragInfo) return;
+
+    const relativeY = absY - rosterTopOffset;
+    const rowIndex = Math.floor(relativeY / ROW_HEIGHT);
+    const targetSlotIndex = Math.max(0, Math.min(rowIndex, slots.length - 1));
+    const screenCenter = SCREEN_WIDTH / 2;
+    const targetTeam: TeamAssignment = absX < screenCenter ? 'Black' : 'White';
+
+    const reg = dragInfo.registration;
+    const isGoalie = reg.registeredPosition === 'Goalie';
+    const currentTeam = reg.teamAssignment as TeamAssignment;
+
+    // Validate drop target
+    if (isGoalie && targetSlotIndex !== 0) {
+      // Invalid drop for goalie
+      setDragInfo(null);
+      setHoverSlotIndex(-1);
+      setHoverTeam(null);
+      translateX.value = 0;
+      translateY.value = 0;
+      return;
+    }
+    if (!isGoalie && targetSlotIndex === 0) {
+      // Invalid drop for skater
+      setDragInfo(null);
+      setHoverSlotIndex(-1);
+      setHoverTeam(null);
+      translateX.value = 0;
+      translateY.value = 0;
+      return;
+    }
+
+    // Build fresh arrays
+    const allBlackGoalies = registrations
+      .filter(r => r.teamAssignment === 'Black' && r.registeredPosition === 'Goalie')
+      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+    const allWhiteGoalies = registrations
+      .filter(r => r.teamAssignment === 'White' && r.registeredPosition === 'Goalie')
+      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+    const allBlackSkaters = registrations
+      .filter(r => r.teamAssignment === 'Black' && r.registeredPosition !== 'Goalie')
+      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+    const allWhiteSkaters = registrations
+      .filter(r => r.teamAssignment === 'White' && r.registeredPosition !== 'Goalie')
+      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
+
+    // Remove from current position
+    if (isGoalie) {
+      if (currentTeam === 'Black') {
+        const idx = allBlackGoalies.findIndex(r => r.id === reg.id);
+        if (idx >= 0) allBlackGoalies.splice(idx, 1);
       } else {
-        if (currentTeam === 'Black') {
-          const idx = allBlackSkaters.findIndex(r => r.id === reg.id);
-          if (idx >= 0) allBlackSkaters.splice(idx, 1);
-        } else {
-          const idx = allWhiteSkaters.findIndex(r => r.id === reg.id);
-          if (idx >= 0) allWhiteSkaters.splice(idx, 1);
-        }
+        const idx = allWhiteGoalies.findIndex(r => r.id === reg.id);
+        if (idx >= 0) allWhiteGoalies.splice(idx, 1);
       }
-
-      // Add to new position
-      if (isGoalie) {
-        if (newTeam === 'Black') {
-          allBlackGoalies.unshift(reg);
-        } else {
-          allWhiteGoalies.unshift(reg);
-        }
+    } else {
+      if (currentTeam === 'Black') {
+        const idx = allBlackSkaters.findIndex(r => r.id === reg.id);
+        if (idx >= 0) allBlackSkaters.splice(idx, 1);
       } else {
-        const insertIndex = newSlotIndex - 1;
-        if (newTeam === 'Black') {
-          allBlackSkaters.splice(Math.min(insertIndex, allBlackSkaters.length), 0, reg);
-        } else {
-          allWhiteSkaters.splice(Math.min(insertIndex, allWhiteSkaters.length), 0, reg);
-        }
+        const idx = allWhiteSkaters.findIndex(r => r.id === reg.id);
+        if (idx >= 0) allWhiteSkaters.splice(idx, 1);
       }
+    }
 
-      // Build roster order items
-      const items: RosterOrderItem[] = [];
+    // Add to new position
+    if (isGoalie) {
+      if (targetTeam === 'Black') {
+        allBlackGoalies.unshift(reg);
+      } else {
+        allWhiteGoalies.unshift(reg);
+      }
+    } else {
+      const insertIndex = targetSlotIndex - 1;
+      if (targetTeam === 'Black') {
+        allBlackSkaters.splice(Math.min(insertIndex, allBlackSkaters.length), 0, reg);
+      } else {
+        allWhiteSkaters.splice(Math.min(insertIndex, allWhiteSkaters.length), 0, reg);
+      }
+    }
 
-      allBlackGoalies.forEach((r, i) => {
-        items.push({ registrationId: r.id, teamAssignment: 'Black', rosterOrder: i });
-      });
-      allWhiteGoalies.forEach((r, i) => {
-        items.push({ registrationId: r.id, teamAssignment: 'White', rosterOrder: i });
-      });
+    // Build roster order items
+    const items: RosterOrderItem[] = [];
+    allBlackGoalies.forEach((r, i) => {
+      items.push({ registrationId: r.id, teamAssignment: 'Black', rosterOrder: i });
+    });
+    allWhiteGoalies.forEach((r, i) => {
+      items.push({ registrationId: r.id, teamAssignment: 'White', rosterOrder: i });
+    });
+    const goalieOffset = Math.max(allBlackGoalies.length, allWhiteGoalies.length, 1);
+    allBlackSkaters.forEach((r, i) => {
+      items.push({ registrationId: r.id, teamAssignment: 'Black', rosterOrder: goalieOffset + i });
+    });
+    allWhiteSkaters.forEach((r, i) => {
+      items.push({ registrationId: r.id, teamAssignment: 'White', rosterOrder: goalieOffset + i });
+    });
 
-      const goalieOffset = Math.max(allBlackGoalies.length, allWhiteGoalies.length, 1);
-      allBlackSkaters.forEach((r, i) => {
-        items.push({ registrationId: r.id, teamAssignment: 'Black', rosterOrder: goalieOffset + i });
-      });
-      allWhiteSkaters.forEach((r, i) => {
-        items.push({ registrationId: r.id, teamAssignment: 'White', rosterOrder: goalieOffset + i });
-      });
+    // Clear drag state
+    setDragInfo(null);
+    setHoverSlotIndex(-1);
+    setHoverTeam(null);
+    translateX.value = 0;
+    translateY.value = 0;
 
-      onRosterChange(items);
-    },
-    [blackGoalies, whiteGoalies, blackSkaters, whiteSkaters, onRosterChange]
-  );
+    // Update roster
+    onRosterChange(items);
+  }, [dragInfo, slots.length, rosterTopOffset, registrations, onRosterChange, translateX, translateY]);
+
+  const handleDragCancel = useCallback(() => {
+    setDragInfo(null);
+    setHoverSlotIndex(-1);
+    setHoverTeam(null);
+    translateX.value = 0;
+    translateY.value = 0;
+  }, [translateX, translateY]);
+
+  // Pan gesture for the entire roster area (captures drag after long press)
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      'worklet';
+      if (dragInfo) {
+        translateX.value = event.translationX;
+        translateY.value = event.translationY;
+        runOnJS(handleDragMove)(event.absoluteY, event.absoluteX);
+      }
+    })
+    .onEnd((event) => {
+      'worklet';
+      if (dragInfo) {
+        runOnJS(handleDragEnd)(event.absoluteY, event.absoluteX);
+      }
+    })
+    .onFinalize(() => {
+      'worklet';
+      // Clean up if drag was active but gesture ended without proper drop
+      runOnJS(handleDragCancel)();
+    });
+
+  // Function to start drag from a player cell
+  const startDrag = useCallback((registration: EventRegistrationDto, side: 'left' | 'right', slotIndex: number) => {
+    const startY = slotIndex * ROW_HEIGHT;
+    setDragInfo({
+      registration,
+      side,
+      sourceSlotIndex: slotIndex,
+      startY,
+    });
+  }, []);
 
   return (
-    <View style={styles.container}>
-      {/* Team Headers */}
-      <View style={styles.teamHeaders}>
-        <View style={styles.teamHeaderLeft}>
-          <View style={styles.teamDotBlack} />
-          <Text style={styles.teamHeaderText}>BLACK</Text>
+    <GestureDetector gesture={panGesture}>
+      <View style={styles.container}>
+        {/* Team Headers */}
+        <View style={styles.teamHeaders}>
+          <View style={styles.teamHeaderLeft}>
+            <View style={styles.teamDotBlack} />
+            <Text style={styles.teamHeaderText}>BLACK</Text>
+          </View>
+          <View style={styles.teamHeaderRight}>
+            <Text style={styles.teamHeaderText}>WHITE</Text>
+            <View style={styles.teamDotWhite} />
+          </View>
         </View>
-        <View style={styles.teamHeaderRight}>
-          <Text style={styles.teamHeaderText}>WHITE</Text>
-          <View style={styles.teamDotWhite} />
+
+        {/* Matchup Rows */}
+        <View ref={rosterRef} style={styles.roster} onLayout={handleRosterLayout}>
+          {slots.map((slot) => {
+            // Check if this row is a valid drop target for the dragged player type
+            const isValidDropTarget = dragInfo &&
+              (slot.type === 'goalie' ? dragInfo.registration.registeredPosition === 'Goalie' : dragInfo.registration.registeredPosition !== 'Goalie');
+            const isHoverRow = hoverSlotIndex === slot.index && isValidDropTarget;
+
+            // Determine which specific SIDE is being hovered (not the whole row)
+            const isBlackHovered = isHoverRow && hoverTeam === 'Black';
+            const isWhiteHovered = isHoverRow && hoverTeam === 'White';
+
+            return (
+              <View
+                key={slot.type === 'goalie' ? 'goalie' : `skater-${slot.index}`}
+                style={styles.matchupRow}
+              >
+                {/* Black Team (Left) */}
+                <View style={[
+                  styles.playerSide,
+                  isBlackHovered && styles.playerSideHovered,
+                ]}>
+                  {slot.blackPlayer ? (
+                    dragInfo?.registration.id === slot.blackPlayer.id ? (
+                      // Source slot - show ghost placeholder
+                      <SourcePlaceholder side="left" />
+                    ) : (
+                      <PlayerCell
+                        registration={slot.blackPlayer}
+                        showPayment={showPayment}
+                        side="left"
+                        onPress={() => onPlayerPress(slot.blackPlayer!)}
+                        onLongPress={() => startDrag(slot.blackPlayer!, 'left', slot.index)}
+                      />
+                    )
+                  ) : (
+                    isBlackHovered ? (
+                      <DropPlaceholder />
+                    ) : (
+                      <EmptySlot side="left" />
+                    )
+                  )}
+                </View>
+
+                {/* Center Slot Badge */}
+                <View style={[styles.slotBadge, slot.type === 'goalie' && styles.slotBadgeGoalie]}>
+                  <Text style={[styles.slotBadgeText, slot.type === 'goalie' && styles.slotBadgeTextGoalie]}>
+                    {slot.type === 'goalie' ? 'G' : `${slot.index}`}
+                  </Text>
+                </View>
+
+                {/* White Team (Right) */}
+                <View style={[
+                  styles.playerSide,
+                  isWhiteHovered && styles.playerSideHovered,
+                ]}>
+                  {slot.whitePlayer ? (
+                    dragInfo?.registration.id === slot.whitePlayer.id ? (
+                      // Source slot - show ghost placeholder
+                      <SourcePlaceholder side="right" />
+                    ) : (
+                      <PlayerCell
+                        registration={slot.whitePlayer}
+                        showPayment={showPayment}
+                        side="right"
+                        onPress={() => onPlayerPress(slot.whitePlayer!)}
+                        onLongPress={() => startDrag(slot.whitePlayer!, 'right', slot.index)}
+                      />
+                    )
+                  ) : (
+                    isWhiteHovered ? (
+                      <DropPlaceholder />
+                    ) : (
+                      <EmptySlot side="right" />
+                    )
+                  )}
+                </View>
+              </View>
+            );
+          })}
+
+          {/* Drag Overlay - renders on top when dragging */}
+          {dragInfo && (
+            <DragOverlay
+              dragInfo={dragInfo}
+              showPayment={showPayment}
+              translateX={translateX}
+              translateY={translateY}
+            />
+          )}
         </View>
-      </View>
 
-      {/* Matchup Rows */}
-      <View style={styles.roster}>
-        {slots.map((slot) => (
-          <MatchupRow
-            key={slot.type === 'goalie' ? 'goalie' : `skater-${slot.index}`}
-            slot={slot}
-            showPayment={showPayment}
-            onPlayerPress={onPlayerPress}
-            onDragEnd={handleDragEnd}
-            totalSlots={slots.length}
-          />
-        ))}
+        {/* Hint */}
+        <Text style={styles.hint}>Tap for options • Hold and drag to move</Text>
       </View>
-
-      {/* Hint */}
-      <Text style={styles.hint}>Tap for options • Hold and drag to move</Text>
-    </View>
+    </GestureDetector>
   );
 }
 
@@ -456,6 +612,7 @@ const styles = StyleSheet.create({
   },
   roster: {
     gap: 2,
+    position: 'relative',
   },
   matchupRow: {
     flexDirection: 'row',
@@ -467,9 +624,11 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     justifyContent: 'center',
+    borderRadius: radius.sm,
+    paddingVertical: 2,
   },
-  animatedWrapper: {
-    flex: 1,
+  playerSideHovered: {
+    backgroundColor: colors.subtle.teal,
   },
   playerCell: {
     flexDirection: 'row',
@@ -479,6 +638,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
     height: 48,
+  },
+  playerCellDragging: {
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 2,
+    borderColor: colors.primary.teal,
   },
   playerCellLeft: {
     marginRight: spacing.xs,
@@ -550,6 +714,44 @@ const styles = StyleSheet.create({
     color: colors.text.subtle,
     flex: 1,
     textAlign: 'center',
+  },
+  // Source placeholder - ghost showing where player came FROM
+  sourcePlaceholder: {
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sourcePlaceholderInner: {
+    width: '100%',
+    height: 48,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    borderColor: colors.primary.teal,
+    borderStyle: 'dashed',
+    backgroundColor: colors.subtle.teal,
+    opacity: 0.6,
+  },
+  dropPlaceholder: {
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: spacing.xs,
+  },
+  dropPlaceholderInner: {
+    width: '100%',
+    height: 48,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    borderColor: colors.primary.teal,
+    borderStyle: 'dashed',
+    backgroundColor: colors.subtle.teal,
+  },
+  dragOverlay: {
+    position: 'absolute',
+    zIndex: 1000,
+    elevation: 10,
   },
   hint: {
     fontSize: 12,
