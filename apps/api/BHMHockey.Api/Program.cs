@@ -128,6 +128,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IWaitlistService, WaitlistService>();
 builder.Services.AddScoped<IEventReminderService, EventReminderService>();
 builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
+builder.Services.AddScoped<IBadgeService, BadgeService>();
 
 // Background Services
 builder.Services.AddHostedService<WaitlistBackgroundService>();

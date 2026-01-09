@@ -333,3 +333,48 @@ export interface NotificationListResponse {
 export interface UnreadCountResponse {
   unreadCount: number;
 }
+
+// Badge types (Phase: Badge System)
+export type BadgeCategory = 'achievement' | 'milestone' | 'social';
+
+export interface BadgeTypeDto {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  iconName: string;
+  category: BadgeCategory;
+}
+
+export interface UserBadgeDto {
+  id: string;
+  badgeType: BadgeTypeDto;
+  context: Record<string, unknown>;
+  earnedAt: string;
+  displayOrder: number | null;
+}
+
+export interface UpdateBadgeOrderRequest {
+  badgeIds: string[];
+}
+
+// Context types for specific badge types
+export interface BadgeContextTournament {
+  tournamentName: string;
+  tournamentId?: string;
+  year: number;
+}
+
+export interface BadgeContextGeneric {
+  description: string;
+}
+
+// User summary with badges (for roster cards)
+export interface UserSummaryDto {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  positions?: UserPositions;
+  badges: UserBadgeDto[];  // Top 3 badges by displayOrder
+}
