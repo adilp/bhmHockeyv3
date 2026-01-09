@@ -31,14 +31,14 @@ if [ -n "$1" ]; then
 
     $PSQL_CMD -c "
         SELECT
-            bt.name as badge,
-            ub.context->>'tournamentName' as tournament,
-            to_char(ub.earned_at, 'Mon DD, YYYY') as earned
-        FROM user_badges ub
-        JOIN badge_types bt ON ub.badge_type_id = bt.id
-        JOIN users u ON ub.user_id = u.id
-        WHERE u.email = '$EMAIL'
-        ORDER BY ub.earned_at DESC;
+            bt.\"Name\" as badge,
+            ub.\"Context\"->>'tournamentName' as tournament,
+            to_char(ub.\"EarnedAt\", 'Mon DD, YYYY') as earned
+        FROM \"UserBadges\" ub
+        JOIN \"BadgeTypes\" bt ON ub.\"BadgeTypeId\" = bt.\"Id\"
+        JOIN \"Users\" u ON ub.\"UserId\" = u.\"Id\"
+        WHERE u.\"Email\" = '$EMAIL'
+        ORDER BY ub.\"EarnedAt\" DESC;
     "
 else
     # Show all users with badges
@@ -46,14 +46,14 @@ else
 
     $PSQL_CMD -c "
         SELECT
-            u.email,
-            u.first_name || ' ' || u.last_name as name,
-            COUNT(ub.id) as badge_count,
-            STRING_AGG(bt.name, ', ' ORDER BY ub.earned_at) as badges
-        FROM users u
-        JOIN user_badges ub ON u.id = ub.user_id
-        JOIN badge_types bt ON ub.badge_type_id = bt.id
-        GROUP BY u.id, u.email, u.first_name, u.last_name
-        ORDER BY badge_count DESC, u.last_name;
+            u.\"Email\" as email,
+            u.\"FirstName\" || ' ' || u.\"LastName\" as name,
+            COUNT(ub.\"Id\") as badge_count,
+            STRING_AGG(bt.\"Name\", ', ' ORDER BY ub.\"EarnedAt\") as badges
+        FROM \"Users\" u
+        JOIN \"UserBadges\" ub ON u.\"Id\" = ub.\"UserId\"
+        JOIN \"BadgeTypes\" bt ON ub.\"BadgeTypeId\" = bt.\"Id\"
+        GROUP BY u.\"Id\", u.\"Email\", u.\"FirstName\", u.\"LastName\"
+        ORDER BY badge_count DESC, u.\"LastName\";
     "
 fi

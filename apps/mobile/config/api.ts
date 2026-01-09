@@ -16,9 +16,15 @@ import Constants from 'expo-constants';
  * Note: /health endpoint is at root level, not under /api
  */
 export function getApiUrl(): string {
-  // TEMPORARY: Force production URL for App Store submission
-  // TODO: Restore dev/prod logic after app is approved
-  return 'https://bhmhockey-mb3md.ondigitalocean.app/api';
+  // TEMPORARY: Point to localhost for development
+  // TODO: Restore production URL when done testing
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:5001/api'; // Android emulator
+  }
+  return 'http://localhost:5001/api'; // iOS simulator
+
+  // Production URL (commented out for local dev):
+  // return 'https://bhmhockey-mb3md.ondigitalocean.app/api';
 }
 
 /**

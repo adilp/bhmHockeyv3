@@ -43,7 +43,7 @@ run_sql() {
 # List available badge types
 echo -e "${YELLOW}Available Badge Types:${NC}"
 echo "-----------------------------------"
-run_sql "SELECT code, name FROM badge_types ORDER BY sort_priority;" | while IFS='|' read -r code name; do
+run_sql "SELECT \"Code\", \"Name\" FROM \"BadgeTypes\" ORDER BY \"SortPriority\";" | while IFS='|' read -r code name; do
     echo "  $code - $name"
 done
 echo ""
@@ -53,13 +53,13 @@ echo -e "${YELLOW}Enter badge type code:${NC}"
 read -r BADGE_CODE
 
 # Validate badge type
-BADGE_ID=$(run_sql "SELECT id FROM badge_types WHERE code = '$BADGE_CODE';")
+BADGE_ID=$(run_sql "SELECT \"Id\" FROM \"BadgeTypes\" WHERE \"Code\" = '$BADGE_CODE';")
 if [ -z "$BADGE_ID" ]; then
     echo -e "${RED}Error: Invalid badge type '$BADGE_CODE'${NC}"
     exit 1
 fi
 
-BADGE_NAME=$(run_sql "SELECT name FROM badge_types WHERE code = '$BADGE_CODE';")
+BADGE_NAME=$(run_sql "SELECT \"Name\" FROM \"BadgeTypes\" WHERE \"Code\" = '$BADGE_CODE';")
 echo -e "${GREEN}Selected: $BADGE_NAME${NC}\n"
 
 # Get user email
@@ -120,7 +120,7 @@ for EMAIL in "${EMAILS[@]}"; do
     EMAIL=$(echo "$EMAIL" | xargs)
 
     # Get user ID
-    USER_ID=$(run_sql "SELECT id FROM users WHERE email = '$EMAIL';")
+    USER_ID=$(run_sql "SELECT \"Id\" FROM \"Users\" WHERE \"Email\" = '$EMAIL';")
 
     if [ -z "$USER_ID" ]; then
         echo -e "${RED}User not found: $EMAIL${NC}"
@@ -129,7 +129,7 @@ for EMAIL in "${EMAILS[@]}"; do
     fi
 
     # Check if user already has this badge
-    EXISTING=$(run_sql "SELECT id FROM user_badges WHERE user_id = '$USER_ID' AND badge_type_id = '$BADGE_ID';")
+    EXISTING=$(run_sql "SELECT \"Id\" FROM \"UserBadges\" WHERE \"UserId\" = '$USER_ID' AND \"BadgeTypeId\" = '$BADGE_ID';")
     if [ -n "$EXISTING" ]; then
         echo -e "${YELLOW}User already has badge: $EMAIL${NC}"
         ((FAIL_COUNT++))
@@ -137,7 +137,7 @@ for EMAIL in "${EMAILS[@]}"; do
     fi
 
     # Insert badge
-    run_sql "INSERT INTO user_badges (id, user_id, badge_type_id, context, earned_at, display_order)
+    run_sql "INSERT INTO \"UserBadges\" (\"Id\", \"UserId\", \"BadgeTypeId\", \"Context\", \"EarnedAt\", \"DisplayOrder\")
              VALUES (gen_random_uuid(), '$USER_ID', '$BADGE_ID', '$CONTEXT'::jsonb, '$EARNED_DATE', NULL);"
 
     if [ $? -eq 0 ]; then

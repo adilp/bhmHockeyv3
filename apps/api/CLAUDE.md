@@ -51,6 +51,7 @@ When adding fields to `User` entity, update ALL `UserDto` creation sites:
 - Always additive migrations - never drop columns
 - JSON columns use JSONB in PostgreSQL, custom converters in tests
 - All dates stored as UTC, converted to Central Time for display
+- **EF Core uses PascalCase** for table/column names (e.g., `"UserBadges"`, `"FirstName"`) - use quotes in raw SQL
 
 ### Background Services
 - Singletons that create scopes per execution
