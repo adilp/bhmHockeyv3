@@ -12,6 +12,9 @@ export interface User {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // Badge fields (optional - included in roster responses)
+  badges?: UserBadgeDto[];    // Top 3 badges by displayOrder
+  totalBadgeCount?: number;   // Total badges user has earned
 }
 
 export type UserRole = 'Player' | 'Organizer' | 'Admin';
@@ -376,5 +379,6 @@ export interface UserSummaryDto {
   lastName: string;
   email: string;
   positions?: UserPositions;
-  badges: UserBadgeDto[];  // Top 3 badges by displayOrder
+  badges: UserBadgeDto[];     // Top 3 badges by displayOrder
+  totalBadgeCount: number;    // Total badges user has earned
 }

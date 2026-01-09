@@ -329,7 +329,11 @@ public class WaitlistServiceTests : IDisposable
                 "ExponentPushToken[xxxxx]",
                 "You're In!",
                 It.Is<string>(s => s.Contains("spot opened up") && s.Contains("2 hours")),
-                It.IsAny<object>()),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
             Times.Once);
     }
 
@@ -352,7 +356,11 @@ public class WaitlistServiceTests : IDisposable
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<object>()),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
             Times.Never);
     }
 
@@ -588,7 +596,11 @@ public class WaitlistServiceTests : IDisposable
                 "ExponentPushToken[xxxxx]",
                 "Registration Expired",
                 It.Is<string>(s => s.Contains("cancelled") && s.Contains("payment deadline")),
-                It.IsAny<object>()),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
             Times.Once);
     }
 

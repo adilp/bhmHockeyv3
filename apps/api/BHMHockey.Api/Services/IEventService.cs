@@ -30,4 +30,7 @@ public interface IEventService
 
     // Authorization helpers
     Task<bool> CanUserManageEventAsync(Guid eventId, Guid userId);
+
+    // Waitlist with badges (for organizer view)
+    Task<List<EventRegistrationDto>> GetWaitlistWithBadgesAsync(Guid eventId);
 }

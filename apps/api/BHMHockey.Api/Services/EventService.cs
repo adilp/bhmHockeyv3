@@ -544,33 +544,90 @@ public class EventService : IEventService
             .ThenBy(r => r.RegisteredAt)
             .ToListAsync();
 
-        return registrations.Select(r => new EventRegistrationDto(
-            r.Id,
-            r.EventId,
-            new UserDto(
-                r.User.Id,
-                r.User.Email,
-                r.User.FirstName,
-                r.User.LastName,
-                r.User.PhoneNumber,
-                r.User.Positions,
-                r.User.VenmoHandle,
-                r.User.Role,
-                r.User.CreatedAt
-            ),
-            r.Status,
-            r.RegisteredAt,
-            r.RegisteredPosition,   // Position tracking
-            r.PaymentStatus,        // Phase 4
-            r.PaymentMarkedAt,      // Phase 4
-            r.PaymentVerifiedAt,    // Phase 4
-            r.TeamAssignment,       // Team assignment
-            r.RosterOrder,          // Roster ordering
-            r.WaitlistPosition,     // Phase 5 - Waitlist
-            r.PromotedAt,           // Phase 5 - Waitlist
-            r.PaymentDeadlineAt,    // Phase 5 - Waitlist
-            r.IsWaitlisted          // Phase 5 - Waitlist
-        )).ToList();
+        // Batch load badges for all users to prevent N+1 queries
+        var userIds = registrations.Select(r => r.User.Id).Distinct();
+        var badgesByUser = await GetBadgesForUsersAsync(userIds);
+
+        return registrations.Select(r => {
+            var (topBadges, totalCount) = badgesByUser.TryGetValue(r.User.Id, out var badges)
+                ? badges
+                : (new List<UserBadgeDto>(), 0);
+
+            return new EventRegistrationDto(
+                r.Id,
+                r.EventId,
+                new UserDto(
+                    r.User.Id,
+                    r.User.Email,
+                    r.User.FirstName,
+                    r.User.LastName,
+                    r.User.PhoneNumber,
+                    r.User.Positions,
+                    r.User.VenmoHandle,
+                    r.User.Role,
+                    r.User.CreatedAt,
+                    topBadges,      // Top 3 badges
+                    totalCount      // Total badge count
+                ),
+                r.Status,
+                r.RegisteredAt,
+                r.RegisteredPosition,   // Position tracking
+                r.PaymentStatus,        // Phase 4
+                r.PaymentMarkedAt,      // Phase 4
+                r.PaymentVerifiedAt,    // Phase 4
+                r.TeamAssignment,       // Team assignment
+                r.RosterOrder,          // Roster ordering
+                r.WaitlistPosition,     // Phase 5 - Waitlist
+                r.PromotedAt,           // Phase 5 - Waitlist
+                r.PaymentDeadlineAt,    // Phase 5 - Waitlist
+                r.IsWaitlisted          // Phase 5 - Waitlist
+            );
+        }).ToList();
+    }
+
+    public async Task<List<EventRegistrationDto>> GetWaitlistWithBadgesAsync(Guid eventId)
+    {
+        var waitlist = await _waitlistService.GetWaitlistAsync(eventId);
+
+        // Batch load badges for all users to prevent N+1 queries
+        var userIds = waitlist.Select(r => r.User.Id).Distinct();
+        var badgesByUser = await GetBadgesForUsersAsync(userIds);
+
+        return waitlist.Select(r => {
+            var (topBadges, totalCount) = badgesByUser.TryGetValue(r.User.Id, out var badges)
+                ? badges
+                : (new List<UserBadgeDto>(), 0);
+
+            return new EventRegistrationDto(
+                r.Id,
+                r.EventId,
+                new UserDto(
+                    r.User.Id,
+                    r.User.Email,
+                    r.User.FirstName,
+                    r.User.LastName,
+                    r.User.PhoneNumber,
+                    r.User.Positions,
+                    r.User.VenmoHandle,
+                    r.User.Role,
+                    r.User.CreatedAt,
+                    topBadges,      // Top 3 badges
+                    totalCount      // Total badge count
+                ),
+                r.Status,
+                r.RegisteredAt,
+                r.RegisteredPosition,
+                r.PaymentStatus,
+                r.PaymentMarkedAt,
+                r.PaymentVerifiedAt,
+                r.TeamAssignment,
+                r.RosterOrder,
+                r.WaitlistPosition,
+                r.PromotedAt,
+                r.PaymentDeadlineAt,
+                r.IsWaitlisted
+            );
+        }).ToList();
     }
 
     // Update roster order for multiple registrations (batch update)
@@ -874,5 +931,58 @@ public class EventService : IEventService
             type: "waitlist_joined",
             organizationId: evt.OrganizationId,
             eventId: evt.Id);
+    }
+
+    /// <summary>
+    /// Batch loads badges for a list of users to prevent N+1 queries.
+    /// Returns a dictionary mapping userId to (top 3 badges, total count).
+    /// </summary>
+    private async Task<Dictionary<Guid, (List<UserBadgeDto> TopBadges, int TotalCount)>> GetBadgesForUsersAsync(IEnumerable<Guid> userIds)
+    {
+        var userIdList = userIds.ToList();
+        if (userIdList.Count == 0)
+        {
+            return new Dictionary<Guid, (List<UserBadgeDto>, int)>();
+        }
+
+        // Single query to get all badges for all users
+        var allBadges = await _context.UserBadges
+            .Include(ub => ub.BadgeType)
+            .Where(ub => userIdList.Contains(ub.UserId))
+            .ToListAsync();
+
+        // Group by user and compute top 3 + total count
+        var result = new Dictionary<Guid, (List<UserBadgeDto> TopBadges, int TotalCount)>();
+
+        foreach (var userId in userIdList)
+        {
+            var userBadges = allBadges
+                .Where(ub => ub.UserId == userId)
+                .OrderBy(ub => ub.DisplayOrder ?? int.MaxValue)
+                .ThenBy(ub => ub.BadgeType.SortPriority)
+                .ToList();
+
+            var topBadges = userBadges
+                .Take(3)
+                .Select(ub => new UserBadgeDto(
+                    ub.Id,
+                    new BadgeTypeDto(
+                        ub.BadgeType.Id,
+                        ub.BadgeType.Code,
+                        ub.BadgeType.Name,
+                        ub.BadgeType.Description,
+                        ub.BadgeType.IconName,
+                        ub.BadgeType.Category
+                    ),
+                    ub.Context,
+                    ub.EarnedAt,
+                    ub.DisplayOrder
+                ))
+                .ToList();
+
+            result[userId] = (topBadges, userBadges.Count);
+        }
+
+        return result;
     }
 }
