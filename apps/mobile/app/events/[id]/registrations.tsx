@@ -295,7 +295,6 @@ export default function EventRegistrationsScreen() {
           ) : (
             <DraggableRoster
               registrations={registrations}
-              showPayment={showPayment}
               onPlayerPress={handlePlayerPress}
               onRosterChange={handleRosterChange}
             />
