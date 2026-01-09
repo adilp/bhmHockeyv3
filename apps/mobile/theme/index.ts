@@ -60,12 +60,12 @@ export const colors = {
     blue: 'rgba(88, 166, 255, 0.12)',
   },
 
-  // Skill Level Colors
+  // Skill Level Colors - Very subtle versions
   skillLevel: {
-    Gold: '#FFD700',
-    Silver: '#C0C0C0',
-    Bronze: '#CD7F32',
-    'D-League': '#A371F7',
+    Gold: '#5C4D3C',      // Very muted gold
+    Silver: '#4A4F57',    // Very muted silver
+    Bronze: '#4D3D2E',    // Very muted bronze
+    'D-League': '#463D54', // Very muted purple
   },
 } as const;
 
