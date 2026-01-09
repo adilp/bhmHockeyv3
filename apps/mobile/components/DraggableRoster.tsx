@@ -18,7 +18,7 @@ import { colors, spacing, radius } from '../theme';
 import { BadgeIconsRow } from './badges';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const ROW_HEIGHT = 78; // 72px cell + 6px gap
+const ROW_HEIGHT = 94; // 88px cell + 6px gap
 const SLOT_BADGE_WIDTH = 32;
 const CONTAINER_PADDING = spacing.md; // 16px on each side = 32 total
 const CELL_MARGIN = spacing.xs; // margin between cells and badge
@@ -82,7 +82,7 @@ function SkillBar({ level, color, side }: { level: SkillLevel | null; color: str
 
   return (
     <View style={[styles.skillBar, side === 'left' ? styles.skillBarLeft : styles.skillBarRight, { backgroundColor: color }]}>
-      <Text style={styles.skillBarText}>{level}</Text>
+      <Text style={styles.skillBarText} allowFontScaling={false}>{level}</Text>
     </View>
   );
 }
@@ -120,12 +120,13 @@ function PlayerCell({
       <Text
         style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
         numberOfLines={1}
+        allowFontScaling={false}
       >
         {fullName}
       </Text>
       {/* Line 2: Payment Badge */}
       <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-        <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
+        <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]} allowFontScaling={false}>
           {paymentInfo.label}
         </Text>
       </View>
@@ -195,12 +196,13 @@ function DragOverlay({
         <Text
           style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
           numberOfLines={1}
+          allowFontScaling={false}
         >
           {fullName}
         </Text>
         {/* Line 2: Payment Badge */}
         <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-          <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
+          <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]} allowFontScaling={false}>
             {paymentInfo.label}
           </Text>
         </View>
@@ -223,7 +225,7 @@ function EmptySlot({ side }: { side: 'left' | 'right' }) {
         side === 'left' ? styles.playerCellLeft : styles.playerCellRight,
       ]}
     >
-      <Text style={styles.emptyText}>-</Text>
+      <Text style={styles.emptyText} allowFontScaling={false}>-</Text>
     </View>
   );
 }
@@ -478,10 +480,10 @@ export function DraggableRoster({
         <View style={styles.teamHeaders}>
           <View style={styles.teamHeaderLeft}>
             <View style={styles.teamDotBlack} />
-            <Text style={styles.teamHeaderText}>BLACK</Text>
+            <Text style={styles.teamHeaderText} allowFontScaling={false}>BLACK</Text>
           </View>
           <View style={styles.teamHeaderRight}>
-            <Text style={styles.teamHeaderText}>WHITE</Text>
+            <Text style={styles.teamHeaderText} allowFontScaling={false}>WHITE</Text>
             <View style={styles.teamDotWhite} />
           </View>
         </View>
@@ -531,7 +533,7 @@ export function DraggableRoster({
 
                 {/* Center Slot Badge */}
                 <View style={[styles.slotBadge, slot.type === 'goalie' && styles.slotBadgeGoalie]}>
-                  <Text style={[styles.slotBadgeText, slot.type === 'goalie' && styles.slotBadgeTextGoalie]}>
+                  <Text style={[styles.slotBadgeText, slot.type === 'goalie' && styles.slotBadgeTextGoalie]} allowFontScaling={false}>
                     {slot.type === 'goalie' ? 'G' : `${slot.index}`}
                   </Text>
                 </View>
@@ -576,7 +578,7 @@ export function DraggableRoster({
         </View>
 
         {/* Hint */}
-        <Text style={styles.hint}>Tap for options • Hold and drag to move</Text>
+        <Text style={styles.hint} allowFontScaling={false}>Tap for options • Hold and drag to move</Text>
       </View>
     </GestureDetector>
   );
@@ -647,10 +649,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.bg.dark,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
     borderRadius: radius.sm,
-    height: 72,
-    gap: 4,
+    height: 88,
+    gap: 6,
   },
   playerCellDragging: {
     backgroundColor: colors.bg.elevated,
@@ -660,12 +662,12 @@ const styles = StyleSheet.create({
   playerCellLeft: {
     marginRight: spacing.xs,
     alignItems: 'flex-end',
-    paddingRight: 18,
+    paddingRight: 24,
   },
   playerCellRight: {
     marginLeft: spacing.xs,
     alignItems: 'flex-start',
-    paddingLeft: 18,
+    paddingLeft: 24,
   },
   playerName: {
     fontSize: 14,
@@ -687,12 +689,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'visible',
   },
   skillBarLeft: {
-    right: -2,
+    right: 4,
   },
   skillBarRight: {
-    left: -2,
+    left: 4,
   },
   skillBarText: {
     fontSize: 9,
@@ -742,7 +745,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
-    height: 72,
+    height: 88,
     borderWidth: 1,
     borderColor: colors.border.default,
     borderStyle: 'dashed',
@@ -756,13 +759,13 @@ const styles = StyleSheet.create({
   // Source placeholder - ghost showing where player came FROM
   sourcePlaceholder: {
     flex: 1,
-    height: 72,
+    height: 88,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sourcePlaceholderInner: {
     width: '100%',
-    height: 72,
+    height: 88,
     borderRadius: radius.sm,
     borderWidth: 2,
     borderColor: colors.primary.teal,
@@ -772,14 +775,14 @@ const styles = StyleSheet.create({
   },
   dropPlaceholder: {
     flex: 1,
-    height: 72,
+    height: 88,
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: spacing.xs,
   },
   dropPlaceholderInner: {
     width: '100%',
-    height: 72,
+    height: 88,
     borderRadius: radius.sm,
     borderWidth: 2,
     borderColor: colors.primary.teal,

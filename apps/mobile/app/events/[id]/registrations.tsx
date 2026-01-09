@@ -223,13 +223,13 @@ export default function EventRegistrationsScreen() {
   const renderWaitlistItem = (item: EventRegistrationDto, isAdmin: boolean) => (
     <View key={item.id} style={styles.waitlistRow}>
       <View style={styles.waitlistPositionBadge}>
-        <Text style={styles.waitlistPositionText}>#{item.waitlistPosition}</Text>
+        <Text style={styles.waitlistPositionText} allowFontScaling={false}>#{item.waitlistPosition}</Text>
       </View>
       <View style={styles.waitlistUserInfo}>
-        <Text style={styles.waitlistUserName}>
+        <Text style={styles.waitlistUserName} allowFontScaling={false}>
           {item.user.firstName} {item.user.lastName}
         </Text>
-        <Text style={styles.waitlistUserMeta}>
+        <Text style={styles.waitlistUserMeta} allowFontScaling={false}>
           {item.registeredPosition || 'Skater'}
         </Text>
       </View>
@@ -238,7 +238,7 @@ export default function EventRegistrationsScreen() {
           style={styles.removeButtonSmall}
           onPress={() => handleRemove(item)}
         >
-          <Text style={styles.removeButtonText}>Remove</Text>
+          <Text style={styles.removeButtonText} allowFontScaling={false}>Remove</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -268,31 +268,31 @@ export default function EventRegistrationsScreen() {
         {event && (
           <View style={styles.summaryHeader}>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{registrations.length}</Text>
-              <Text style={styles.statLabel}>Registered</Text>
+              <Text style={styles.statValue} allowFontScaling={false}>{registrations.length}</Text>
+              <Text style={styles.statLabel} allowFontScaling={false}>Registered</Text>
             </View>
             {showPayment && (
               <>
                 <View style={styles.statBox}>
-                  <Text style={[styles.statValue, { color: colors.primary.green }]}>
+                  <Text style={[styles.statValue, { color: colors.primary.green }]} allowFontScaling={false}>
                     {registrations.filter(r => r.paymentStatus === 'Verified').length}
                   </Text>
-                  <Text style={styles.statLabel}>Paid</Text>
+                  <Text style={styles.statLabel} allowFontScaling={false}>Paid</Text>
                 </View>
                 <View style={styles.statBox}>
-                  <Text style={[styles.statValue, { color: colors.status.error }]}>
+                  <Text style={[styles.statValue, { color: colors.status.error }]} allowFontScaling={false}>
                     {registrations.filter(r => r.paymentStatus !== 'Verified').length}
                   </Text>
-                  <Text style={styles.statLabel}>Unpaid</Text>
+                  <Text style={styles.statLabel} allowFontScaling={false}>Unpaid</Text>
                 </View>
               </>
             )}
             {waitlist.length > 0 && (
               <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: colors.status.warning }]}>
+                <Text style={[styles.statValue, { color: colors.status.warning }]} allowFontScaling={false}>
                   {waitlist.length}
                 </Text>
-                <Text style={styles.statLabel}>Waitlist</Text>
+                <Text style={styles.statLabel} allowFontScaling={false}>Waitlist</Text>
               </View>
             )}
           </View>

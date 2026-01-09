@@ -40,7 +40,7 @@ export function BadgeIconsRow({ badges, totalCount, style }: BadgeIconsRowProps)
         />
       ))}
       {overflow > 0 && (
-        <Text style={styles.overflow}>+{overflow}</Text>
+        <Text style={styles.overflow} allowFontScaling={false}>+{overflow}</Text>
       )}
     </View>
   );

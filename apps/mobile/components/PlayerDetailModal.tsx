@@ -143,8 +143,8 @@ export function PlayerDetailModal({
                 {/* Header */}
                 <View style={styles.header}>
                   <View style={styles.headerInfo}>
-                    <Text style={styles.playerName}>{fullName}</Text>
-                    <Text style={styles.playerMeta}>
+                    <Text style={styles.playerName} allowFontScaling={false}>{fullName}</Text>
+                    <Text style={styles.playerMeta} allowFontScaling={false}>
                       {registeredPosition || 'Skater'} • Team {teamAssignment || 'TBD'}
                     </Text>
                   </View>
@@ -153,10 +153,10 @@ export function PlayerDetailModal({
                 {/* Payment Status - Admin only */}
                 {isAdmin && showPayment && (
                   <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>Payment Status</Text>
+                    <Text style={styles.sectionLabel} allowFontScaling={false}>Payment Status</Text>
                     <View style={styles.statusRow}>
                       <View style={[styles.statusDot, { backgroundColor: paymentInfo.color }]} />
-                      <Text style={[styles.statusText, { color: paymentInfo.color }]}>
+                      <Text style={[styles.statusText, { color: paymentInfo.color }]} allowFontScaling={false}>
                         {paymentInfo.label}
                       </Text>
                     </View>
@@ -165,7 +165,7 @@ export function PlayerDetailModal({
 
                 {/* Trophy Case - Visible to everyone */}
                 <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>Trophy Case</Text>
+                  <Text style={styles.sectionLabel} allowFontScaling={false}>Trophy Case</Text>
                   {isLoadingBadges ? (
                     <View style={styles.loadingContainer}>
                       <ActivityIndicator size="small" color={colors.primary.teal} />
@@ -181,7 +181,7 @@ export function PlayerDetailModal({
                     {/* Swap Team */}
                     {onSwapTeam && (
                       <TouchableOpacity style={styles.actionButton} onPress={handleSwapTeam}>
-                        <Text style={styles.actionButtonText}>Move to Team {otherTeam}</Text>
+                        <Text style={styles.actionButtonText} allowFontScaling={false}>Move to Team {otherTeam}</Text>
                       </TouchableOpacity>
                     )}
 
@@ -194,7 +194,7 @@ export function PlayerDetailModal({
                             style={[styles.actionButton, styles.successButton]}
                             onPress={handleMarkPaid}
                           >
-                            <Text style={styles.successButtonText}>Mark as Paid</Text>
+                            <Text style={styles.successButtonText} allowFontScaling={false}>Mark as Paid</Text>
                           </TouchableOpacity>
                         )}
 
@@ -204,7 +204,7 @@ export function PlayerDetailModal({
                             style={[styles.actionButton, styles.successButton]}
                             onPress={handleVerifyPayment}
                           >
-                            <Text style={styles.successButtonText}>Verify Payment</Text>
+                            <Text style={styles.successButtonText} allowFontScaling={false}>Verify Payment</Text>
                           </TouchableOpacity>
                         )}
 
@@ -214,7 +214,7 @@ export function PlayerDetailModal({
                             style={[styles.actionButton, styles.warningButton]}
                             onPress={handleResetPayment}
                           >
-                            <Text style={styles.warningButtonText}>Reset Payment to Unpaid</Text>
+                            <Text style={styles.warningButtonText} allowFontScaling={false}>Reset Payment to Unpaid</Text>
                           </TouchableOpacity>
                         )}
                       </>
@@ -226,7 +226,7 @@ export function PlayerDetailModal({
                         style={[styles.actionButton, styles.dangerButton]}
                         onPress={handleRemove}
                       >
-                        <Text style={styles.dangerButtonText}>Remove from Roster</Text>
+                        <Text style={styles.dangerButtonText} allowFontScaling={false}>Remove from Roster</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -235,7 +235,7 @@ export function PlayerDetailModal({
 
               {/* Cancel - Fixed at bottom */}
               <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-                <Text style={styles.cancelButtonText}>
+                <Text style={styles.cancelButtonText} allowFontScaling={false}>
                   {hasAdminActions ? 'Cancel' : 'Close'}
                 </Text>
               </TouchableOpacity>
