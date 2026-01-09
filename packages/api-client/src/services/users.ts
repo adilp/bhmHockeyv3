@@ -1,4 +1,4 @@
-import type { User, UpdateUserProfileRequest } from '@bhmhockey/shared';
+import type { User, UpdateUserProfileRequest, UserBadgeDto, UpdateBadgeOrderRequest } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
 /**
@@ -34,5 +34,23 @@ export const userService = {
    */
   async deleteAccount(): Promise<void> {
     await apiClient.instance.delete('/users/me');
+  },
+
+  /**
+   * Get all badges for a user
+   * Returns badges sorted by display order (for profile/modal view)
+   */
+  async getUserBadges(userId: string): Promise<UserBadgeDto[]> {
+    const response = await apiClient.instance.get<UserBadgeDto[]>(`/users/${userId}/badges`);
+    return response.data;
+  },
+
+  /**
+   * Update the display order of the current user's badges
+   * Used for profile badge reordering
+   */
+  async updateBadgeOrder(badgeIds: string[]): Promise<void> {
+    const request: UpdateBadgeOrderRequest = { badgeIds };
+    await apiClient.instance.patch('/users/me/badges/order', request);
   },
 };
