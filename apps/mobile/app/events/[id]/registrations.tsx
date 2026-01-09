@@ -213,8 +213,8 @@ export default function EventRegistrationsScreen() {
     }
   };
 
-  // Waitlist item render
-  const renderWaitlistItem = (item: EventRegistrationDto) => (
+  // Waitlist item render - canManage checked at render time
+  const renderWaitlistItem = (item: EventRegistrationDto, isAdmin: boolean) => (
     <View key={item.id} style={styles.waitlistRow}>
       <View style={styles.waitlistPositionBadge}>
         <Text style={styles.waitlistPositionText}>#{item.waitlistPosition}</Text>
@@ -227,12 +227,14 @@ export default function EventRegistrationsScreen() {
           {item.registeredPosition || 'Skater'}
         </Text>
       </View>
-      <TouchableOpacity
-        style={styles.removeButtonSmall}
-        onPress={() => handleRemove(item)}
-      >
-        <Text style={styles.removeButtonText}>Remove</Text>
-      </TouchableOpacity>
+      {isAdmin && (
+        <TouchableOpacity
+          style={styles.removeButtonSmall}
+          onPress={() => handleRemove(item)}
+        >
+          <Text style={styles.removeButtonText}>Remove</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -244,8 +246,10 @@ export default function EventRegistrationsScreen() {
     );
   }
 
-  // Always show payment status - useful for admins to track who paid
-  const showPayment = true;
+  // Permission check - only organizers/admins can manage the roster
+  const canManage = selectedEvent?.canManage ?? false;
+  // Show payment info only to admins
+  const showPayment = canManage;
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -296,7 +300,8 @@ export default function EventRegistrationsScreen() {
             <DraggableRoster
               registrations={registrations}
               onPlayerPress={handlePlayerPress}
-              onRosterChange={handleRosterChange}
+              onRosterChange={canManage ? handleRosterChange : undefined}
+              readOnly={!canManage}
             />
           )}
         </View>
@@ -306,7 +311,7 @@ export default function EventRegistrationsScreen() {
           <View style={styles.section}>
             <SectionHeader title="Waitlist" count={waitlist.length} />
             <View style={styles.waitlistSection}>
-              {waitlist.map(renderWaitlistItem)}
+              {waitlist.map((item) => renderWaitlistItem(item, canManage))}
             </View>
           </View>
         )}
@@ -320,12 +325,13 @@ export default function EventRegistrationsScreen() {
         visible={isModalVisible}
         registration={selectedPlayer}
         showPayment={showPayment}
+        isAdmin={canManage}
         onClose={handleCloseModal}
-        onSwapTeam={handleSwapTeam}
-        onRemove={handleRemove}
-        onMarkPaid={handleMarkPaid}
-        onVerifyPayment={handleVerifyPayment}
-        onResetPayment={handleResetPayment}
+        onSwapTeam={canManage ? handleSwapTeam : undefined}
+        onRemove={canManage ? handleRemove : undefined}
+        onMarkPaid={canManage ? handleMarkPaid : undefined}
+        onVerifyPayment={canManage ? handleVerifyPayment : undefined}
+        onResetPayment={canManage ? handleResetPayment : undefined}
       />
     </GestureHandlerRootView>
   );

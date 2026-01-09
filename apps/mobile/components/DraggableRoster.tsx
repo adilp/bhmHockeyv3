@@ -26,7 +26,9 @@ const CELL_MARGIN = spacing.xs; // margin between cells and badge
 interface DraggableRosterProps {
   registrations: EventRegistrationDto[];
   onPlayerPress: (registration: EventRegistrationDto) => void;
-  onRosterChange: (items: RosterOrderItem[]) => void;
+  onRosterChange?: (items: RosterOrderItem[]) => void;
+  /** When true, disables drag-and-drop reordering (view-only mode) */
+  readOnly?: boolean;
 }
 
 type SlotType = 'goalie' | 'skater';
@@ -219,6 +221,7 @@ export function DraggableRoster({
   registrations,
   onPlayerPress,
   onRosterChange,
+  readOnly = false,
 }: DraggableRosterProps) {
   const rosterRef = useRef<View>(null);
   const [rosterTopOffset, setRosterTopOffset] = useState(0);
@@ -389,8 +392,8 @@ export function DraggableRoster({
     translateX.value = 0;
     translateY.value = 0;
 
-    // Update roster
-    onRosterChange(items);
+    // Update roster (only if callback provided)
+    onRosterChange?.(items);
   }, [dragInfo, slots.length, rosterTopOffset, registrations, onRosterChange, translateX, translateY]);
 
   const handleDragCancel = useCallback(() => {
@@ -480,7 +483,7 @@ export function DraggableRoster({
                         registration={slot.blackPlayer}
                         side="left"
                         onPress={() => onPlayerPress(slot.blackPlayer!)}
-                        onLongPress={() => startDrag(slot.blackPlayer!, 'left', slot.index)}
+                        onLongPress={readOnly ? () => {} : () => startDrag(slot.blackPlayer!, 'left', slot.index)}
                       />
                     )
                   ) : (
@@ -513,7 +516,7 @@ export function DraggableRoster({
                         registration={slot.whitePlayer}
                         side="right"
                         onPress={() => onPlayerPress(slot.whitePlayer!)}
-                        onLongPress={() => startDrag(slot.whitePlayer!, 'right', slot.index)}
+                        onLongPress={readOnly ? () => {} : () => startDrag(slot.whitePlayer!, 'right', slot.index)}
                       />
                     )
                   ) : (

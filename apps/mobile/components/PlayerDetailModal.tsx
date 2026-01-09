@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,20 +6,27 @@ import {
   Modal,
   TouchableOpacity,
   TouchableWithoutFeedback,
+  ScrollView,
+  ActivityIndicator,
 } from 'react-native';
-import type { EventRegistrationDto, TeamAssignment } from '@bhmhockey/shared';
+import type { EventRegistrationDto, TeamAssignment, UserBadgeDto } from '@bhmhockey/shared';
+import { userService } from '@bhmhockey/api-client';
 import { colors, spacing, radius } from '../theme';
+import { TrophyCase } from './badges/TrophyCase';
 
 interface PlayerDetailModalProps {
   visible: boolean;
   registration: EventRegistrationDto | null;
-  showPayment: boolean;
+  /** Show payment status section (default: true) */
+  showPayment?: boolean;
+  /** Show admin actions like swap team, remove, payment controls (default: true for backwards compat) */
+  isAdmin?: boolean;
   onClose: () => void;
-  onSwapTeam: (registration: EventRegistrationDto) => void;
-  onRemove: (registration: EventRegistrationDto) => void;
-  onMarkPaid: (registration: EventRegistrationDto) => void;
-  onVerifyPayment: (registration: EventRegistrationDto) => void;
-  onResetPayment: (registration: EventRegistrationDto) => void;
+  onSwapTeam?: (registration: EventRegistrationDto) => void;
+  onRemove?: (registration: EventRegistrationDto) => void;
+  onMarkPaid?: (registration: EventRegistrationDto) => void;
+  onVerifyPayment?: (registration: EventRegistrationDto) => void;
+  onResetPayment?: (registration: EventRegistrationDto) => void;
 }
 
 const getPaymentStatusDisplay = (status?: string): { label: string; color: string } => {
@@ -37,7 +44,8 @@ const getPaymentStatusDisplay = (status?: string): { label: string; color: strin
 export function PlayerDetailModal({
   visible,
   registration,
-  showPayment,
+  showPayment = true,
+  isAdmin = true,
   onClose,
   onSwapTeam,
   onRemove,
@@ -45,6 +53,41 @@ export function PlayerDetailModal({
   onVerifyPayment,
   onResetPayment,
 }: PlayerDetailModalProps) {
+  const [badges, setBadges] = useState<UserBadgeDto[]>([]);
+  const [isLoadingBadges, setIsLoadingBadges] = useState(false);
+
+  // Reset badge state when modal closes or registration changes
+  useEffect(() => {
+    if (!visible || !registration) {
+      setBadges([]);
+      setIsLoadingBadges(false);
+      return;
+    }
+
+    // Smart fetch: use cached badges if totalBadgeCount <= 3, otherwise fetch full list
+    const cachedBadges = registration.user.badges ?? [];
+    const totalCount = registration.user.totalBadgeCount ?? 0;
+
+    if (totalCount <= 3) {
+      // Use cached badges from registration data
+      setBadges(cachedBadges);
+    } else {
+      // Need to fetch full badge list
+      setIsLoadingBadges(true);
+      userService.getUserBadges(registration.user.id)
+        .then((fullBadges) => {
+          setBadges(fullBadges);
+        })
+        .catch(() => {
+          // On error, fall back to cached badges
+          setBadges(cachedBadges);
+        })
+        .finally(() => {
+          setIsLoadingBadges(false);
+        });
+    }
+  }, [visible, registration?.user.id]);
+
   if (!registration) return null;
 
   const { user, teamAssignment, paymentStatus, registeredPosition } = registration;
@@ -53,29 +96,32 @@ export function PlayerDetailModal({
   const otherTeam: TeamAssignment = teamAssignment === 'Black' ? 'White' : 'Black';
 
   const handleSwapTeam = () => {
-    onSwapTeam(registration);
+    onSwapTeam?.(registration);
     onClose();
   };
 
   const handleRemove = () => {
-    onRemove(registration);
+    onRemove?.(registration);
     onClose();
   };
 
   const handleMarkPaid = () => {
-    onMarkPaid(registration);
+    onMarkPaid?.(registration);
     onClose();
   };
 
   const handleVerifyPayment = () => {
-    onVerifyPayment(registration);
+    onVerifyPayment?.(registration);
     onClose();
   };
 
   const handleResetPayment = () => {
-    onResetPayment(registration);
+    onResetPayment?.(registration);
     onClose();
   };
+
+  // Check if we have any admin actions to show
+  const hasAdminActions = isAdmin && (onSwapTeam || onRemove || onMarkPaid || onVerifyPayment || onResetPayment);
 
   return (
     <Modal
@@ -88,83 +134,110 @@ export function PlayerDetailModal({
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View style={styles.modal}>
-              {/* Header */}
-              <View style={styles.header}>
-                <View style={styles.headerInfo}>
-                  <Text style={styles.playerName}>{fullName}</Text>
-                  <Text style={styles.playerMeta}>
-                    {registeredPosition || 'Skater'} • Team {teamAssignment || 'TBD'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Payment Status */}
-              {showPayment && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>Payment Status</Text>
-                  <View style={styles.statusRow}>
-                    <View style={[styles.statusDot, { backgroundColor: paymentInfo.color }]} />
-                    <Text style={[styles.statusText, { color: paymentInfo.color }]}>
-                      {paymentInfo.label}
+              <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+                {/* Header */}
+                <View style={styles.header}>
+                  <View style={styles.headerInfo}>
+                    <Text style={styles.playerName}>{fullName}</Text>
+                    <Text style={styles.playerMeta}>
+                      {registeredPosition || 'Skater'} • Team {teamAssignment || 'TBD'}
                     </Text>
                   </View>
                 </View>
-              )}
 
-              {/* Actions */}
-              <View style={styles.actions}>
-                {/* Swap Team */}
-                <TouchableOpacity style={styles.actionButton} onPress={handleSwapTeam}>
-                  <Text style={styles.actionButtonText}>Move to Team {otherTeam}</Text>
-                </TouchableOpacity>
-
-                {/* Payment Actions - Show all relevant options */}
-                {showPayment && (
-                  <>
-                    {/* Mark as Paid - only show if Pending */}
-                    {paymentStatus === 'Pending' && (
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.successButton]}
-                        onPress={handleMarkPaid}
-                      >
-                        <Text style={styles.successButtonText}>Mark as Paid</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {/* Verify Payment - only show if MarkedPaid */}
-                    {paymentStatus === 'MarkedPaid' && (
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.successButton]}
-                        onPress={handleVerifyPayment}
-                      >
-                        <Text style={styles.successButtonText}>Verify Payment</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {/* Reset Payment - show if MarkedPaid or Verified */}
-                    {(paymentStatus === 'MarkedPaid' || paymentStatus === 'Verified') && (
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.warningButton]}
-                        onPress={handleResetPayment}
-                      >
-                        <Text style={styles.warningButtonText}>Reset Payment to Unpaid</Text>
-                      </TouchableOpacity>
-                    )}
-                  </>
+                {/* Payment Status - Admin only */}
+                {isAdmin && showPayment && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>Payment Status</Text>
+                    <View style={styles.statusRow}>
+                      <View style={[styles.statusDot, { backgroundColor: paymentInfo.color }]} />
+                      <Text style={[styles.statusText, { color: paymentInfo.color }]}>
+                        {paymentInfo.label}
+                      </Text>
+                    </View>
+                  </View>
                 )}
 
-                {/* Remove */}
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.dangerButton]}
-                  onPress={handleRemove}
-                >
-                  <Text style={styles.dangerButtonText}>Remove from Roster</Text>
-                </TouchableOpacity>
-              </View>
+                {/* Trophy Case - Visible to everyone */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Trophy Case</Text>
+                  {isLoadingBadges ? (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="small" color={colors.primary.teal} />
+                    </View>
+                  ) : (
+                    <TrophyCase badges={badges} />
+                  )}
+                </View>
 
-              {/* Cancel */}
+                {/* Admin Actions */}
+                {hasAdminActions && (
+                  <View style={styles.actions}>
+                    {/* Swap Team */}
+                    {onSwapTeam && (
+                      <TouchableOpacity style={styles.actionButton} onPress={handleSwapTeam}>
+                        <Text style={styles.actionButtonText}>Move to Team {otherTeam}</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Payment Actions - Show all relevant options */}
+                    {showPayment && (
+                      <>
+                        {/* Mark as Paid - only show if Pending */}
+                        {paymentStatus === 'Pending' && onMarkPaid && (
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.successButton]}
+                            onPress={handleMarkPaid}
+                          >
+                            <Text style={styles.successButtonText}>Mark as Paid</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {/* Verify Payment - only show if MarkedPaid */}
+                        {paymentStatus === 'MarkedPaid' && onVerifyPayment && (
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.successButton]}
+                            onPress={handleVerifyPayment}
+                          >
+                            <Text style={styles.successButtonText}>Verify Payment</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {/* Reset Payment - show if MarkedPaid or Verified */}
+                        {(paymentStatus === 'MarkedPaid' || paymentStatus === 'Verified') && onResetPayment && (
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.warningButton]}
+                            onPress={handleResetPayment}
+                          >
+                            <Text style={styles.warningButtonText}>Reset Payment to Unpaid</Text>
+                          </TouchableOpacity>
+                        )}
+                      </>
+                    )}
+
+                    {/* Remove */}
+                    {onRemove && (
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.dangerButton]}
+                        onPress={handleRemove}
+                      >
+                        <Text style={styles.dangerButtonText}>Remove from Roster</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+
+              {/* Cancel - Fixed at bottom */}
               <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>
+                  {hasAdminActions ? 'Cancel' : 'Close'}
+                </Text>
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
@@ -184,8 +257,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.dark,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    padding: spacing.lg,
+    maxHeight: '80%', // Limit modal height for scroll
     paddingBottom: spacing.xl + 20, // Extra padding for home indicator
+  },
+  scrollView: {
+    flexGrow: 0,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingBottom: 0, // Cancel button has its own padding
   },
   header: {
     flexDirection: 'row',
@@ -229,6 +309,10 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    padding: spacing.lg,
+    alignItems: 'center',
   },
   actions: {
     gap: spacing.sm,
@@ -277,8 +361,8 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
-    marginTop: spacing.md,
   },
   cancelButtonText: {
     color: colors.text.muted,
