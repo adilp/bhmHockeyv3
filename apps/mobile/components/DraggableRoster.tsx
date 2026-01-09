@@ -13,7 +13,7 @@ import Animated, {
   runOnJS,
   SharedValue,
 } from 'react-native-reanimated';
-import type { EventRegistrationDto, TeamAssignment, RosterOrderItem } from '@bhmhockey/shared';
+import type { EventRegistrationDto, TeamAssignment, RosterOrderItem, SkillLevel } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../theme';
 import { BadgeIconsRow } from './badges';
 
@@ -47,6 +47,21 @@ interface DragInfo {
   startY: number;
 }
 
+// Get skill level info based on registered position
+const getSkillLevelInfo = (registration: EventRegistrationDto): { level: SkillLevel | null; color: string } => {
+  const { user, registeredPosition } = registration;
+  const positions = user.positions;
+
+  if (!positions) return { level: null, color: colors.text.muted };
+
+  const skillLevel: SkillLevel | undefined =
+    registeredPosition === 'Goalie' ? positions.goalie : positions.skater;
+
+  if (!skillLevel) return { level: null, color: colors.text.muted };
+
+  return { level: skillLevel, color: colors.skillLevel[skillLevel] || colors.text.muted };
+};
+
 const getPaymentInfo = (status?: string): { label: string; color: string; bgColor: string } => {
   switch (status) {
     case 'Verified':
@@ -61,6 +76,17 @@ const getPaymentInfo = (status?: string): { label: string; color: string; bgColo
 
 // Static player cell (non-draggable, just displays)
 // 3-line layout: Name, Payment Badge, Achievement Badges
+// Vertical skill level bar component
+function SkillBar({ level, color, side }: { level: SkillLevel | null; color: string; side: 'left' | 'right' }) {
+  if (!level) return null;
+
+  return (
+    <View style={[styles.skillBar, side === 'left' ? styles.skillBarLeft : styles.skillBarRight, { backgroundColor: color }]}>
+      <Text style={styles.skillBarText}>{level}</Text>
+    </View>
+  );
+}
+
 function PlayerCell({
   registration,
   side,
@@ -75,6 +101,7 @@ function PlayerCell({
   const { user, paymentStatus } = registration;
   const fullName = `${user.firstName} ${user.lastName}`;
   const paymentInfo = getPaymentInfo(paymentStatus);
+  const skillInfo = getSkillLevelInfo(registration);
 
   return (
     <Pressable
@@ -86,6 +113,9 @@ function PlayerCell({
       onLongPress={onLongPress}
       delayLongPress={200}
     >
+      {/* Skill level bar on inner edge */}
+      <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
+
       {/* Line 1: Name */}
       <Text
         style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
@@ -123,6 +153,7 @@ function DragOverlay({
   const { user, paymentStatus } = registration;
   const fullName = `${user.firstName} ${user.lastName}`;
   const paymentInfo = getPaymentInfo(paymentStatus);
+  const skillInfo = getSkillLevelInfo(registration);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -157,6 +188,9 @@ function DragOverlay({
           { marginRight: 0, marginLeft: 0 },
         ]}
       >
+        {/* Skill level bar on inner edge */}
+        <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
+
         {/* Line 1: Name */}
         <Text
           style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
@@ -616,6 +650,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.sm,
     height: 72,
+    gap: 4,
   },
   playerCellDragging: {
     backgroundColor: colors.bg.elevated,
@@ -625,22 +660,47 @@ const styles = StyleSheet.create({
   playerCellLeft: {
     marginRight: spacing.xs,
     alignItems: 'flex-end',
+    paddingRight: 18,
   },
   playerCellRight: {
     marginLeft: spacing.xs,
     alignItems: 'flex-start',
+    paddingLeft: 18,
   },
   playerName: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text.primary,
     flexShrink: 1,
+    color: colors.text.primary,
   },
   playerNameLeft: {
     textAlign: 'right',
   },
   playerNameRight: {
     textAlign: 'left',
+  },
+  skillBar: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    width: 16,
+    borderRadius: radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  skillBarLeft: {
+    right: -2,
+  },
+  skillBarRight: {
+    left: -2,
+  },
+  skillBarText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.bg.darkest,
+    transform: [{ rotate: '-90deg' }],
+    width: 50,
+    textAlign: 'center',
   },
   paymentBadge: {
     paddingHorizontal: spacing.sm,

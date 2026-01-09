@@ -36,7 +36,7 @@ export function BadgeIconsRow({ badges, totalCount, style }: BadgeIconsRowProps)
         <BadgeIcon
           key={badge.id}
           iconName={badge.badgeType.iconName}
-          size={16}
+          size={24}
         />
       ))}
       {overflow > 0 && (
@@ -51,10 +51,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs, // 4px gap between icons
-    minHeight: 16, // Maintain consistent height even when empty
+    minHeight: 24, // Maintain consistent height even when empty
   },
   overflow: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text.muted,
     marginLeft: 2, // Slight extra margin before overflow text

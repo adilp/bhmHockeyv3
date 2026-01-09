@@ -1,43 +1,35 @@
 import React from 'react';
 import { Image, ImageStyle, StyleProp } from 'react-native';
 
-type BadgeSize = 16 | 24;
-
 interface BadgeIconProps {
   iconName: string;
-  size?: BadgeSize;
+  /** Render size in pixels (default: 24). Asset scales to fit. */
+  size?: number;
   style?: StyleProp<ImageStyle>;
 }
 
-// Icon map: iconName -> size -> require()
+// Icon map: iconName -> 24px asset
+// All badges only need a single 24px asset - it scales to any render size
 // React Native auto-selects @2x/@3x variants based on device density
-const iconMap: Record<string, Record<BadgeSize, ReturnType<typeof require>>> = {
-  trophy_gold: {
-    16: require('../../assets/badges/trophy_gold_16.png'),
-    24: require('../../assets/badges/trophy_gold_24.png'),
-  },
-  star_teal: {
-    16: require('../../assets/badges/star_teal_16.png'),
-    24: require('../../assets/badges/star_teal_24.png'),
-  },
+const iconMap: Record<string, ReturnType<typeof require>> = {
+  trophy_gold: require('../../assets/badges/trophy_gold_24.png'),
+  star_teal: require('../../assets/badges/star_teal_24.png'),
 };
 
 /**
  * BadgeIcon - Renders a badge icon based on iconName and size
  *
  * @param iconName - The badge type's iconName (e.g., 'trophy_gold', 'star_teal')
- * @param size - Icon size: 16 (for roster cards) or 24 (for trophy case)
+ * @param size - Render size in pixels (default: 24). Asset scales to fit any size.
  * @param style - Optional additional styles
  */
-export function BadgeIcon({ iconName, size = 16, style }: BadgeIconProps) {
-  const iconSources = iconMap[iconName];
+export function BadgeIcon({ iconName, size = 24, style }: BadgeIconProps) {
+  const source = iconMap[iconName];
 
   // Fallback if iconName not found - render nothing
-  if (!iconSources) {
+  if (!source) {
     return null;
   }
-
-  const source = iconSources[size];
 
   return (
     <Image
