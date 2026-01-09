@@ -946,7 +946,9 @@ public class EventServiceTests : IDisposable
                 org.Id,
                 It.Is<string>(s => s.Contains("Org Event")),
                 It.IsAny<string>(),
-                It.IsAny<object>()),
+                It.IsAny<object>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>()),
             Times.Once);
     }
 
@@ -977,7 +979,9 @@ public class EventServiceTests : IDisposable
                 It.IsAny<Guid>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<object>()),
+                It.IsAny<object>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>()),
             Times.Never);
     }
 
@@ -993,7 +997,9 @@ public class EventServiceTests : IDisposable
                 It.IsAny<Guid>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<object>()))
+                It.IsAny<object>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>()))
             .ThrowsAsync(new HttpRequestException("Expo API unavailable"));
 
         var request = new CreateEventRequest(

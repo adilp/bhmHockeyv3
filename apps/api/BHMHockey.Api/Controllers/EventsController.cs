@@ -208,36 +208,7 @@ public class EventsController : ControllerBase
             return Forbid();
         }
 
-        var waitlist = await _waitlistService.GetWaitlistAsync(id);
-
-        var dtos = waitlist.Select(r => new EventRegistrationDto(
-            r.Id,
-            r.EventId,
-            new UserDto(
-                r.User.Id,
-                r.User.Email,
-                r.User.FirstName,
-                r.User.LastName,
-                r.User.PhoneNumber,
-                r.User.Positions,
-                r.User.VenmoHandle,
-                r.User.Role,
-                r.User.CreatedAt
-            ),
-            r.Status,
-            r.RegisteredAt,
-            r.RegisteredPosition,
-            r.PaymentStatus,
-            r.PaymentMarkedAt,
-            r.PaymentVerifiedAt,
-            r.TeamAssignment,
-            r.RosterOrder,
-            r.WaitlistPosition,
-            r.PromotedAt,
-            r.PaymentDeadlineAt,
-            r.IsWaitlisted
-        )).ToList();
-
+        var dtos = await _eventService.GetWaitlistWithBadgesAsync(id);
         return Ok(dtos);
     }
 

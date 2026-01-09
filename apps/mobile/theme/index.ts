@@ -59,6 +59,14 @@ export const colors = {
     purple: 'rgba(163, 113, 247, 0.12)',
     blue: 'rgba(88, 166, 255, 0.12)',
   },
+
+  // Skill Level Colors
+  skillLevel: {
+    Gold: '#FFD700',
+    Silver: '#C0C0C0',
+    Bronze: '#CD7F32',
+    'D-League': '#A371F7',
+  },
 } as const;
 
 export const spacing = {

@@ -108,16 +108,20 @@ public class WaitlistService : IWaitlistService
         foreach (var registration in expiredRegistrations)
         {
             _logger.LogInformation(
-                "Payment deadline expired for user {UserId} on event {EventId}. Sending reminder.",
+                "Payment deadline expired for user {UserId} on event {EventId}. Cancelling registration.",
                 registration.UserId, registration.EventId);
 
-            // Clear the deadline so we only send one reminder
+            // Cancel the registration
+            registration.Status = "Cancelled";
             registration.PaymentDeadlineAt = null;
 
-            // Send payment reminder
-            await NotifyPaymentReminderAsync(registration);
-
             await _context.SaveChangesAsync();
+
+            // Notify user their registration was cancelled
+            await NotifyRegistrationExpiredAsync(registration);
+
+            // Promote next person from waitlist
+            await PromoteNextFromWaitlistAsync(registration.EventId);
         }
     }
 
@@ -186,6 +190,26 @@ public class WaitlistService : IWaitlistService
             new { eventId = registration.EventId.ToString(), type = "payment_reminder" },
             userId: registration.UserId,
             type: "payment_reminder",
+            organizationId: registration.Event.OrganizationId,
+            eventId: registration.EventId);
+    }
+
+    private async Task NotifyRegistrationExpiredAsync(EventRegistration registration)
+    {
+        if (string.IsNullOrEmpty(registration.User.PushToken))
+        {
+            return;
+        }
+
+        var eventName = registration.Event.Name ?? $"Event on {registration.Event.EventDate:MMM d}";
+
+        await _notificationService.SendPushNotificationAsync(
+            registration.User.PushToken,
+            "Registration Expired",
+            $"Your registration for {eventName} was cancelled due to missed payment deadline.",
+            new { eventId = registration.EventId.ToString(), type = "registration_expired" },
+            userId: registration.UserId,
+            type: "registration_expired",
             organizationId: registration.Event.OrganizationId,
             eventId: registration.EventId);
     }

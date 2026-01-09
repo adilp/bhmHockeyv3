@@ -19,6 +19,7 @@ public class UsersControllerTests
     private readonly Mock<IUserService> _mockUserService;
     private readonly Mock<IOrganizationService> _mockOrgService;
     private readonly Mock<IEventService> _mockEventService;
+    private readonly Mock<IBadgeService> _mockBadgeService;
     private readonly UsersController _sut;
 
     public UsersControllerTests()
@@ -26,7 +27,12 @@ public class UsersControllerTests
         _mockUserService = new Mock<IUserService>();
         _mockOrgService = new Mock<IOrganizationService>();
         _mockEventService = new Mock<IEventService>();
-        _sut = new UsersController(_mockUserService.Object, _mockOrgService.Object, _mockEventService.Object);
+        _mockBadgeService = new Mock<IBadgeService>();
+        _sut = new UsersController(
+            _mockUserService.Object,
+            _mockOrgService.Object,
+            _mockEventService.Object,
+            _mockBadgeService.Object);
     }
 
     private void SetupControllerWithClaims(IEnumerable<Claim> claims)

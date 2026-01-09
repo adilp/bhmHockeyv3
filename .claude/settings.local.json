@@ -7,7 +7,9 @@
       "mcp__digitalocean__apps-get-deployment-status",
       "mcp__digitalocean__apps-get-logs",
       "WebFetch(domain:docs.expo.dev)",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "Bash(grep:*)",
+      "Bash(git show:*)"
     ]
   }
 }

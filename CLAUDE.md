@@ -112,3 +112,64 @@ npx eas-cli submit --platform ios
 2. Test via Swagger
 3. Frontend - Zustand store action, then UI
 4. Test on physical device for networking issues
+
+## Badge Assets
+
+### Location
+`apps/mobile/assets/badges/`
+
+### Requirements
+- **Format**: PNG with transparent background
+- **Size**: 24x24 pixels (single asset, React Native scales automatically)
+- **Naming**: `{icon_name}_24.png` (e.g., `star_teal_24.png`, `trophy_gold_24.png`)
+
+### Creating Badge Assets from Source Images
+
+Use ImageMagick to process source images (works with transparent PNGs or images with white backgrounds):
+
+```bash
+# For transparent PNG sources (recommended)
+convert "source_image.png" \
+    -fuzz 5% -trim +repage \
+    -resize 24x24 \
+    -gravity center \
+    -background none \
+    -extent 24x24 \
+    "apps/mobile/assets/badges/{icon_name}_24.png"
+
+# For images with white backgrounds (removes white)
+convert "source_image.png" \
+    -fuzz 20% -transparent white \
+    -trim +repage \
+    -resize 24x24 \
+    -gravity center \
+    -background none \
+    -extent 24x24 \
+    "apps/mobile/assets/badges/{icon_name}_24.png"
+```
+
+**Flags explained:**
+- `-fuzz 5%` - Tolerance for trim edge detection (increase if badge has shadows)
+- `-trim +repage` - Remove surrounding whitespace and reset canvas
+- `-resize 24x24` - Scale to 24x24 maintaining aspect ratio
+- `-gravity center -extent 24x24` - Center in 24x24 canvas with transparent padding
+
+### Registering New Badges
+
+Add to icon map in `apps/mobile/components/badges/BadgeIcon.tsx`:
+
+```typescript
+const iconMap: Record<string, ReturnType<typeof require>> = {
+  trophy_gold: require('../../assets/badges/trophy_gold_24.png'),
+  star_teal: require('../../assets/badges/star_teal_24.png'),
+  new_badge: require('../../assets/badges/new_badge_24.png'),  // Add new badges here
+};
+```
+
+### Cache Clearing
+
+After adding/updating badge assets, clear Metro cache:
+
+```bash
+cd apps/mobile && npx expo start --clear
+```

@@ -20,6 +20,8 @@ public class AppDbContext : DbContext
     public DbSet<Event> Events { get; set; }
     public DbSet<EventRegistration> EventRegistrations { get; set; }
     public DbSet<Notification> Notifications { get; set; }
+    public DbSet<BadgeType> BadgeTypes { get; set; }
+    public DbSet<UserBadge> UserBadges { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -214,6 +216,61 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.EventId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // BadgeType configuration
+        modelBuilder.Entity<BadgeType>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Code).IsUnique();
+            entity.Property(e => e.Code).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Description).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.IconName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Category).IsRequired().HasMaxLength(50);
+        });
+
+        // UserBadge configuration
+        modelBuilder.Entity<UserBadge>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // Unique constraint: user can only have each badge type once
+            entity.HasIndex(e => new { e.UserId, e.BadgeTypeId }).IsUnique();
+
+            // Index for querying user's badges
+            entity.HasIndex(e => e.UserId);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.BadgeType)
+                .WithMany()
+                .HasForeignKey(e => e.BadgeTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Store Context as JSONB
+            if (isInMemory)
+            {
+                var contextConverter = new ValueConverter<Dictionary<string, object>?, string?>(
+                    v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => v == null ? null : JsonSerializer.Deserialize<Dictionary<string, object>>(v, (JsonSerializerOptions?)null)
+                );
+                var contextComparer = new ValueComparer<Dictionary<string, object>?>(
+                    (c1, c2) => c1 != null && c2 != null ? c1.Count == c2.Count && !c1.Except(c2).Any() : c1 == c2,
+                    c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                    c => c == null ? null : new Dictionary<string, object>(c)
+                );
+                entity.Property(e => e.Context)
+                    .HasConversion(contextConverter)
+                    .Metadata.SetValueComparer(contextComparer);
+            }
+            else
+            {
+                entity.Property(e => e.Context).HasColumnType("jsonb");
+            }
         });
     }
 }

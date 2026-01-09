@@ -11,7 +11,7 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useLocalSearchParams } from 'expo-router';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventRegistrationDto, TeamAssignment, RosterOrderItem } from '@bhmhockey/shared';
+import type { EventRegistrationDto, EventDto, TeamAssignment, RosterOrderItem } from '@bhmhockey/shared';
 import { useEventStore } from '../../../stores/eventStore';
 import { EmptyState, SectionHeader, DraggableRoster, PlayerDetailModal } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
@@ -19,11 +19,12 @@ import { colors, spacing, radius } from '../../../theme';
 export default function EventRegistrationsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [allRegistrations, setAllRegistrations] = useState<EventRegistrationDto[]>([]);
+  const [event, setEvent] = useState<EventDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<EventRegistrationDto | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const isUpdatingRoster = useRef(false);
-  const { updatePaymentStatus, updateTeamAssignment, removeRegistration, selectedEvent, fetchEventById } = useEventStore();
+  const { updatePaymentStatus, updateTeamAssignment, removeRegistration } = useEventStore();
 
   // Filter into registered and waitlisted
   const registrations = useMemo(() =>
@@ -46,23 +47,28 @@ export default function EventRegistrationsScreen() {
     if (!id) return;
     setIsLoading(true);
     try {
-      // Load event if not already loaded (needed for canManage and cost)
-      if (!selectedEvent || selectedEvent.id !== id) {
-        await fetchEventById(id);
-      }
-      await loadRegistrations();
+      // Load event and registrations in parallel
+      const [eventData, registrationsData] = await Promise.all([
+        eventService.getById(id),
+        eventService.getRegistrations(id),
+      ]);
+      setEvent(eventData);
+      setAllRegistrations(registrationsData);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+      Alert.alert('Error', 'Failed to load event data');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadRegistrations = async () => {
+  const reloadRegistrations = async () => {
     if (!id) return;
     try {
       const data = await eventService.getRegistrations(id);
       setAllRegistrations(data);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load registrations');
+      Alert.alert('Error', 'Failed to reload registrations');
     }
   };
 
@@ -90,7 +96,7 @@ export default function EventRegistrationsScreen() {
           text: 'Yes, Mark Paid',
           onPress: async () => {
             const success = await updatePaymentStatus(id, registration.id, 'Verified');
-            if (success) await loadRegistrations();
+            if (success) await reloadRegistrations();
           },
         },
       ]
@@ -109,7 +115,7 @@ export default function EventRegistrationsScreen() {
           text: 'Yes, Verify',
           onPress: async () => {
             const success = await updatePaymentStatus(id, registration.id, 'Verified');
-            if (success) await loadRegistrations();
+            if (success) await reloadRegistrations();
           },
         },
       ]
@@ -129,7 +135,7 @@ export default function EventRegistrationsScreen() {
           style: 'destructive',
           onPress: async () => {
             const success = await updatePaymentStatus(id, registration.id, 'Pending');
-            if (success) await loadRegistrations();
+            if (success) await reloadRegistrations();
           },
         },
       ]
@@ -142,7 +148,7 @@ export default function EventRegistrationsScreen() {
 
     const newTeam: TeamAssignment = registration.teamAssignment === 'Black' ? 'White' : 'Black';
     const success = await updateTeamAssignment(id, registration.id, newTeam);
-    if (success) await loadRegistrations();
+    if (success) await reloadRegistrations();
   };
 
   // Remove handler (from modal)
@@ -162,7 +168,7 @@ export default function EventRegistrationsScreen() {
           style: 'destructive',
           onPress: async () => {
             const success = await removeRegistration(id, registration.id);
-            if (success) await loadRegistrations();
+            if (success) await reloadRegistrations();
           },
         },
       ]
@@ -207,14 +213,14 @@ export default function EventRegistrationsScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to save roster order. Please try again.');
       // Refetch to restore correct state on error
-      await loadRegistrations();
+      await reloadRegistrations();
     } finally {
       isUpdatingRoster.current = false;
     }
   };
 
-  // Waitlist item render
-  const renderWaitlistItem = (item: EventRegistrationDto) => (
+  // Waitlist item render - canManage checked at render time
+  const renderWaitlistItem = (item: EventRegistrationDto, isAdmin: boolean) => (
     <View key={item.id} style={styles.waitlistRow}>
       <View style={styles.waitlistPositionBadge}>
         <Text style={styles.waitlistPositionText}>#{item.waitlistPosition}</Text>
@@ -227,16 +233,19 @@ export default function EventRegistrationsScreen() {
           {item.registeredPosition || 'Skater'}
         </Text>
       </View>
-      <TouchableOpacity
-        style={styles.removeButtonSmall}
-        onPress={() => handleRemove(item)}
-      >
-        <Text style={styles.removeButtonText}>Remove</Text>
-      </TouchableOpacity>
+      {isAdmin && (
+        <TouchableOpacity
+          style={styles.removeButtonSmall}
+          onPress={() => handleRemove(item)}
+        >
+          <Text style={styles.removeButtonText}>Remove</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
-  if (isLoading) {
+  // Show loading while fetching
+  if (isLoading || !event) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary.teal} />
@@ -244,14 +253,19 @@ export default function EventRegistrationsScreen() {
     );
   }
 
-  // Always show payment status - useful for admins to track who paid
-  const showPayment = true;
+  // Permission check - only organizers/admins can manage the roster
+  const canManage = event.canManage;
+  // Show payment info only to admins
+  const showPayment = canManage;
+
+  // Debug logging - remove after testing
+  console.log('📋 Registrations - canManage:', canManage, 'eventId:', event.id);
 
   return (
     <GestureHandlerRootView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {/* Summary Header */}
-        {selectedEvent && (
+        {event && (
           <View style={styles.summaryHeader}>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>{registrations.length}</Text>
@@ -295,9 +309,9 @@ export default function EventRegistrationsScreen() {
           ) : (
             <DraggableRoster
               registrations={registrations}
-              showPayment={showPayment}
               onPlayerPress={handlePlayerPress}
-              onRosterChange={handleRosterChange}
+              onRosterChange={canManage ? handleRosterChange : undefined}
+              readOnly={!canManage}
             />
           )}
         </View>
@@ -307,7 +321,7 @@ export default function EventRegistrationsScreen() {
           <View style={styles.section}>
             <SectionHeader title="Waitlist" count={waitlist.length} />
             <View style={styles.waitlistSection}>
-              {waitlist.map(renderWaitlistItem)}
+              {waitlist.map((item) => renderWaitlistItem(item, canManage))}
             </View>
           </View>
         )}
@@ -321,12 +335,13 @@ export default function EventRegistrationsScreen() {
         visible={isModalVisible}
         registration={selectedPlayer}
         showPayment={showPayment}
+        isAdmin={canManage}
         onClose={handleCloseModal}
-        onSwapTeam={handleSwapTeam}
-        onRemove={handleRemove}
-        onMarkPaid={handleMarkPaid}
-        onVerifyPayment={handleVerifyPayment}
-        onResetPayment={handleResetPayment}
+        onSwapTeam={canManage ? handleSwapTeam : undefined}
+        onRemove={canManage ? handleRemove : undefined}
+        onMarkPaid={canManage ? handleMarkPaid : undefined}
+        onVerifyPayment={canManage ? handleVerifyPayment : undefined}
+        onResetPayment={canManage ? handleResetPayment : undefined}
       />
     </GestureHandlerRootView>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import {
   View,
   Text,
@@ -349,16 +349,18 @@ export default function EventDetailScreen() {
         </View>
       )}
 
-      {/* Organizer Tools Section - positioned in thumb zone for quick access */}
-      {selectedEvent.canManage && (
+      {/* View Roster - Available to all authenticated users */}
+      {isAuthenticated && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Organizer Tools</Text>
+          <Text style={styles.sectionTitle}>
+            {selectedEvent.canManage ? 'Organizer Tools' : 'Roster'}
+          </Text>
           <TouchableOpacity
             style={styles.viewRegistrationsButton}
             onPress={() => router.push(`/events/${id}/registrations`)}
           >
             <Text style={styles.viewRegistrationsButtonText}>
-              View Registrations ({selectedEvent.registeredCount})
+              View Roster ({selectedEvent.registeredCount})
             </Text>
           </TouchableOpacity>
         </View>

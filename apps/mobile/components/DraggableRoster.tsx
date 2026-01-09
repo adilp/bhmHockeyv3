@@ -13,20 +13,22 @@ import Animated, {
   runOnJS,
   SharedValue,
 } from 'react-native-reanimated';
-import type { EventRegistrationDto, TeamAssignment, RosterOrderItem } from '@bhmhockey/shared';
+import type { EventRegistrationDto, TeamAssignment, RosterOrderItem, SkillLevel } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../theme';
+import { BadgeIconsRow } from './badges';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const ROW_HEIGHT = 56;
+const ROW_HEIGHT = 78; // 72px cell + 6px gap
 const SLOT_BADGE_WIDTH = 32;
 const CONTAINER_PADDING = spacing.md; // 16px on each side = 32 total
 const CELL_MARGIN = spacing.xs; // margin between cells and badge
 
 interface DraggableRosterProps {
   registrations: EventRegistrationDto[];
-  showPayment: boolean;
   onPlayerPress: (registration: EventRegistrationDto) => void;
-  onRosterChange: (items: RosterOrderItem[]) => void;
+  onRosterChange?: (items: RosterOrderItem[]) => void;
+  /** When true, disables drag-and-drop reordering (view-only mode) */
+  readOnly?: boolean;
 }
 
 type SlotType = 'goalie' | 'skater';
@@ -45,6 +47,21 @@ interface DragInfo {
   startY: number;
 }
 
+// Get skill level info based on registered position
+const getSkillLevelInfo = (registration: EventRegistrationDto): { level: SkillLevel | null; color: string } => {
+  const { user, registeredPosition } = registration;
+  const positions = user.positions;
+
+  if (!positions) return { level: null, color: colors.text.muted };
+
+  const skillLevel: SkillLevel | undefined =
+    registeredPosition === 'Goalie' ? positions.goalie : positions.skater;
+
+  if (!skillLevel) return { level: null, color: colors.text.muted };
+
+  return { level: skillLevel, color: colors.skillLevel[skillLevel] || colors.text.muted };
+};
+
 const getPaymentInfo = (status?: string): { label: string; color: string; bgColor: string } => {
   switch (status) {
     case 'Verified':
@@ -58,15 +75,25 @@ const getPaymentInfo = (status?: string): { label: string; color: string; bgColo
 };
 
 // Static player cell (non-draggable, just displays)
+// 3-line layout: Name, Payment Badge, Achievement Badges
+// Vertical skill level bar component
+function SkillBar({ level, color, side }: { level: SkillLevel | null; color: string; side: 'left' | 'right' }) {
+  if (!level) return null;
+
+  return (
+    <View style={[styles.skillBar, side === 'left' ? styles.skillBarLeft : styles.skillBarRight, { backgroundColor: color }]}>
+      <Text style={styles.skillBarText}>{level}</Text>
+    </View>
+  );
+}
+
 function PlayerCell({
   registration,
-  showPayment,
   side,
   onPress,
   onLongPress,
 }: {
   registration: EventRegistrationDto;
-  showPayment: boolean;
   side: 'left' | 'right';
   onPress: () => void;
   onLongPress: () => void;
@@ -74,6 +101,7 @@ function PlayerCell({
   const { user, paymentStatus } = registration;
   const fullName = `${user.firstName} ${user.lastName}`;
   const paymentInfo = getPaymentInfo(paymentStatus);
+  const skillInfo = getSkillLevelInfo(registration);
 
   return (
     <Pressable
@@ -85,47 +113,39 @@ function PlayerCell({
       onLongPress={onLongPress}
       delayLongPress={200}
     >
-      {side === 'left' && (
-        <>
-          <Text style={[styles.playerName, styles.playerNameLeft]} numberOfLines={1}>
-            {fullName}
-          </Text>
-          {showPayment && (
-            <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-              <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
-                {paymentInfo.label}
-              </Text>
-            </View>
-          )}
-        </>
-      )}
-      {side === 'right' && (
-        <>
-          {showPayment && (
-            <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-              <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
-                {paymentInfo.label}
-              </Text>
-            </View>
-          )}
-          <Text style={[styles.playerName, styles.playerNameRight]} numberOfLines={1}>
-            {fullName}
-          </Text>
-        </>
-      )}
+      {/* Skill level bar on inner edge */}
+      <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
+
+      {/* Line 1: Name */}
+      <Text
+        style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
+        numberOfLines={1}
+      >
+        {fullName}
+      </Text>
+      {/* Line 2: Payment Badge */}
+      <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
+        <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
+          {paymentInfo.label}
+        </Text>
+      </View>
+      {/* Line 3: Achievement Badges */}
+      <BadgeIconsRow
+        badges={user.badges || []}
+        totalCount={user.totalBadgeCount || 0}
+      />
     </Pressable>
   );
 }
 
 // Drag overlay - follows finger during drag
+// Mirrors PlayerCell 3-line layout for consistent drag visuals
 function DragOverlay({
   dragInfo,
-  showPayment,
   translateX,
   translateY,
 }: {
   dragInfo: DragInfo;
-  showPayment: boolean;
   translateX: SharedValue<number>;
   translateY: SharedValue<number>;
 }) {
@@ -133,6 +153,7 @@ function DragOverlay({
   const { user, paymentStatus } = registration;
   const fullName = `${user.firstName} ${user.lastName}`;
   const paymentInfo = getPaymentInfo(paymentStatus);
+  const skillInfo = getSkillLevelInfo(registration);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -163,37 +184,31 @@ function DragOverlay({
         style={[
           styles.playerCell,
           styles.playerCellDragging,
+          side === 'left' ? styles.playerCellLeft : styles.playerCellRight,
           { marginRight: 0, marginLeft: 0 },
         ]}
       >
-        {side === 'left' && (
-          <>
-            <Text style={[styles.playerName, styles.playerNameLeft]} numberOfLines={1}>
-              {fullName}
-            </Text>
-            {showPayment && (
-              <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-                <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
-                  {paymentInfo.label}
-                </Text>
-              </View>
-            )}
-          </>
-        )}
-        {side === 'right' && (
-          <>
-            {showPayment && (
-              <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-                <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
-                  {paymentInfo.label}
-                </Text>
-              </View>
-            )}
-            <Text style={[styles.playerName, styles.playerNameRight]} numberOfLines={1}>
-              {fullName}
-            </Text>
-          </>
-        )}
+        {/* Skill level bar on inner edge */}
+        <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
+
+        {/* Line 1: Name */}
+        <Text
+          style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
+          numberOfLines={1}
+        >
+          {fullName}
+        </Text>
+        {/* Line 2: Payment Badge */}
+        <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
+          <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]}>
+            {paymentInfo.label}
+          </Text>
+        </View>
+        {/* Line 3: Achievement Badges */}
+        <BadgeIconsRow
+          badges={user.badges || []}
+          totalCount={user.totalBadgeCount || 0}
+        />
       </View>
     </Animated.View>
   );
@@ -238,9 +253,9 @@ function DropPlaceholder() {
 
 export function DraggableRoster({
   registrations,
-  showPayment,
   onPlayerPress,
   onRosterChange,
+  readOnly = false,
 }: DraggableRosterProps) {
   const rosterRef = useRef<View>(null);
   const [rosterTopOffset, setRosterTopOffset] = useState(0);
@@ -411,8 +426,8 @@ export function DraggableRoster({
     translateX.value = 0;
     translateY.value = 0;
 
-    // Update roster
-    onRosterChange(items);
+    // Update roster (only if callback provided)
+    onRosterChange?.(items);
   }, [dragInfo, slots.length, rosterTopOffset, registrations, onRosterChange, translateX, translateY]);
 
   const handleDragCancel = useCallback(() => {
@@ -500,10 +515,9 @@ export function DraggableRoster({
                     ) : (
                       <PlayerCell
                         registration={slot.blackPlayer}
-                        showPayment={showPayment}
                         side="left"
                         onPress={() => onPlayerPress(slot.blackPlayer!)}
-                        onLongPress={() => startDrag(slot.blackPlayer!, 'left', slot.index)}
+                        onLongPress={readOnly ? () => {} : () => startDrag(slot.blackPlayer!, 'left', slot.index)}
                       />
                     )
                   ) : (
@@ -534,10 +548,9 @@ export function DraggableRoster({
                     ) : (
                       <PlayerCell
                         registration={slot.whitePlayer}
-                        showPayment={showPayment}
                         side="right"
                         onPress={() => onPlayerPress(slot.whitePlayer!)}
-                        onLongPress={() => startDrag(slot.whitePlayer!, 'right', slot.index)}
+                        onLongPress={readOnly ? () => {} : () => startDrag(slot.whitePlayer!, 'right', slot.index)}
                       />
                     )
                   ) : (
@@ -556,7 +569,6 @@ export function DraggableRoster({
           {dragInfo && (
             <DragOverlay
               dragInfo={dragInfo}
-              showPayment={showPayment}
               translateX={translateX}
               translateY={translateY}
             />
@@ -631,13 +643,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.subtle.teal,
   },
   playerCell: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    justifyContent: 'center',
     backgroundColor: colors.bg.dark,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: radius.sm,
-    height: 48,
+    height: 72,
+    gap: 4,
   },
   playerCellDragging: {
     backgroundColor: colors.bg.elevated,
@@ -646,23 +659,48 @@ const styles = StyleSheet.create({
   },
   playerCellLeft: {
     marginRight: spacing.xs,
-    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingRight: 18,
   },
   playerCellRight: {
     marginLeft: spacing.xs,
-    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    paddingLeft: 18,
   },
   playerName: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text.primary,
     flexShrink: 1,
+    color: colors.text.primary,
   },
   playerNameLeft: {
     textAlign: 'right',
   },
   playerNameRight: {
     textAlign: 'left',
+  },
+  skillBar: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    width: 16,
+    borderRadius: radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  skillBarLeft: {
+    right: -2,
+  },
+  skillBarRight: {
+    left: -2,
+  },
+  skillBarText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.bg.darkest,
+    transform: [{ rotate: '-90deg' }],
+    width: 50,
+    textAlign: 'center',
   },
   paymentBadge: {
     paddingHorizontal: spacing.sm,
@@ -704,7 +742,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
-    height: 48,
+    height: 72,
     borderWidth: 1,
     borderColor: colors.border.default,
     borderStyle: 'dashed',
@@ -718,13 +756,13 @@ const styles = StyleSheet.create({
   // Source placeholder - ghost showing where player came FROM
   sourcePlaceholder: {
     flex: 1,
-    height: 48,
+    height: 72,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sourcePlaceholderInner: {
     width: '100%',
-    height: 48,
+    height: 72,
     borderRadius: radius.sm,
     borderWidth: 2,
     borderColor: colors.primary.teal,
@@ -734,14 +772,14 @@ const styles = StyleSheet.create({
   },
   dropPlaceholder: {
     flex: 1,
-    height: 48,
+    height: 72,
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: spacing.xs,
   },
   dropPlaceholderInner: {
     width: '100%',
-    height: 48,
+    height: 72,
     borderRadius: radius.sm,
     borderWidth: 2,
     borderColor: colors.primary.teal,

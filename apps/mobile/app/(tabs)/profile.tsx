@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,15 +14,18 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
-import type { User, SkillLevel } from '@bhmhockey/shared';
+import type { User, SkillLevel, UserBadgeDto } from '@bhmhockey/shared';
 import {
   FormSection,
   FormInput,
   PositionSelector,
   buildPositionsFromState,
   createStateFromPositions,
+  TrophyCase,
 } from '../../components';
 import { colors, spacing, radius } from '../../theme';
+
+const BADGE_SAVE_DEBOUNCE_MS = 500;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -44,6 +47,13 @@ export default function ProfileScreen() {
   const [isSkater, setIsSkater] = useState(false);
   const [skaterSkill, setSkaterSkill] = useState<SkillLevel>('Bronze');
 
+  // Badge state
+  const [badges, setBadges] = useState<UserBadgeDto[]>([]);
+  const [isLoadingBadges, setIsLoadingBadges] = useState(false);
+  const [badgeSaveError, setBadgeSaveError] = useState<string | null>(null);
+  const badgeSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousBadgeOrderRef = useRef<string[]>([]);
+
   useEffect(() => {
     if (authUser) {
       setUser(authUser);
@@ -58,8 +68,85 @@ export default function ProfileScreen() {
       setGoalieSkill(positionState.goalieSkill ?? 'Bronze');
       setIsSkater(positionState.isSkater ?? false);
       setSkaterSkill(positionState.skaterSkill ?? 'Bronze');
+
+      // Fetch user's full badges
+      fetchBadges(authUser.id);
     }
   }, [authUser]);
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (badgeSaveTimeoutRef.current) {
+        clearTimeout(badgeSaveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const fetchBadges = async (userId: string) => {
+    try {
+      setIsLoadingBadges(true);
+      const userBadges = await userService.getUserBadges(userId);
+      setBadges(userBadges);
+      previousBadgeOrderRef.current = userBadges.map(b => b.id);
+    } catch (error) {
+      console.error('Failed to fetch badges:', error);
+      // Fall back to badges from auth user if available
+      if (authUser?.badges) {
+        setBadges(authUser.badges);
+        previousBadgeOrderRef.current = authUser.badges.map(b => b.id);
+      }
+    } finally {
+      setIsLoadingBadges(false);
+    }
+  };
+
+  const handleBadgeOrderChange = useCallback((badgeIds: string[]) => {
+    // Clear any existing save timeout
+    if (badgeSaveTimeoutRef.current) {
+      clearTimeout(badgeSaveTimeoutRef.current);
+    }
+
+    // Clear any previous error
+    setBadgeSaveError(null);
+
+    // Optimistically update local state
+    const reorderedBadges = badgeIds
+      .map(id => badges.find(b => b.id === id))
+      .filter((b): b is UserBadgeDto => b !== undefined);
+    setBadges(reorderedBadges);
+
+    // Debounce the API call
+    badgeSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await userService.updateBadgeOrder(badgeIds);
+        // Update the previous order reference on success
+        previousBadgeOrderRef.current = badgeIds;
+
+        // Update auth user's top 3 badges for roster card display
+        if (authUser) {
+          const top3Badges = reorderedBadges.slice(0, 3);
+          setAuthUser({
+            ...authUser,
+            badges: top3Badges,
+          });
+        }
+      } catch (error: any) {
+        console.error('Failed to save badge order:', error);
+
+        // Rollback to previous order
+        const previousBadges = previousBadgeOrderRef.current
+          .map(id => badges.find(b => b.id === id))
+          .filter((b): b is UserBadgeDto => b !== undefined);
+        setBadges(previousBadges);
+
+        // Show error message
+        const message = error?.response?.data?.message || 'Failed to save badge order';
+        setBadgeSaveError(message);
+        Alert.alert('Error', message);
+      }
+    }, BADGE_SAVE_DEBOUNCE_MS);
+  }, [badges, authUser, setAuthUser]);
 
   const handleSave = async () => {
     if (!isGoalie && !isSkater) {
@@ -172,6 +259,24 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.form}>
+        {/* Trophy Case Section - at top for easy access */}
+        <FormSection title="Trophy Case">
+          {isLoadingBadges ? (
+            <View style={styles.badgeLoading}>
+              <ActivityIndicator size="small" color={colors.primary.teal} />
+            </View>
+          ) : (
+            <TrophyCase
+              badges={badges}
+              editable={true}
+              onOrderChange={handleBadgeOrderChange}
+            />
+          )}
+          {badgeSaveError && (
+            <Text style={styles.badgeError}>{badgeSaveError}</Text>
+          )}
+        </FormSection>
+
         <FormSection title="Basic Information">
           <FormInput
             label="First Name"
@@ -263,7 +368,9 @@ export default function ProfileScreen() {
               : `build ${Constants.expoConfig?.android?.versionCode || '?'}`})
           </Text>
           <Text style={styles.versionText}>
-            runtime {Constants.expoConfig?.runtimeVersion || '?'}
+            runtime {typeof Constants.expoConfig?.runtimeVersion === 'string'
+              ? Constants.expoConfig.runtimeVersion
+              : '?'}
           </Text>
         </View>
       </View>
@@ -305,6 +412,16 @@ const styles = StyleSheet.create({
   },
   form: {
     padding: spacing.lg,
+  },
+  badgeLoading: {
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  badgeError: {
+    fontSize: 12,
+    color: colors.status.error,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   saveButton: {
     backgroundColor: colors.primary.teal,

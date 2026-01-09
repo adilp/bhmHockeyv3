@@ -511,6 +511,7 @@ public class EventsControllerTests
                 PaymentMarkedAt: null,         // Phase 4
                 PaymentVerifiedAt: null,       // Phase 4
                 TeamAssignment: null,          // Team assignment
+                RosterOrder: null,             // Roster ordering
                 WaitlistPosition: null,        // Phase 5 - Waitlist
                 PromotedAt: null,              // Phase 5 - Waitlist
                 PaymentDeadlineAt: null,       // Phase 5 - Waitlist
