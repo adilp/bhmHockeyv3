@@ -662,12 +662,12 @@ const styles = StyleSheet.create({
   playerCellLeft: {
     marginRight: spacing.xs,
     alignItems: 'flex-end',
-    paddingRight: 24,
+    paddingRight: 30,
   },
   playerCellRight: {
     marginLeft: spacing.xs,
     alignItems: 'flex-start',
-    paddingLeft: 24,
+    paddingLeft: 30,
   },
   playerName: {
     fontSize: 14,
