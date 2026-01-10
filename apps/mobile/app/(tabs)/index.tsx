@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'expo-router';
+import { useState, useCallback, useMemo } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useEventStore } from '../../stores/eventStore';
 import { useAuthStore } from '../../stores/authStore';
 import { EventCard, SectionHeader, EmptyState } from '../../components';
@@ -12,13 +12,15 @@ export default function HomeScreen() {
   const { events, myRegistrations, isLoading, fetchEvents, fetchMyRegistrations } = useEventStore();
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load data on mount
-  useEffect(() => {
-    if (user) {
-      fetchEvents();
-      fetchMyRegistrations();
-    }
-  }, [user]);
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchEvents();
+        fetchMyRegistrations();
+      }
+    }, [user])
+  );
 
   // Pull to refresh
   const onRefresh = useCallback(async () => {
@@ -41,18 +43,18 @@ export default function HomeScreen() {
 
   // Waitlisted events (from events list since they're not in myRegistrations)
   const myWaitlistedGames = useMemo(() =>
-    events.filter(e => e.amIWaitlisted).sort(sortByDate),
+    events.filter(e => e.amIWaitlisted && e.status === 'Published').sort(sortByDate),
     [events]
   );
 
-  // Combined: registered + waitlisted
+  // Combined: registered + waitlisted (filter out cancelled)
   const myUpcomingGames = useMemo(() =>
-    [...myRegistrations, ...myWaitlistedGames].sort(sortByDate),
+    [...myRegistrations.filter(e => e.status === 'Published'), ...myWaitlistedGames].sort(sortByDate),
     [myRegistrations, myWaitlistedGames]
   );
 
   const myOrganizedGames = useMemo(() =>
-    events.filter(e => e.canManage).sort(sortByDate),
+    events.filter(e => e.canManage && e.status === 'Published').sort(sortByDate),
     [events]
   );
 

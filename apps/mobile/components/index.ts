@@ -40,3 +40,13 @@ export { PlayerDetailModal } from './PlayerDetailModal';
 
 // Badge components
 export { BadgeIcon, BadgeIconsRow, TrophyCase } from './badges';
+
+// Event detail components
+export {
+  SegmentedControl,
+  EventInfoTab,
+  EventRosterTab,
+  EventChatTab,
+  RegistrationFooter,
+} from './event-detail';
+export type { TabKey } from './event-detail';

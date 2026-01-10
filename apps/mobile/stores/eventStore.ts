@@ -305,6 +305,8 @@ export const useEventStore = create<EventState>((set, get) => ({
   updateTeamAssignment: async (eventId: string, registrationId: string, team: TeamAssignment) => {
     try {
       await eventService.updateTeamAssignment(eventId, registrationId, team);
+      // Refresh event data to get updated team assignments
+      await get().fetchEventById(eventId);
       return true;
     } catch (error) {
       set({
@@ -336,7 +338,9 @@ export const useEventStore = create<EventState>((set, get) => ({
     const { events, myRegistrations } = get();
 
     try {
+      console.log('🗑️ Deleting event:', eventId);
       await eventService.cancel(eventId);
+      console.log('🗑️ Event deleted successfully');
       // Remove cancelled event from all lists
       set({
         events: events.filter(e => e.id !== eventId),
@@ -344,7 +348,8 @@ export const useEventStore = create<EventState>((set, get) => ({
         selectedEvent: null,
       });
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      console.error('🗑️ Delete event failed:', error?.response?.data || error?.message || error);
       set({
         error: error instanceof Error ? error.message : 'Failed to cancel event',
       });

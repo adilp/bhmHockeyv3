@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,28 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useLocalSearchParams } from 'expo-router';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventRegistrationDto, EventDto, TeamAssignment, RosterOrderItem } from '@bhmhockey/shared';
-import { useEventStore } from '../../../stores/eventStore';
-import { EmptyState, SectionHeader, DraggableRoster, PlayerDetailModal } from '../../../components';
-import { colors, spacing, radius } from '../../../theme';
+import type {
+  EventRegistrationDto,
+  EventDto,
+  TeamAssignment,
+  RosterOrderItem,
+} from '@bhmhockey/shared';
+import { useEventStore } from '../../stores/eventStore';
+import { EmptyState } from '../EmptyState';
+import { SectionHeader } from '../SectionHeader';
+import { DraggableRoster } from '../DraggableRoster';
+import { PlayerDetailModal } from '../PlayerDetailModal';
+import { colors, spacing, radius } from '../../theme';
 
-export default function EventRegistrationsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+interface EventRosterTabProps {
+  eventId: string;
+  event: EventDto;
+  canManage: boolean;
+}
+
+export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProps) {
   const [allRegistrations, setAllRegistrations] = useState<EventRegistrationDto[]>([]);
-  const [event, setEvent] = useState<EventDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<EventRegistrationDto | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -27,50 +37,58 @@ export default function EventRegistrationsScreen() {
   const { updatePaymentStatus, updateTeamAssignment, removeRegistration } = useEventStore();
 
   // Filter into registered and waitlisted
-  const registrations = useMemo(() =>
-    allRegistrations.filter(r => !r.isWaitlisted),
+  const registrations = useMemo(
+    () => allRegistrations.filter((r) => !r.isWaitlisted),
     [allRegistrations]
   );
 
-  const waitlist = useMemo(() =>
-    allRegistrations.filter(r => r.isWaitlisted).sort(
-      (a, b) => (a.waitlistPosition ?? 999) - (b.waitlistPosition ?? 999)
-    ),
+  const waitlist = useMemo(
+    () =>
+      allRegistrations
+        .filter((r) => r.isWaitlisted)
+        .sort((a, b) => (a.waitlistPosition ?? 999) - (b.waitlistPosition ?? 999)),
     [allRegistrations]
   );
 
+  // Load registrations with cleanup to prevent memory leaks
   useEffect(() => {
-    loadData();
-  }, [id]);
+    let cancelled = false;
 
-  const loadData = async () => {
-    if (!id) return;
-    setIsLoading(true);
-    try {
-      // Load event and registrations in parallel
-      const [eventData, registrationsData] = await Promise.all([
-        eventService.getById(id),
-        eventService.getRegistrations(id),
-      ]);
-      setEvent(eventData);
-      setAllRegistrations(registrationsData);
-    } catch (error) {
-      console.error('Failed to load data:', error);
-      Alert.alert('Error', 'Failed to load event data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const loadRegistrations = async () => {
+      if (!eventId) return;
+      setIsLoading(true);
+      try {
+        const registrationsData = await eventService.getRegistrations(eventId);
+        if (!cancelled) {
+          setAllRegistrations(registrationsData);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load registrations:', error);
+          Alert.alert('Error', 'Failed to load roster data');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
 
-  const reloadRegistrations = async () => {
-    if (!id) return;
+    loadRegistrations();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
+
+  const reloadRegistrations = useCallback(async () => {
+    if (!eventId) return;
     try {
-      const data = await eventService.getRegistrations(id);
+      const data = await eventService.getRegistrations(eventId);
       setAllRegistrations(data);
     } catch (error) {
       Alert.alert('Error', 'Failed to reload registrations');
     }
-  };
+  }, [eventId]);
 
   // Player modal handlers
   const handlePlayerPress = (registration: EventRegistrationDto) => {
@@ -83,48 +101,34 @@ export default function EventRegistrationsScreen() {
     setSelectedPlayer(null);
   };
 
-  // Payment handlers (now called from modal)
+  // Payment handlers
   const handleMarkPaid = async (registration: EventRegistrationDto) => {
-    if (!id) return;
-
-    Alert.alert(
-      'Mark as Paid',
-      `Mark payment from ${registration.user.firstName} as verified?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes, Mark Paid',
-          onPress: async () => {
-            const success = await updatePaymentStatus(id, registration.id, 'Verified');
-            if (success) await reloadRegistrations();
-          },
+    Alert.alert('Mark as Paid', `Mark payment from ${registration.user.firstName} as verified?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Yes, Mark Paid',
+        onPress: async () => {
+          const success = await updatePaymentStatus(eventId, registration.id, 'Verified');
+          if (success) await reloadRegistrations();
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleVerifyPayment = async (registration: EventRegistrationDto) => {
-    if (!id) return;
-
-    Alert.alert(
-      'Verify Payment',
-      `Verify payment from ${registration.user.firstName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes, Verify',
-          onPress: async () => {
-            const success = await updatePaymentStatus(id, registration.id, 'Verified');
-            if (success) await reloadRegistrations();
-          },
+    Alert.alert('Verify Payment', `Verify payment from ${registration.user.firstName}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Yes, Verify',
+        onPress: async () => {
+          const success = await updatePaymentStatus(eventId, registration.id, 'Verified');
+          if (success) await reloadRegistrations();
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleResetPayment = async (registration: EventRegistrationDto) => {
-    if (!id) return;
-
     Alert.alert(
       'Reset Payment',
       `Reset payment status for ${registration.user.firstName} to Unpaid?`,
@@ -134,7 +138,7 @@ export default function EventRegistrationsScreen() {
           text: 'Reset',
           style: 'destructive',
           onPress: async () => {
-            const success = await updatePaymentStatus(id, registration.id, 'Pending');
+            const success = await updatePaymentStatus(eventId, registration.id, 'Pending');
             if (success) await reloadRegistrations();
           },
         },
@@ -142,19 +146,15 @@ export default function EventRegistrationsScreen() {
     );
   };
 
-  // Team swap handler (from modal)
+  // Team swap handler
   const handleSwapTeam = async (registration: EventRegistrationDto) => {
-    if (!id) return;
-
     const newTeam: TeamAssignment = registration.teamAssignment === 'Black' ? 'White' : 'Black';
-    const success = await updateTeamAssignment(id, registration.id, newTeam);
+    const success = await updateTeamAssignment(eventId, registration.id, newTeam);
     if (success) await reloadRegistrations();
   };
 
-  // Remove handler (from modal)
+  // Remove handler
   const handleRemove = async (registration: EventRegistrationDto) => {
-    if (!id) return;
-
     const isWaitlisted = registration.isWaitlisted;
     const userName = `${registration.user.firstName} ${registration.user.lastName}`;
 
@@ -167,7 +167,7 @@ export default function EventRegistrationsScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            const success = await removeRegistration(id, registration.id);
+            const success = await removeRegistration(eventId, registration.id);
             if (success) await reloadRegistrations();
           },
         },
@@ -175,26 +175,24 @@ export default function EventRegistrationsScreen() {
     );
   };
 
-  // Roster order change handler with optimistic update and concurrency guard
+  // Roster order change handler
   const handleRosterChange = async (items: RosterOrderItem[]) => {
-    if (!id) return;
-
-    // Prevent concurrent updates
     if (isUpdatingRoster.current) return;
     isUpdatingRoster.current = true;
 
-    // Optimistic update: immediately update local state
-    setAllRegistrations(prev => {
-      // Create a map of registration ID -> new values
+    // Optimistic update
+    setAllRegistrations((prev) => {
       const updateMap = new Map(
-        items.map(item => [item.registrationId, {
-          teamAssignment: item.teamAssignment,
-          rosterOrder: item.rosterOrder
-        }])
+        items.map((item) => [
+          item.registrationId,
+          {
+            teamAssignment: item.teamAssignment,
+            rosterOrder: item.rosterOrder,
+          },
+        ])
       );
 
-      // Update each registration with its new team/order
-      return prev.map(reg => {
+      return prev.map((reg) => {
         const update = updateMap.get(reg.id);
         if (update) {
           return {
@@ -207,23 +205,23 @@ export default function EventRegistrationsScreen() {
       });
     });
 
-    // Save to API in background
     try {
-      await eventService.updateRosterOrder(id, items);
+      await eventService.updateRosterOrder(eventId, items);
     } catch (error) {
       Alert.alert('Error', 'Failed to save roster order. Please try again.');
-      // Refetch to restore correct state on error
       await reloadRegistrations();
     } finally {
       isUpdatingRoster.current = false;
     }
   };
 
-  // Waitlist item render - canManage checked at render time
-  const renderWaitlistItem = (item: EventRegistrationDto, isAdmin: boolean) => (
+  // Waitlist item render
+  const renderWaitlistItem = (item: EventRegistrationDto) => (
     <View key={item.id} style={styles.waitlistRow}>
       <View style={styles.waitlistPositionBadge}>
-        <Text style={styles.waitlistPositionText} allowFontScaling={false}>#{item.waitlistPosition}</Text>
+        <Text style={styles.waitlistPositionText} allowFontScaling={false}>
+          #{item.waitlistPosition}
+        </Text>
       </View>
       <View style={styles.waitlistUserInfo}>
         <Text style={styles.waitlistUserName} allowFontScaling={false}>
@@ -233,19 +231,17 @@ export default function EventRegistrationsScreen() {
           {item.registeredPosition || 'Skater'}
         </Text>
       </View>
-      {isAdmin && (
-        <TouchableOpacity
-          style={styles.removeButtonSmall}
-          onPress={() => handleRemove(item)}
-        >
-          <Text style={styles.removeButtonText} allowFontScaling={false}>Remove</Text>
+      {canManage && (
+        <TouchableOpacity style={styles.removeButtonSmall} onPress={() => handleRemove(item)}>
+          <Text style={styles.removeButtonText} allowFontScaling={false}>
+            Remove
+          </Text>
         </TouchableOpacity>
       )}
     </View>
   );
 
-  // Show loading while fetching
-  if (isLoading || !event) {
+  if (isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary.teal} />
@@ -253,53 +249,13 @@ export default function EventRegistrationsScreen() {
     );
   }
 
-  // Permission check - only organizers/admins can manage the roster
-  const canManage = event.canManage;
-  // Show payment info only to admins
   const showPayment = canManage;
 
-  // Debug logging - remove after testing
-  console.log('📋 Registrations - canManage:', canManage, 'eventId:', event.id);
-
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Summary Header */}
-        {event && (
-          <View style={styles.summaryHeader}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue} allowFontScaling={false}>{registrations.length}</Text>
-              <Text style={styles.statLabel} allowFontScaling={false}>Registered</Text>
-            </View>
-            {showPayment && (
-              <>
-                <View style={styles.statBox}>
-                  <Text style={[styles.statValue, { color: colors.primary.green }]} allowFontScaling={false}>
-                    {registrations.filter(r => r.paymentStatus === 'Verified').length}
-                  </Text>
-                  <Text style={styles.statLabel} allowFontScaling={false}>Paid</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={[styles.statValue, { color: colors.status.error }]} allowFontScaling={false}>
-                    {registrations.filter(r => r.paymentStatus !== 'Verified').length}
-                  </Text>
-                  <Text style={styles.statLabel} allowFontScaling={false}>Unpaid</Text>
-                </View>
-              </>
-            )}
-            {waitlist.length > 0 && (
-              <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: colors.status.warning }]} allowFontScaling={false}>
-                  {waitlist.length}
-                </Text>
-                <Text style={styles.statLabel} allowFontScaling={false}>Waitlist</Text>
-              </View>
-            )}
-          </View>
-        )}
-
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Roster View */}
-        <View style={styles.section}>
+        <View>
           {registrations.length === 0 ? (
             <EmptyState
               icon="👥"
@@ -318,16 +274,13 @@ export default function EventRegistrationsScreen() {
 
         {/* Waitlist Section */}
         {waitlist.length > 0 && (
-          <View style={styles.section}>
+          <View style={styles.waitlistContainer}>
             <SectionHeader title="Waitlist" count={waitlist.length} />
             <View style={styles.waitlistSection}>
-              {waitlist.map((item) => renderWaitlistItem(item, canManage))}
+              {waitlist.map((item) => renderWaitlistItem(item))}
             </View>
           </View>
         )}
-
-        {/* Bottom padding */}
-        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* Player Detail Modal */}
@@ -343,7 +296,7 @@ export default function EventRegistrationsScreen() {
         onVerifyPayment={canManage ? handleVerifyPayment : undefined}
         onResetPayment={canManage ? handleResetPayment : undefined}
       />
-    </GestureHandlerRootView>
+    </View>
   );
 }
 
@@ -355,37 +308,20 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+  },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.bg.darkest,
   },
-  summaryHeader: {
-    flexDirection: 'row',
-    backgroundColor: colors.bg.dark,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
+  waitlistContainer: {
+    marginTop: spacing.lg,
   },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  section: {
-    padding: spacing.md,
-  },
-  // Waitlist styles
   waitlistSection: {
     backgroundColor: colors.bg.dark,
     borderRadius: radius.lg,
