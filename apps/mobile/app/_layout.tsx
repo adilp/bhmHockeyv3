@@ -1,7 +1,8 @@
 import { Stack } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import * as Notifications from 'expo-notifications';
 import { initializeApiClient } from '@bhmhockey/api-client';
 import { getApiUrl } from '../config/api';
@@ -17,6 +18,14 @@ import {
   handleNotificationData,
   handleForegroundNotification,
 } from '../utils/notifications';
+
+// Disable font scaling globally to prevent text overflow on devices with large font settings
+// This must be set before any components render
+Text.defaultProps = Text.defaultProps || {};
+Text.defaultProps.allowFontScaling = false;
+
+TextInput.defaultProps = TextInput.defaultProps || {};
+TextInput.defaultProps.allowFontScaling = false;
 
 function RootLayoutContent() {
   const insets = useSafeAreaInsets();
@@ -143,7 +152,6 @@ function RootLayoutContent() {
         <Stack.Screen name="events/create" options={{ title: 'Create Event', presentation: 'modal' }} />
         <Stack.Screen name="events/edit" options={{ title: 'Edit Event' }} />
         <Stack.Screen name="events/[id]/index" options={{ title: 'Event' }} />
-        <Stack.Screen name="events/[id]/registrations" options={{ title: 'Registrations' }} />
         {/* Organization screens */}
         <Stack.Screen name="organizations/create" options={{ title: 'Create Organization', presentation: 'modal' }} />
         <Stack.Screen name="organizations/[id]" options={{ title: 'Organization' }} />

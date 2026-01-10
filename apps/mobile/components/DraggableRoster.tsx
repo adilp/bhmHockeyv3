@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useMemo } from 'react';
+import React, { useCallback, useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -440,26 +440,41 @@ export function DraggableRoster({
     translateY.value = 0;
   }, [translateX, translateY]);
 
-  // Pan gesture for the entire roster area (captures drag after long press)
+  // Shared value to track if drag is active (for worklet access)
+  const isDragging = useSharedValue(false);
+
+  // Update isDragging when dragInfo changes
+  useEffect(() => {
+    isDragging.value = !!dragInfo;
+  }, [dragInfo, isDragging]);
+
+  // Pan gesture for drag-and-drop
+  // Uses manualActivation so it only captures touches when we're dragging
   const panGesture = Gesture.Pan()
+    .manualActivation(true)
+    .onTouchesMove((event, stateManager) => {
+      // Only activate the gesture if we're in drag mode
+      if (isDragging.value) {
+        stateManager.activate();
+      } else {
+        stateManager.fail();
+      }
+    })
     .onUpdate((event) => {
       'worklet';
-      if (dragInfo) {
-        translateX.value = event.translationX;
-        translateY.value = event.translationY;
-        runOnJS(handleDragMove)(event.absoluteY, event.absoluteX);
-      }
+      translateX.value = event.translationX;
+      translateY.value = event.translationY;
+      runOnJS(handleDragMove)(event.absoluteY, event.absoluteX);
     })
     .onEnd((event) => {
       'worklet';
-      if (dragInfo) {
-        runOnJS(handleDragEnd)(event.absoluteY, event.absoluteX);
-      }
+      runOnJS(handleDragEnd)(event.absoluteY, event.absoluteX);
     })
     .onFinalize(() => {
       'worklet';
-      // Clean up if drag was active but gesture ended without proper drop
-      runOnJS(handleDragCancel)();
+      if (isDragging.value) {
+        runOnJS(handleDragCancel)();
+      }
     });
 
   // Function to start drag from a player cell
@@ -586,7 +601,7 @@ export function DraggableRoster({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // No flex: 1 here - let content determine height for ScrollView compatibility
   },
   teamHeaders: {
     flexDirection: 'row',
@@ -662,12 +677,12 @@ const styles = StyleSheet.create({
   playerCellLeft: {
     marginRight: spacing.xs,
     alignItems: 'flex-end',
-    paddingRight: 30,
+    paddingRight: 28,
   },
   playerCellRight: {
     marginLeft: spacing.xs,
     alignItems: 'flex-start',
-    paddingLeft: 30,
+    paddingLeft: 28,
   },
   playerName: {
     fontSize: 14,
@@ -685,11 +700,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     bottom: 4,
-    width: 16,
+    width: 20,
     borderRadius: radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'visible',
   },
   skillBarLeft: {
     right: 4,
@@ -701,8 +715,8 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     color: colors.bg.darkest,
-    transform: [{ rotate: '-90deg' }],
-    width: 50,
+    transform: [{ rotate: '90deg' }],
+    width: 70,
     textAlign: 'center',
   },
   paymentBadge: {

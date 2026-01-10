@@ -39,6 +39,7 @@ interface EventFormProps {
   organizations?: Organization[];
   onSubmit: (data: EventFormData) => Promise<boolean>;
   isSubmitting: boolean;
+  footer?: React.ReactNode;
 }
 
 export function EventForm({
@@ -47,6 +48,7 @@ export function EventForm({
   organizations = [],
   onSubmit,
   isSubmitting,
+  footer,
 }: EventFormProps) {
   // Form state
   const [name, setName] = useState('');
@@ -421,6 +423,9 @@ export function EventForm({
             </Text>
           )}
         </TouchableOpacity>
+
+        {/* Optional footer (e.g., danger zone for edit mode) */}
+        {footer}
 
         {/* Bottom padding */}
         <View style={{ height: 40 }} />

@@ -9,7 +9,8 @@
       "WebFetch(domain:docs.expo.dev)",
       "Bash(git diff:*)",
       "Bash(grep:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "WebSearch"
     ]
   }
 }
