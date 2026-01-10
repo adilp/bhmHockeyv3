@@ -239,6 +239,24 @@ export interface UpdatePaymentStatusRequest {
   paymentStatus: 'Verified' | 'Pending';
 }
 
+// Payment update result DTO (Phase 5 - payment verification response)
+export interface PaymentUpdateResultDto {
+  success: boolean;
+  promoted: boolean;
+  message: string;
+  registration?: EventRegistrationDto;
+}
+
+// Waitlist reorder types (Phase 5)
+export interface WaitlistOrderItem {
+  registrationId: string;
+  position: number;
+}
+
+export interface ReorderWaitlistRequest {
+  items: WaitlistOrderItem[];
+}
+
 // Team assignment request
 export interface UpdateTeamAssignmentRequest {
   teamAssignment: TeamAssignment;

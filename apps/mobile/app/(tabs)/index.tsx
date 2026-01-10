@@ -49,7 +49,14 @@ export default function HomeScreen() {
 
   // Combined: registered + waitlisted (filter out cancelled)
   const myUpcomingGames = useMemo(() =>
-    [...myRegistrations.filter(e => e.status === 'Published'), ...myWaitlistedGames].sort(sortByDate),
+    Array.from(
+      myRegistrations
+        .filter(e => e.status === 'Published')
+        .reduce((map, event) => map.set(event.id, event), new Map<string, typeof events[0]>(
+          myWaitlistedGames.map(event => [event.id, event])
+        ))
+        .values()
+    ).sort(sortByDate),
     [myRegistrations, myWaitlistedGames]
   );
 

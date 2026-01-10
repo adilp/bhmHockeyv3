@@ -5,6 +5,7 @@ using BHMHockey.Api.Models.Entities;
 using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Moq;
 using Xunit;
 
@@ -30,6 +31,7 @@ public class EventServiceTests : IDisposable
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         _context = new AppDbContext(options);
         _mockNotificationService = new Mock<INotificationService>();
@@ -123,7 +125,8 @@ public class EventServiceTests : IDisposable
         int maxPlayers = 10,
         string visibility = "Public",
         string status = "Published",
-        DateTime? eventDate = null)
+        DateTime? eventDate = null,
+        decimal cost = 25.00m)
     {
         var evt = new Event
         {
@@ -136,7 +139,7 @@ public class EventServiceTests : IDisposable
             Duration = 60,
             Venue = "Test Venue",
             MaxPlayers = maxPlayers,
-            Cost = 25.00m,
+            Cost = cost,
             Status = status,
             Visibility = visibility,
             CreatedAt = DateTime.UtcNow,
@@ -174,10 +177,10 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_WhenNotRegistered_CreatesRegistration()
     {
-        // Arrange
+        // Arrange - Use free event so registration is direct (paid events always waitlist)
         var creator = await CreateTestUser("creator@example.com");
         var user = await CreateTestUser("user@example.com");
-        var evt = await CreateTestEvent(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, cost: 0);
 
         // Act
         var result = await _sut.RegisterAsync(evt.Id, user.Id);
@@ -244,10 +247,10 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_AfterCancellingRegistration_ReactivatesRegistration()
     {
-        // Arrange - This tests the bug fix for re-registration
+        // Arrange - Use free event so registration is direct (paid events always waitlist)
         var creator = await CreateTestUser("creator@example.com");
         var user = await CreateTestUser("user@example.com");
-        var evt = await CreateTestEvent(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, cost: 0);
 
         // Create and cancel a registration
         await CreateRegistration(evt.Id, user.Id, "Cancelled");
@@ -315,16 +318,16 @@ public class EventServiceTests : IDisposable
         await CreateRegistration(evt.Id, registeredUser.Id, "Registered");
         await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
 
-        // Setup mock to verify promotion is called
-        _mockWaitlistService.Setup(w => w.PromoteNextFromWaitlistAsync(evt.Id))
-            .ReturnsAsync((EventRegistration?)null);
+        // Setup mock to verify promotion is called (with callerOwnsTransaction: true)
+        _mockWaitlistService.Setup(w => w.PromoteFromWaitlistAsync(evt.Id, 1, true))
+            .ReturnsAsync(new PromotionResult());
 
         // Act
         await _sut.CancelRegistrationAsync(evt.Id, registeredUser.Id);
 
-        // Assert - Promotion should be triggered
+        // Assert - Promotion should be triggered with callerOwnsTransaction: true
         _mockWaitlistService.Verify(
-            w => w.PromoteNextFromWaitlistAsync(evt.Id),
+            w => w.PromoteFromWaitlistAsync(evt.Id, 1, true),
             Times.Once);
     }
 
@@ -342,6 +345,112 @@ public class EventServiceTests : IDisposable
         await _sut.CancelRegistrationAsync(evt.Id, waitlistedUser.Id);
 
         // Assert - Waitlist positions should be updated
+        _mockWaitlistService.Verify(
+            w => w.UpdateWaitlistPositionsAsync(evt.Id),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelRegistrationAsync_WhenRegistered_SendsPendingNotificationsAfterCommit()
+    {
+        // Arrange - Verify notifications are sent after promotion
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var registeredUser = await CreateTestUser("registered@example.com");
+        await CreateRegistration(evt.Id, registeredUser.Id, "Registered");
+
+        var pendingNotifications = new List<PendingNotification>
+        {
+            new PendingNotification { Type = NotificationType.AutoPromoted }
+        };
+
+        // Setup mock to return pending notifications
+        _mockWaitlistService.Setup(w => w.PromoteFromWaitlistAsync(evt.Id, 1, true))
+            .ReturnsAsync(new PromotionResult { PendingNotifications = pendingNotifications });
+
+        // Act
+        await _sut.CancelRegistrationAsync(evt.Id, registeredUser.Id);
+
+        // Assert - SendPendingNotificationsAsync should be called with the pending notifications
+        _mockWaitlistService.Verify(
+            w => w.SendPendingNotificationsAsync(pendingNotifications),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RemoveRegistrationAsync_WhenRegistered_TriggersAtomicPromotion()
+    {
+        // Arrange - Organizer removes registered user, should trigger atomic promotion
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var registration = await CreateRegistration(evt.Id, registeredUser.Id, "Registered");
+
+        // Setup mock for atomic promotion
+        _mockWaitlistService.Setup(w => w.PromoteFromWaitlistAsync(evt.Id, 1, true))
+            .ReturnsAsync(new PromotionResult());
+
+        // Act
+        var result = await _sut.RemoveRegistrationAsync(evt.Id, registration.Id, creator.Id);
+
+        // Assert
+        result.Should().BeTrue();
+        _mockWaitlistService.Verify(
+            w => w.PromoteFromWaitlistAsync(evt.Id, 1, true),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RemoveRegistrationAsync_NotifiesRemovedUser()
+    {
+        // Arrange - Removed user should receive notification
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var removedUser = await CreateTestUser("removed@example.com");
+        removedUser.PushToken = "ExponentPushToken[removed]";
+        await _context.SaveChangesAsync();
+
+        var registration = await CreateRegistration(evt.Id, removedUser.Id, "Registered");
+
+        // Setup mock for promotion
+        _mockWaitlistService.Setup(w => w.PromoteFromWaitlistAsync(evt.Id, 1, true))
+            .ReturnsAsync(new PromotionResult());
+
+        // Act
+        await _sut.RemoveRegistrationAsync(evt.Id, registration.Id, creator.Id);
+
+        // Assert - Removed user should receive notification
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                "ExponentPushToken[removed]",
+                "Removed from Event",
+                It.Is<string>(s => s.Contains("removed from")),
+                It.IsAny<object>(),
+                removedUser.Id,
+                "removed_from_event",
+                It.IsAny<Guid?>(),
+                evt.Id),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RemoveRegistrationAsync_WhenWaitlisted_UpdatesWaitlistPositions()
+    {
+        // Arrange - Organizer removes waitlisted user
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+
+        // Act
+        var result = await _sut.RemoveRegistrationAsync(evt.Id, registration.Id, creator.Id);
+
+        // Assert
+        result.Should().BeTrue();
         _mockWaitlistService.Verify(
             w => w.UpdateWaitlistPositionsAsync(evt.Id),
             Times.Once);
@@ -379,6 +488,135 @@ public class EventServiceTests : IDisposable
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*multiple positions*");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ForPaidEvent_WithAvailableSpots_AlwaysWaitlists()
+    {
+        // Arrange - Paid event with plenty of capacity
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 25.00m);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, user.Id);
+
+        // Assert - Should be waitlisted, not registered (paid events always waitlist)
+        result.Status.Should().Be("Waitlisted");
+        result.WaitlistPosition.Should().Be(1);
+        result.Message.Should().Contain("payment");
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == user.Id);
+        registration.Should().NotBeNull();
+        registration!.Status.Should().Be("Waitlisted");
+        registration.PaymentStatus.Should().Be("Pending");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ForPaidEvent_WhenFull_Waitlists()
+    {
+        // Arrange - Paid event that is full
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2, cost: 25.00m);
+
+        // Fill the event (these are pre-existing registrations, not going through RegisterAsync)
+        var user1 = await CreateTestUser("user1@example.com");
+        var user2 = await CreateTestUser("user2@example.com");
+        await CreateRegistration(evt.Id, user1.Id);
+        await CreateRegistration(evt.Id, user2.Id);
+
+        var newUser = await CreateTestUser("new@example.com");
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, newUser.Id);
+
+        // Assert
+        result.Status.Should().Be("Waitlisted");
+        result.WaitlistPosition.Should().Be(1);
+        result.Message.Should().Contain("payment");
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == newUser.Id);
+        registration!.PaymentStatus.Should().Be("Pending");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ForFreeEvent_WithAvailableSpots_RegistersDirectly()
+    {
+        // Arrange - Free event (Cost = 0) with capacity
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 0);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, user.Id);
+
+        // Assert - Free events register directly when capacity available
+        result.Status.Should().Be("Registered");
+        result.WaitlistPosition.Should().BeNull();
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == user.Id);
+        registration.Should().NotBeNull();
+        registration!.Status.Should().Be("Registered");
+        registration.PaymentStatus.Should().BeNull(); // No payment tracking for free events
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ForFreeEvent_WhenFull_Waitlists()
+    {
+        // Arrange - Free event that is full
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2, cost: 0);
+
+        // Fill the event
+        var user1 = await CreateTestUser("user1@example.com");
+        var user2 = await CreateTestUser("user2@example.com");
+        await CreateRegistration(evt.Id, user1.Id);
+        await CreateRegistration(evt.Id, user2.Id);
+
+        var newUser = await CreateTestUser("new@example.com");
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, newUser.Id);
+
+        // Assert - Waitlisted because full (not because paid)
+        result.Status.Should().Be("Waitlisted");
+        result.WaitlistPosition.Should().Be(1);
+        result.Message.Should().Contain("full"); // Different message for full free events
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == newUser.Id);
+        registration!.PaymentStatus.Should().BeNull(); // No payment tracking for free events
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ForPaidEvent_NotifiesOrganizer()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        creator.PushToken = "ExponentPushToken[test]";
+        await _context.SaveChangesAsync();
+
+        var user = await CreateTestUser("user@example.com");
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+
+        // Act
+        await _sut.RegisterAsync(evt.Id, user.Id);
+
+        // Assert - Verify organizer notification was sent
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                creator.PushToken,
+                "New Waitlist Signup",
+                It.Is<string>(s => s.Contains("waitlist")),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
     }
 
     #endregion
@@ -866,11 +1104,11 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_BeforeRegistrationDeadline_Succeeds()
     {
-        // Arrange
+        // Arrange - Use free event so registration is direct (paid events always waitlist)
         var creator = await CreateTestUser("creator@example.com");
         var user = await CreateTestUser("user@example.com");
 
-        // Create event with deadline in the future
+        // Create free event with deadline in the future
         var evt = new Event
         {
             Id = Guid.NewGuid(),
@@ -881,7 +1119,7 @@ public class EventServiceTests : IDisposable
             Duration = 60,
             Venue = "Test Venue",
             MaxPlayers = 10,
-            Cost = 25.00m,
+            Cost = 0, // Free event so registration is direct
             Status = "Published",
             Visibility = "Public",
             RegistrationDeadline = DateTime.UtcNow.AddDays(1), // Deadline in future
@@ -902,10 +1140,10 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_WithNoDeadline_Succeeds()
     {
-        // Arrange - Events without deadline should allow registration
+        // Arrange - Use free event so registration is direct (paid events always waitlist)
         var creator = await CreateTestUser("creator@example.com");
         var user = await CreateTestUser("user@example.com");
-        var evt = await CreateTestEvent(creator.Id); // No deadline set
+        var evt = await CreateTestEvent(creator.Id, cost: 0); // Free event, no deadline
 
         // Act
         var result = await _sut.RegisterAsync(evt.Id, user.Id);
@@ -1281,7 +1519,7 @@ public class EventServiceTests : IDisposable
         var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", orgAdmin.Id);
 
         // Assert
-        result.Should().BeTrue();
+        result.Success.Should().BeTrue();
 
         var updated = await _context.EventRegistrations.FindAsync(registration.Id);
         updated!.PaymentStatus.Should().Be("Verified");
@@ -1304,7 +1542,7 @@ public class EventServiceTests : IDisposable
         var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", subscriber.Id);
 
         // Assert
-        result.Should().BeFalse();
+        result.Success.Should().BeFalse();
 
         var unchanged = await _context.EventRegistrations.FindAsync(registration.Id);
         unchanged!.PaymentStatus.Should().BeNull();
@@ -1382,9 +1620,9 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_ConcurrentRegistrationsForLastSlot_OnlyOneSucceeds()
     {
-        // Arrange - Event with 1 slot remaining
+        // Arrange - Free event with 1 slot remaining (paid events always waitlist)
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2);
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2, cost: 0);
 
         // Fill all but one slot
         var existingUser = await CreateTestUser("existing@example.com");
@@ -1415,9 +1653,9 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_SequentialRegistrationsForLastSlot_SecondGoesToWaitlist()
     {
-        // Arrange - Sequential version to verify the basic logic works
+        // Arrange - Free event, sequential version to verify the basic logic (paid events always waitlist)
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2);
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2, cost: 0);
 
         // Fill all but one slot
         var existingUser = await CreateTestUser("existing@example.com");
@@ -1450,10 +1688,10 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_WhenTeamsEqual_AssignsToBlack()
     {
-        // Arrange - Empty event, first registration should go to Black
+        // Arrange - Free event so registration is direct (paid events waitlist, no team assignment)
         var creator = await CreateTestUser("creator@example.com");
         var user = await CreateTestUser("user@example.com");
-        var evt = await CreateTestEvent(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, cost: 0);
 
         // Act
         await _sut.RegisterAsync(evt.Id, user.Id);
@@ -1467,9 +1705,9 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_AssignsSkaterToTeamWithFewerSkaters()
     {
-        // Arrange - Create event with 2 skaters on Black, 1 skater on White
+        // Arrange - Free event so registration is direct (paid events waitlist, no team assignment)
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, cost: 0);
 
         // Add 2 skaters to Black team
         var black1 = await CreateTestUser("black1@example.com");
@@ -1504,10 +1742,9 @@ public class EventServiceTests : IDisposable
     [Fact]
     public async Task RegisterAsync_AssignsGoalieToTeamWithFewerGoalies()
     {
-        // Arrange - Event has 2 goalies on White, 0 on Black
-        // New goalie should go to Black regardless of total player count
+        // Arrange - Free event so registration is direct (paid events waitlist, no team assignment)
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, cost: 0);
 
         // Add 2 goalies to White team
         var goalie1 = await CreateTestUser("goalie1@example.com",
@@ -1614,6 +1851,384 @@ public class EventServiceTests : IDisposable
         await _sut.Invoking(s => s.UpdateTeamAssignmentAsync(evt.Id, registration.Id, "Red", creator.Id))
             .Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Invalid team*");
+    }
+
+    #endregion
+
+    #region MarkPaymentAsync Tests (PWL-003)
+
+    [Fact]
+    public async Task MarkPaymentAsync_WaitlistedUser_WithPendingPayment_Succeeds()
+    {
+        // Arrange - Waitlisted user with Pending payment should be able to mark paid
+        var creator = await CreateTestUser();
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id); // Cost = 25.00m (paid event)
+
+        var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+        registration.PaymentStatus = "Pending";
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(evt.Id, waitlistedUser.Id, null);
+
+        // Assert
+        result.Should().BeTrue();
+
+        var updated = await _context.EventRegistrations.FindAsync(registration.Id);
+        updated!.PaymentStatus.Should().Be("MarkedPaid");
+        updated.PaymentMarkedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_RegisteredUser_WithPendingPayment_Succeeds()
+    {
+        // Arrange - Registered user with Pending payment should be able to mark paid (existing behavior)
+        var creator = await CreateTestUser();
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var evt = await CreateTestEvent(creator.Id); // Cost = 25.00m (paid event)
+
+        var registration = await CreateRegistration(evt.Id, registeredUser.Id, "Registered");
+        registration.PaymentStatus = "Pending";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(evt.Id, registeredUser.Id, null);
+
+        // Assert
+        result.Should().BeTrue();
+
+        var updated = await _context.EventRegistrations.FindAsync(registration.Id);
+        updated!.PaymentStatus.Should().Be("MarkedPaid");
+        updated.PaymentMarkedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_WhenPaymentAlreadyMarked_ReturnsFalse()
+    {
+        // Arrange - User who already marked payment should get false
+        var creator = await CreateTestUser();
+        var user = await CreateTestUser("user@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var registration = await CreateRegistration(evt.Id, user.Id, "Registered");
+        registration.PaymentStatus = "MarkedPaid"; // Already marked
+        registration.PaymentMarkedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(evt.Id, user.Id, null);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_ForFreeEvent_ReturnsFalse()
+    {
+        // Arrange - Free event should return false
+        var creator = await CreateTestUser();
+        var user = await CreateTestUser("user@example.com");
+        var evt = await CreateTestEvent(creator.Id, cost: 0); // Free event
+
+        var registration = await CreateRegistration(evt.Id, user.Id, "Registered");
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(evt.Id, user.Id, null);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_WhenUserNotRegistered_ReturnsFalse()
+    {
+        // Arrange - User with no registration should get false
+        var creator = await CreateTestUser();
+        var unregisteredUser = await CreateTestUser("unregistered@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        // No registration created for unregisteredUser
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(evt.Id, unregisteredUser.Id, null);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    #endregion
+
+    #region UpdatePaymentStatusAsync Tests (PWL-006)
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_WaitlistedUser_CapacityAvailable_PromotesToRoster()
+    {
+        // Arrange - Waitlisted user with verified payment should be promoted when capacity exists
+        var creator = await CreateTestUser("creator@example.com");
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10); // Plenty of capacity
+
+        var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+        registration.PaymentStatus = "MarkedPaid";
+        registration.WaitlistPosition = 1;
+        registration.RegisteredPosition = "Skater";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", creator.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Promoted.Should().BeTrue();
+        result.Message.Should().Contain("promoted to roster");
+
+        var updated = await _context.EventRegistrations.FindAsync(registration.Id);
+        updated!.Status.Should().Be("Registered");
+        updated.PaymentStatus.Should().Be("Verified");
+        updated.PromotedAt.Should().NotBeNull();
+        updated.WaitlistPosition.Should().BeNull();
+        updated.TeamAssignment.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_WaitlistedUser_RosterFull_StaysWaitlistedWithVerifiedStatus()
+    {
+        // Arrange - Waitlisted user should stay waitlisted if roster is full
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2);
+
+        // Fill the roster
+        var user1 = await CreateTestUser("user1@example.com");
+        var user2 = await CreateTestUser("user2@example.com");
+        await CreateRegistration(evt.Id, user1.Id, "Registered");
+        await CreateRegistration(evt.Id, user2.Id, "Registered");
+
+        // Add waitlisted user
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        var waitlistReg = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+        waitlistReg.PaymentStatus = "MarkedPaid";
+        waitlistReg.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, waitlistReg.Id, "Verified", creator.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Promoted.Should().BeFalse();
+        result.Message.Should().Contain("roster full");
+
+        var updated = await _context.EventRegistrations.FindAsync(waitlistReg.Id);
+        updated!.Status.Should().Be("Waitlisted");
+        updated.PaymentStatus.Should().Be("Verified");
+        updated.WaitlistPosition.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_ResetToPending_BlockedForRegisteredUsers()
+    {
+        // Arrange - Registered user cannot have payment reset to Pending
+        var creator = await CreateTestUser("creator@example.com");
+        var registeredUser = await CreateTestUser("registered@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var registration = await CreateRegistration(evt.Id, registeredUser.Id, "Registered");
+        registration.PaymentStatus = "Verified";
+        registration.PaymentVerifiedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Pending", creator.Id);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.Message.Should().Be("Cannot reset payment status for users already on the roster");
+
+        // Verify payment status unchanged
+        var unchanged = await _context.EventRegistrations.FindAsync(registration.Id);
+        unchanged!.PaymentStatus.Should().Be("Verified");
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_ResetToPending_AllowedForWaitlistedUsers()
+    {
+        // Arrange - Waitlisted user can have payment reset to Pending
+        var creator = await CreateTestUser("creator@example.com");
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+        registration.PaymentStatus = "Verified";
+        registration.PaymentVerifiedAt = DateTime.UtcNow;
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Pending", creator.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Message.Should().Contain("reset to pending");
+
+        var updated = await _context.EventRegistrations.FindAsync(registration.Id);
+        updated!.PaymentStatus.Should().Be("Pending");
+        updated.PaymentVerifiedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_WaitlistedUserPromoted_TriggersWaitlistRenumber()
+    {
+        // Arrange - When waitlisted user is promoted, waitlist should be renumbered
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10);
+
+        var waitlist1 = await CreateTestUser("waitlist1@example.com");
+        var waitlist2 = await CreateTestUser("waitlist2@example.com");
+
+        var reg1 = await CreateRegistration(evt.Id, waitlist1.Id, "Waitlisted");
+        reg1.PaymentStatus = "MarkedPaid";
+        reg1.WaitlistPosition = 1;
+        reg1.RegisteredPosition = "Skater";
+
+        var reg2 = await CreateRegistration(evt.Id, waitlist2.Id, "Waitlisted");
+        reg2.PaymentStatus = "Pending";
+        reg2.WaitlistPosition = 2;
+
+        await _context.SaveChangesAsync();
+
+        // Act - Promote first waitlisted user
+        await _sut.UpdatePaymentStatusAsync(evt.Id, reg1.Id, "Verified", creator.Id);
+
+        // Assert - Waitlist renumber should be called
+        _mockWaitlistService.Verify(
+            w => w.UpdateWaitlistPositionsAsync(evt.Id),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_WaitlistedUserPromoted_AssignsTeam()
+    {
+        // Arrange - Promoted user should get team assignment
+        var creator = await CreateTestUser("creator@example.com");
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10);
+
+        var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+        registration.PaymentStatus = "MarkedPaid";
+        registration.WaitlistPosition = 1;
+        registration.RegisteredPosition = "Skater";
+        registration.TeamAssignment = null; // No team yet
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", creator.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Promoted.Should().BeTrue();
+        result.Registration.Should().NotBeNull();
+        result.Registration!.TeamAssignment.Should().NotBeNull();
+        result.Registration.TeamAssignment.Should().BeOneOf("Black", "White");
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_WaitlistedUserPromoted_SendsNotification()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        waitlistedUser.PushToken = "ExponentPushToken[test]";
+        await _context.SaveChangesAsync();
+
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10);
+
+        var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+        registration.PaymentStatus = "MarkedPaid";
+        registration.WaitlistPosition = 1;
+        registration.RegisteredPosition = "Skater";
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", creator.Id);
+
+        // Assert - Notification should be sent
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                waitlistedUser.PushToken,
+                "You're In!",
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_WaitlistedUserRosterFull_SendsVerifiedButFullNotification()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 1);
+
+        // Fill the roster
+        var user1 = await CreateTestUser("user1@example.com");
+        await CreateRegistration(evt.Id, user1.Id, "Registered");
+
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        waitlistedUser.PushToken = "ExponentPushToken[test]";
+        await _context.SaveChangesAsync();
+
+        var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+        registration.PaymentStatus = "MarkedPaid";
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", creator.Id);
+
+        // Assert - "Verified but full" notification should be sent
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                waitlistedUser.PushToken,
+                "Payment Verified - On Waitlist",
+                It.Is<string>(s => s.Contains("priority waitlist")),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_ResponseIncludesUpdatedRegistration()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var waitlistedUser = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10);
+
+        var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
+        registration.PaymentStatus = "MarkedPaid";
+        registration.WaitlistPosition = 1;
+        registration.RegisteredPosition = "Skater";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", creator.Id);
+
+        // Assert - Response should include full registration details
+        result.Registration.Should().NotBeNull();
+        result.Registration!.Id.Should().Be(registration.Id);
+        result.Registration.Status.Should().Be("Registered");
+        result.Registration.PaymentStatus.Should().Be("Verified");
+        result.Registration.PromotedAt.Should().NotBeNull();
+        result.Registration.IsWaitlisted.Should().BeFalse();
     }
 
     #endregion

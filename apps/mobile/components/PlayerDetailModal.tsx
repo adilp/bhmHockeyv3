@@ -226,7 +226,9 @@ export function PlayerDetailModal({
                         style={[styles.actionButton, styles.dangerButton]}
                         onPress={handleRemove}
                       >
-                        <Text style={styles.dangerButtonText} allowFontScaling={false}>Remove from Roster</Text>
+                        <Text style={styles.dangerButtonText} allowFontScaling={false}>
+                          {registration.isWaitlisted ? 'Remove from Waitlist' : 'Remove from Roster'}
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>

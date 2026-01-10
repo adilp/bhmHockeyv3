@@ -17,7 +17,7 @@ public interface IEventService
 
     // Payment methods (Phase 4)
     Task<bool> MarkPaymentAsync(Guid eventId, Guid userId, string? paymentReference);
-    Task<bool> UpdatePaymentStatusAsync(Guid eventId, Guid registrationId, string paymentStatus, Guid organizerId);
+    Task<PaymentUpdateResultDto> UpdatePaymentStatusAsync(Guid eventId, Guid registrationId, string paymentStatus, Guid organizerId);
 
     // Team assignment methods
     Task<bool> UpdateTeamAssignmentAsync(Guid eventId, Guid registrationId, string teamAssignment, Guid organizerId);

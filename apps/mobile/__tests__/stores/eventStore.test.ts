@@ -14,6 +14,7 @@ const mockCreate = jest.fn();
 const mockRegister = jest.fn();
 const mockCancelRegistration = jest.fn();
 const mockGetMyRegistrations = jest.fn();
+const mockReorderWaitlist = jest.fn();
 
 // Mock the api-client module
 jest.mock('@bhmhockey/api-client', () => ({
@@ -24,12 +25,13 @@ jest.mock('@bhmhockey/api-client', () => ({
     register: mockRegister,
     cancelRegistration: mockCancelRegistration,
     getMyRegistrations: mockGetMyRegistrations,
+    reorderWaitlist: mockReorderWaitlist,
   },
 }));
 
 // Import after mocking
 import { useEventStore } from '../../stores/eventStore';
-import type { EventDto, RegistrationResultDto } from '@bhmhockey/shared';
+import type { EventDto, RegistrationResultDto, WaitlistOrderItem } from '@bhmhockey/shared';
 
 // Helper to create mock registration result
 const createMockRegistrationResult = (overrides: Partial<RegistrationResultDto> = {}): RegistrationResultDto => ({
@@ -430,6 +432,84 @@ describe('eventStore', () => {
       await promise;
 
       // Should be cleared after completion
+      expect(useEventStore.getState().processingEventId).toBeNull();
+    });
+  });
+
+  describe('reorderWaitlist', () => {
+    const mockWaitlistItems: WaitlistOrderItem[] = [
+      { registrationId: 'reg-1', position: 1 },
+      { registrationId: 'reg-2', position: 2 },
+      { registrationId: 'reg-3', position: 3 },
+    ];
+
+    it('sets processingEventId during API call', async () => {
+      const event = createMockEvent({ id: 'event-1' });
+      useEventStore.setState({ selectedEvent: event });
+
+      let resolveReorder: (value?: unknown) => void;
+      mockReorderWaitlist.mockReturnValue(
+        new Promise((resolve) => {
+          resolveReorder = resolve;
+        })
+      );
+      mockGetById.mockResolvedValue(event);
+
+      // Start reorder (don't await)
+      const reorderPromise = useEventStore.getState().reorderWaitlist('event-1', mockWaitlistItems);
+
+      // processingEventId should be set
+      expect(useEventStore.getState().processingEventId).toBe('event-1');
+
+      resolveReorder!();
+      await reorderPromise;
+
+      // processingEventId should be cleared
+      expect(useEventStore.getState().processingEventId).toBeNull();
+    });
+
+    it('refreshes event data on success', async () => {
+      const originalEvent = createMockEvent({ id: 'event-1', waitlistCount: 3 });
+      const updatedEvent = createMockEvent({ id: 'event-1', waitlistCount: 3 });
+      useEventStore.setState({ selectedEvent: originalEvent });
+
+      mockReorderWaitlist.mockResolvedValue(undefined);
+      mockGetById.mockResolvedValue(updatedEvent);
+
+      await useEventStore.getState().reorderWaitlist('event-1', mockWaitlistItems);
+
+      expect(mockReorderWaitlist).toHaveBeenCalledWith('event-1', mockWaitlistItems);
+      expect(mockGetById).toHaveBeenCalledWith('event-1');
+      expect(useEventStore.getState().selectedEvent).toEqual(updatedEvent);
+      expect(useEventStore.getState().processingEventId).toBeNull();
+    });
+
+    it('sets error state and re-throws on failure', async () => {
+      const event = createMockEvent({ id: 'event-1' });
+      useEventStore.setState({ selectedEvent: event });
+
+      mockReorderWaitlist.mockRejectedValue(new Error('Reorder failed'));
+
+      await expect(
+        useEventStore.getState().reorderWaitlist('event-1', mockWaitlistItems)
+      ).rejects.toThrow('Reorder failed');
+
+      expect(useEventStore.getState().processingEventId).toBeNull();
+      expect(useEventStore.getState().error).toBe('Reorder failed');
+    });
+
+    it('clears processingEventId even on failure', async () => {
+      const event = createMockEvent({ id: 'event-1' });
+      useEventStore.setState({ selectedEvent: event });
+
+      mockReorderWaitlist.mockRejectedValue(new Error('Network error'));
+
+      try {
+        await useEventStore.getState().reorderWaitlist('event-1', mockWaitlistItems);
+      } catch {
+        // Expected to throw
+      }
+
       expect(useEventStore.getState().processingEventId).toBeNull();
     });
   });

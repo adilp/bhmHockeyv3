@@ -115,9 +115,35 @@ public record RegisterForEventRequest(
     string? Position             // "Goalie" or "Skater" (optional if user has only one position)
 );
 
+// Waitlist reorder DTOs (Phase 5)
+public record WaitlistReorderItem(
+    Guid RegistrationId,
+    int Position
+);
+
+// Waitlist reorder request DTOs (for API endpoint)
+public class ReorderWaitlistRequest
+{
+    public List<WaitlistOrderItem> Items { get; set; } = new();
+}
+
+public class WaitlistOrderItem
+{
+    public Guid RegistrationId { get; set; }
+    public int Position { get; set; }
+}
+
 // Registration result DTO (Phase 5 - includes waitlist info)
 public record RegistrationResultDto(
     string Status,               // "Registered" or "Waitlisted"
     int? WaitlistPosition,       // Position if waitlisted (null if registered)
     string Message               // User-friendly message
+);
+
+// Payment update result DTO (Phase 5 - payment verification response)
+public record PaymentUpdateResultDto(
+    bool Success,                // Whether the operation succeeded
+    bool Promoted,               // True if user was promoted to roster, false if roster full or not applicable
+    string Message,              // User-friendly message (e.g., "Payment verified - user promoted to roster")
+    EventRegistrationDto? Registration  // Updated registration details (null on failure)
 );

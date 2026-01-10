@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto } from '@bhmhockey/shared';
+import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto } from '@bhmhockey/shared';
 
 interface EventState {
   // State
@@ -24,13 +24,16 @@ interface EventState {
 
   // Payment actions (Phase 4)
   markPayment: (eventId: string) => Promise<boolean>;
-  updatePaymentStatus: (eventId: string, registrationId: string, status: 'Verified' | 'Pending') => Promise<boolean>;
+  updatePaymentStatus: (eventId: string, registrationId: string, status: 'Verified' | 'Pending') => Promise<PaymentUpdateResultDto | null>;
 
   // Team assignment actions
   updateTeamAssignment: (eventId: string, registrationId: string, team: TeamAssignment) => Promise<boolean>;
 
   // Registration management (organizer)
   removeRegistration: (eventId: string, registrationId: string) => Promise<boolean>;
+
+  // Waitlist management (organizer)
+  reorderWaitlist: (eventId: string, items: WaitlistOrderItem[]) => Promise<void>;
 
   // Event management (organizer)
   cancelEvent: (eventId: string) => Promise<boolean>;
@@ -138,6 +141,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       isRegistered: false,
       amIWaitlisted: true,
       myWaitlistPosition: waitlistPosition,
+      myPaymentStatus: 'Pending' as PaymentStatus,
       waitlistCount: event.waitlistCount + 1,
     });
 
@@ -173,11 +177,18 @@ export const useEventStore = create<EventState>((set, get) => ({
       } else if (result.status === 'Waitlisted') {
         // User was added to waitlist
         const waitlistPosition = result.waitlistPosition ?? 1;
-        set({
-          events: events.map(e => e.id === eventId ? updateEventAsWaitlisted(e, waitlistPosition) : e),
-          selectedEvent: selectedEvent?.id === eventId ? updateEventAsWaitlisted(selectedEvent, waitlistPosition) : selectedEvent,
-          processingEventId: null,
-        });
+        const waitlistedEvent = events.find(e => e.id === eventId);
+        if (waitlistedEvent) {
+          const updatedEvent = updateEventAsWaitlisted(waitlistedEvent, waitlistPosition);
+          set({
+            events: events.map(e => e.id === eventId ? updatedEvent : e),
+            selectedEvent: selectedEvent?.id === eventId ? updateEventAsWaitlisted(selectedEvent, waitlistPosition) : selectedEvent,
+            myRegistrations: [...myRegistrations, updatedEvent],
+            processingEventId: null,
+          });
+        } else {
+          set({ processingEventId: null });
+        }
       }
 
       return result;
@@ -285,17 +296,18 @@ export const useEventStore = create<EventState>((set, get) => ({
   },
 
   // Update payment status (for organizers)
+  // Returns PaymentUpdateResultDto with promoted flag for appropriate toast messaging
   updatePaymentStatus: async (eventId: string, registrationId: string, status: 'Verified' | 'Pending') => {
     try {
-      await eventService.updatePaymentStatus(eventId, registrationId, { paymentStatus: status });
+      const result = await eventService.updatePaymentStatus(eventId, registrationId, { paymentStatus: status });
       // Refresh event data to get updated registrations
       await get().fetchEventById(eventId);
-      return true;
+      return result;
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to update payment status',
       });
-      return false;
+      return null;
     }
   },
 
@@ -330,6 +342,26 @@ export const useEventStore = create<EventState>((set, get) => ({
         error: error instanceof Error ? error.message : 'Failed to remove registration',
       });
       return false;
+    }
+  },
+
+  // Reorder waitlist positions (organizer only)
+  reorderWaitlist: async (eventId: string, items: WaitlistOrderItem[]) => {
+    set({ processingEventId: eventId });
+    try {
+      await eventService.reorderWaitlist(eventId, items);
+      // Refresh event to get updated positions
+      const event = await eventService.getById(eventId);
+      set({
+        selectedEvent: event,
+        processingEventId: null,
+      });
+    } catch (error) {
+      set({
+        processingEventId: null,
+        error: error instanceof Error ? error.message : 'Failed to reorder waitlist',
+      });
+      throw error;
     }
   },
 

@@ -28,15 +28,17 @@ public class WaitlistBackgroundService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
-            {
-                await ProcessExpiredDeadlinesAsync();
-            }
-            catch (Exception ex)
-            {
-                // Log error but don't rethrow - keep the service running
-                _logger.LogError(ex, "Error processing expired payment deadlines");
-            }
+            // Payment deadlines no longer enforced - organizer manages manually
+            // The ProcessExpiredDeadlinesAsync method is preserved for potential future use
+            // try
+            // {
+            //     await ProcessExpiredDeadlinesAsync();
+            // }
+            // catch (Exception ex)
+            // {
+            //     // Log error but don't rethrow - keep the service running
+            //     _logger.LogError(ex, "Error processing expired payment deadlines");
+            // }
 
             try
             {

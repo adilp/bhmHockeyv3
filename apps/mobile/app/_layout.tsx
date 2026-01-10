@@ -21,10 +21,15 @@ import {
 
 // Disable font scaling globally to prevent text overflow on devices with large font settings
 // This must be set before any components render
+// Note: defaultProps is deprecated in RN 0.76+ types but still works at runtime
+// @ts-expect-error defaultProps removed from RN types but still functional
 Text.defaultProps = Text.defaultProps || {};
+// @ts-expect-error defaultProps removed from RN types but still functional
 Text.defaultProps.allowFontScaling = false;
 
+// @ts-expect-error defaultProps removed from RN types but still functional
 TextInput.defaultProps = TextInput.defaultProps || {};
+// @ts-expect-error defaultProps removed from RN types but still functional
 TextInput.defaultProps.allowFontScaling = false;
 
 function RootLayoutContent() {
