@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BHMHockey.Api.Models.DTOs;
+using BHMHockey.Api.Models.Exceptions;
 using BHMHockey.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -159,6 +160,10 @@ public class EventsController : ControllerBase
             var result = await _eventService.RegisterAsync(id, userId, request?.Position);
             return Ok(result);
         }
+        catch (ConcurrentModificationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -214,6 +219,52 @@ public class EventsController : ControllerBase
 
     #endregion
 
+    #region Waitlist Management
+
+    /// <summary>
+    /// Reorder waitlist positions (organizer only).
+    /// All waitlisted users must be included with sequential positions starting from 1.
+    /// </summary>
+    [Authorize]
+    [HttpPut("{eventId:guid}/waitlist/reorder")]
+    public async Task<IActionResult> ReorderWaitlist(
+        Guid eventId,
+        [FromBody] ReorderWaitlistRequest request)
+    {
+        var userId = GetCurrentUserId();
+
+        // Check if event exists
+        var eventDto = await _eventService.GetByIdAsync(eventId);
+        if (eventDto == null)
+        {
+            return NotFound();
+        }
+
+        // Check if user can manage this event
+        if (!await _eventService.CanUserManageEventAsync(eventId, userId))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            // Map WaitlistOrderItem to WaitlistReorderItem
+            var items = request.Items
+                .Select(i => new WaitlistReorderItem(i.RegistrationId, i.Position))
+                .ToList();
+
+            await _waitlistService.ReorderWaitlistAsync(eventId, items);
+
+            return Ok(new { success = true, message = "Waitlist reordered" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
     #region Payment
 
     /// <summary>
@@ -237,6 +288,7 @@ public class EventsController : ControllerBase
 
     /// <summary>
     /// Update payment status for a registration (organizer only).
+    /// Returns detailed result including whether user was promoted to roster.
     /// </summary>
     [Authorize]
     [HttpPut("{eventId:guid}/registrations/{registrationId:guid}/payment")]
@@ -249,14 +301,18 @@ public class EventsController : ControllerBase
 
         try
         {
-            var success = await _eventService.UpdatePaymentStatusAsync(eventId, registrationId, request.PaymentStatus, userId);
+            var result = await _eventService.UpdatePaymentStatusAsync(eventId, registrationId, request.PaymentStatus, userId);
 
-            if (!success)
+            if (!result.Success)
             {
-                return NotFound(new { message = "Event or registration not found, or you are not the organizer." });
+                return NotFound(new { message = result.Message });
             }
 
-            return Ok(new { message = $"Payment status updated to {request.PaymentStatus}" });
+            return Ok(result);
+        }
+        catch (ConcurrentModificationException ex)
+        {
+            return Conflict(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
@@ -277,14 +333,21 @@ public class EventsController : ControllerBase
     {
         var userId = GetCurrentUserId();
 
-        var success = await _eventService.RemoveRegistrationAsync(eventId, registrationId, userId);
-
-        if (!success)
+        try
         {
-            return NotFound(new { message = "Event or registration not found, or you are not the organizer." });
-        }
+            var success = await _eventService.RemoveRegistrationAsync(eventId, registrationId, userId);
 
-        return Ok(new { message = "Registration removed successfully" });
+            if (!success)
+            {
+                return NotFound(new { message = "Event or registration not found, or you are not the organizer." });
+            }
+
+            return Ok(new { message = "Registration removed successfully" });
+        }
+        catch (ConcurrentModificationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 
     #endregion

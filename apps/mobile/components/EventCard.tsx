@@ -161,11 +161,26 @@ function AvailableBadges({ spotsLeft, waitlistCount }: { spotsLeft: number; wait
 }
 
 function WaitlistedBadges({ event }: { event: EventDto }) {
+  const spotsLeft = event.maxPlayers - event.registeredCount;
+  const isFull = spotsLeft <= 0;
+
+  // If roster is full, show position (you're actually queued for capacity)
+  if (isFull) {
+    return (
+      <View style={styles.waitlistedStats}>
+        <Badge variant="warning">
+          #{event.myWaitlistPosition} on waitlist
+        </Badge>
+      </View>
+    );
+  }
+
+  // Roster has space - you're on waitlist because of payment (pay-to-play model)
+  // Show payment status instead of position
+  const { text, variant } = getPaymentBadgeVariant(event.myPaymentStatus);
   return (
     <View style={styles.waitlistedStats}>
-      <Badge variant="warning">
-        #{event.myWaitlistPosition} on waitlist
-      </Badge>
+      <Badge variant={variant}>{text}</Badge>
     </View>
   );
 }

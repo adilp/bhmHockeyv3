@@ -27,9 +27,12 @@ export function EventInfoTab({
   const [showDetails, setShowDetails] = useState(false);
 
   const orgName = event.organizationName || 'Pickup Game';
-  const showPaymentCard = event.isRegistered && event.cost > 0;
-  const showCostPreview = !event.isRegistered && event.cost > 0;
+  // Waitlist takes priority - if you're waitlisted, show waitlist payment section
+  const showWaitlistPaymentCard = event.amIWaitlisted && event.cost > 0;
+  const showPaymentCard = event.isRegistered && !event.amIWaitlisted && event.cost > 0;
+  const showCostPreview = !event.isRegistered && !event.amIWaitlisted && event.cost > 0;
   const hasMoreDetails = event.description || event.registrationDeadline;
+  const isRosterFull = event.registeredCount >= event.maxPlayers;
 
   // Format: "SAT"
   const getDayName = (dateString: string) => {
@@ -149,6 +152,75 @@ export function EventInfoTab({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
+            WAITLIST PAYMENT SECTION (for waitlisted users on paid events)
+            ═══════════════════════════════════════════════════════════════════ */}
+        {showWaitlistPaymentCard && (
+          <>
+            <View style={styles.paymentDivider} />
+
+            <View style={styles.waitlistPaymentSection}>
+              {/* Waitlist Position Header - only show when roster is full */}
+              {isRosterFull && (
+                <Text style={styles.waitlistPositionText}>
+                  You're #{event.myWaitlistPosition} on the waitlist
+                </Text>
+              )}
+
+              {/* Pending: Show payment prompt and buttons */}
+              {event.myPaymentStatus === 'Pending' && (
+                <>
+                  <Text style={styles.waitlistPaymentPrompt}>
+                    {isRosterFull
+                      ? 'Pay to be ready when a spot opens'
+                      : 'Pay to secure your spot on the roster'}
+                  </Text>
+
+                  <View style={styles.paymentActions}>
+                    {event.creatorVenmoHandle && (
+                      <TouchableOpacity style={styles.venmoButton} onPress={onPayWithVenmo}>
+                        <Text style={styles.venmoButtonText}>Pay with Venmo</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity style={styles.markPaidButton} onPress={onMarkAsPaid}>
+                      <Text style={styles.markPaidButtonText}>I've Already Paid</Text>
+                    </TouchableOpacity>
+
+                    {!event.creatorVenmoHandle && (
+                      <Text style={styles.noVenmoText}>
+                        Contact organizer directly for payment details.
+                      </Text>
+                    )}
+                  </View>
+
+                  {event.creatorVenmoHandle && (
+                    <Text style={styles.disclaimer}>
+                      Payment goes directly to the organizer. BHM Hockey does not process payments.
+                    </Text>
+                  )}
+                </>
+              )}
+
+              {/* MarkedPaid: Awaiting verification */}
+              {event.myPaymentStatus === 'MarkedPaid' && (
+                <Text style={styles.statusMessage}>
+                  Awaiting organizer verification
+                </Text>
+              )}
+
+              {/* Verified: Payment confirmed */}
+              {event.myPaymentStatus === 'Verified' && (
+                <Text style={[styles.statusMessage, { color: colors.primary.green }]}>
+                  {isRosterFull
+                    ? "Payment verified! You'll be automatically added when a spot opens."
+                    : "Payment verified! You'll be added to the roster shortly."}
+                </Text>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
             PAYMENT SECTION (for registered users with cost)
             ═══════════════════════════════════════════════════════════════════ */}
         {showPaymentCard && (
@@ -190,17 +262,17 @@ export function EventInfoTab({
               {/* Payment Actions */}
               {event.myPaymentStatus === 'Pending' && (
                 <View style={styles.paymentActions}>
-                  {event.creatorVenmoHandle ? (
-                    <>
-                      <TouchableOpacity style={styles.venmoButton} onPress={onPayWithVenmo}>
-                        <Text style={styles.venmoButtonText}>Pay with Venmo</Text>
-                      </TouchableOpacity>
+                  {event.creatorVenmoHandle && (
+                    <TouchableOpacity style={styles.venmoButton} onPress={onPayWithVenmo}>
+                      <Text style={styles.venmoButtonText}>Pay with Venmo</Text>
+                    </TouchableOpacity>
+                  )}
 
-                      <TouchableOpacity style={styles.markPaidButton} onPress={onMarkAsPaid}>
-                        <Text style={styles.markPaidButtonText}>I've Already Paid</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
+                  <TouchableOpacity style={styles.markPaidButton} onPress={onMarkAsPaid}>
+                    <Text style={styles.markPaidButtonText}>I've Already Paid</Text>
+                  </TouchableOpacity>
+
+                  {!event.creatorVenmoHandle && (
                     <Text style={styles.noVenmoText}>
                       Contact organizer directly for payment details.
                     </Text>
@@ -383,6 +455,21 @@ const styles = StyleSheet.create({
   },
   paymentSection: {
     alignItems: 'center',
+  },
+  waitlistPaymentSection: {
+    alignItems: 'center',
+  },
+  waitlistPositionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  waitlistPaymentPrompt: {
+    fontSize: 14,
+    color: colors.text.muted,
+    marginBottom: spacing.md,
+    textAlign: 'center',
   },
   paymentRow: {
     flexDirection: 'row',

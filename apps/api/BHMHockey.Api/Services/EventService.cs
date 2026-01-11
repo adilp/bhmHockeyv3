@@ -1,3 +1,4 @@
+using System.Data;
 using BHMHockey.Api.Data;
 using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Models.Entities;
@@ -356,9 +357,12 @@ public class EventService : IEventService
         }
 
         var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
-        bool isWaitlisted = registeredCount >= evt.MaxPlayers;
+        bool isFull = registeredCount >= evt.MaxPlayers;
+        bool isPaidEvent = evt.Cost > 0;
 
-        if (isWaitlisted)
+        // Paid events: ALWAYS waitlist first (organizer verifies payment before adding to roster)
+        // Free events: Only waitlist if roster is full
+        if (isPaidEvent || isFull)
         {
             // Add to waitlist
             var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
@@ -371,7 +375,7 @@ public class EventService : IEventService
                 existingReg.RegisteredPosition = registeredPosition;
                 existingReg.WaitlistPosition = waitlistPosition;
                 existingReg.TeamAssignment = null; // No team until promoted
-                existingReg.PaymentStatus = evt.Cost > 0 ? "Pending" : null;
+                existingReg.PaymentStatus = isPaidEvent ? "Pending" : null;
                 existingReg.PaymentMarkedAt = null;
                 existingReg.PaymentVerifiedAt = null;
                 existingReg.PromotedAt = null;
@@ -387,25 +391,30 @@ public class EventService : IEventService
                     Status = "Waitlisted",
                     RegisteredPosition = registeredPosition,
                     WaitlistPosition = waitlistPosition,
-                    PaymentStatus = evt.Cost > 0 ? "Pending" : null
+                    PaymentStatus = isPaidEvent ? "Pending" : null
                 };
                 _context.EventRegistrations.Add(registration);
             }
 
             await _context.SaveChangesAsync();
 
-            // Notify organizer about new waitlist entry
-            await NotifyOrganizerWaitlistJoinedAsync(evt, user, waitlistPosition);
+            // Notify organizer about new waitlist signup
+            await NotifyOrganizerNewWaitlistSignupAsync(evt, user, waitlistPosition);
+
+            // Different message for paid events vs full free events
+            var message = isPaidEvent
+                ? "You've been added to the waitlist. Please mark your payment so the organizer can verify and add you to the roster."
+                : $"Event is full. You're #{waitlistPosition} on the waitlist.";
 
             return new RegistrationResultDto(
                 "Waitlisted",
                 waitlistPosition,
-                $"Event is full. You're #{waitlistPosition} on the waitlist."
+                message
             );
         }
         else
         {
-            // Normal registration
+            // Free event with available capacity: register directly
             var teamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
 
             if (existingReg != null)
@@ -416,7 +425,7 @@ public class EventService : IEventService
                 existingReg.RegisteredPosition = registeredPosition;
                 existingReg.TeamAssignment = teamAssignment;
                 existingReg.WaitlistPosition = null;
-                existingReg.PaymentStatus = evt.Cost > 0 ? "Pending" : null;
+                existingReg.PaymentStatus = null; // Free event, no payment tracking
                 existingReg.PaymentMarkedAt = null;
                 existingReg.PaymentVerifiedAt = null;
                 existingReg.PromotedAt = null;
@@ -431,7 +440,7 @@ public class EventService : IEventService
                     UserId = userId,
                     RegisteredPosition = registeredPosition,
                     TeamAssignment = teamAssignment,
-                    PaymentStatus = evt.Cost > 0 ? "Pending" : null
+                    PaymentStatus = null // Free event, no payment tracking
                 };
                 _context.EventRegistrations.Add(registration);
             }
@@ -513,23 +522,50 @@ public class EventService : IEventService
         var wasRegistered = registration.Status == "Registered";
         var wasWaitlisted = registration.Status == "Waitlisted";
 
-        registration.Status = "Cancelled";
-        registration.WaitlistPosition = null;
-        registration.PaymentDeadlineAt = null;
-        await _context.SaveChangesAsync();
+        // Use Serializable transaction to atomically cancel and promote
+        await using var transaction = await _context.Database
+            .BeginTransactionAsync(IsolationLevel.Serializable);
 
-        // If a registered user cancels, promote next from waitlist
-        if (wasRegistered)
-        {
-            await _waitlistService.PromoteNextFromWaitlistAsync(eventId);
-        }
-        // If a waitlisted user cancels, renumber the waitlist
-        else if (wasWaitlisted)
-        {
-            await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
-        }
+        PromotionResult? promotionResult = null;
 
-        return true;
+        try
+        {
+            registration.Status = "Cancelled";
+            registration.WaitlistPosition = null;
+            registration.PaymentDeadlineAt = null;
+            await _context.SaveChangesAsync();
+
+            // If a registered user cancels, promote next from waitlist
+            if (wasRegistered)
+            {
+                promotionResult = await _waitlistService.PromoteFromWaitlistAsync(
+                    eventId,
+                    spotCount: 1,
+                    callerOwnsTransaction: true  // We manage the transaction
+                );
+            }
+            // If a waitlisted user cancels, renumber the waitlist
+            else if (wasWaitlisted)
+            {
+                await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
+            }
+
+            await transaction.CommitAsync();
+
+            // Send notifications AFTER commit to prevent false notifications on rollback
+            if (promotionResult != null)
+            {
+                await _waitlistService.SendPendingNotificationsAsync(
+                    promotionResult.PendingNotifications);
+            }
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<List<EventRegistrationDto>> GetRegistrationsAsync(Guid eventId)
@@ -710,12 +746,13 @@ public class EventService : IEventService
         }
 
         // Get current user's registration info (payment status and team assignment)
+        // Include both registered AND waitlisted users for payment status
         string? myPaymentStatus = null;
         string? myTeamAssignment = null;
-        if (currentUserId.HasValue && isRegistered)
+        if (currentUserId.HasValue)
         {
-            var myRegistration = evt.Registrations?.FirstOrDefault(r => r.UserId == currentUserId.Value && r.Status == "Registered")
-                ?? await _context.EventRegistrations.FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && r.Status == "Registered");
+            var myRegistration = evt.Registrations?.FirstOrDefault(r => r.UserId == currentUserId.Value && (r.Status == "Registered" || r.Status == "Waitlisted"))
+                ?? await _context.EventRegistrations.FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && (r.Status == "Registered" || r.Status == "Waitlisted"));
             if (myRegistration != null)
             {
                 myPaymentStatus = evt.Cost > 0 ? myRegistration.PaymentStatus : null;
@@ -724,11 +761,12 @@ public class EventService : IEventService
         }
 
         // Calculate unpaid count for organizers (paid events only)
+        // Includes both registered and waitlisted users with unverified payments
         int? unpaidCount = null;
         if (canManage && evt.Cost > 0)
         {
-            unpaidCount = evt.Registrations?.Count(r => r.Status == "Registered" && r.PaymentStatus != "Verified") ??
-                await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id && r.Status == "Registered" && r.PaymentStatus != "Verified");
+            unpaidCount = evt.Registrations?.Count(r => (r.Status == "Registered" || r.Status == "Waitlisted") && r.PaymentStatus != "Verified") ??
+                await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id && (r.Status == "Registered" || r.Status == "Waitlisted") && r.PaymentStatus != "Verified");
         }
 
         // Waitlist fields (Phase 5)
@@ -786,7 +824,9 @@ public class EventService : IEventService
     {
         var registration = await _context.EventRegistrations
             .Include(r => r.Event)
-            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId && r.Status == "Registered");
+                .ThenInclude(e => e.Creator)
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId && (r.Status == "Registered" || r.Status == "Waitlisted"));
 
         if (registration == null) return false;
 
@@ -800,21 +840,53 @@ public class EventService : IEventService
         registration.PaymentMarkedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+        // Notify the organizer that a user marked their payment
+        if (!string.IsNullOrEmpty(registration.Event.Creator?.PushToken))
+        {
+            var userName = $"{registration.User.FirstName} {registration.User.LastName}".Trim();
+            if (string.IsNullOrEmpty(userName)) userName = registration.User.Email;
+            var eventName = registration.Event.Name ?? $"Event on {registration.Event.EventDate:MMM d}";
+
+            await _notificationService.SendPushNotificationAsync(
+                registration.Event.Creator.PushToken,
+                "Payment Pending Verification",
+                $"{userName} marked their payment for {eventName}. Tap to view.",
+                new Dictionary<string, string>
+                {
+                    { "type", "payment_marked" },
+                    { "eventId", eventId.ToString() }
+                }
+            );
+        }
+
         return true;
     }
 
-    public async Task<bool> UpdatePaymentStatusAsync(Guid eventId, Guid registrationId, string paymentStatus, Guid organizerId)
+    public async Task<PaymentUpdateResultDto> UpdatePaymentStatusAsync(Guid eventId, Guid registrationId, string paymentStatus, Guid organizerId)
     {
         // Verify the organizer can manage this event
         var evt = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId);
-        if (evt == null) return false;
+        if (evt == null)
+        {
+            return new PaymentUpdateResultDto(false, false, "Event not found", null);
+        }
 
-        if (!await CanUserManageEventAsync(evt, organizerId)) return false;
+        if (!await CanUserManageEventAsync(evt, organizerId))
+        {
+            return new PaymentUpdateResultDto(false, false, "You are not authorized to manage this event", null);
+        }
 
+        // Find registration - include both registered and waitlisted users
         var registration = await _context.EventRegistrations
-            .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId && r.Status == "Registered");
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId
+                && (r.Status == "Registered" || r.Status == "Waitlisted"));
 
-        if (registration == null) return false;
+        if (registration == null)
+        {
+            return new PaymentUpdateResultDto(false, false, "Registration not found", null);
+        }
 
         // Validate status transition
         if (paymentStatus != "Verified" && paymentStatus != "Pending")
@@ -822,20 +894,154 @@ public class EventService : IEventService
             throw new InvalidOperationException("Invalid payment status. Must be 'Verified' or 'Pending'");
         }
 
-        registration.PaymentStatus = paymentStatus;
+        // Block reset-to-Pending for already registered users
+        if (paymentStatus == "Pending" && registration.Status == "Registered")
+        {
+            return new PaymentUpdateResultDto(false, false, "Cannot reset payment status for users already on the roster", null);
+        }
+
+        string message;
+        bool promoted = false;
+
+        // Track notification action to send AFTER commit
+        // 0 = none, 1 = promoted from waitlist, 2 = verified but roster full
+        int notificationAction = 0;
 
         if (paymentStatus == "Verified")
         {
+            registration.PaymentStatus = "Verified";
             registration.PaymentVerifiedAt = DateTime.UtcNow;
+
+            // If user is waitlisted, check if we can promote them
+            if (registration.Status == "Waitlisted")
+            {
+                // Use Serializable transaction for the critical section to prevent race conditions
+                await using var transaction = await _context.Database
+                    .BeginTransactionAsync(IsolationLevel.Serializable);
+
+                try
+                {
+                    // Check roster capacity
+                    var registeredCount = await _context.EventRegistrations
+                        .CountAsync(r => r.EventId == eventId && r.Status == "Registered");
+
+                    if (registeredCount < evt.MaxPlayers)
+                    {
+                        // Capacity available - promote user
+                        registration.Status = "Registered";
+                        registration.PromotedAt = DateTime.UtcNow;
+                        registration.TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registration.RegisteredPosition);
+                        registration.WaitlistPosition = null;
+                        registration.PaymentDeadlineAt = null; // Clear any deadline
+
+                        promoted = true;
+                        message = "Payment verified - user promoted to roster";
+                        notificationAction = 1; // promoted from waitlist
+                    }
+                    else
+                    {
+                        // Roster full - keep waitlisted but mark as verified
+                        message = "Payment verified - roster full, user remains on waitlist";
+                        notificationAction = 2; // verified but roster full
+                    }
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    // Reload entity to get fresh state after transaction
+                    await _context.Entry(registration).ReloadAsync();
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            else
+            {
+                // User is already registered, just verify payment
+                message = "Payment verified successfully";
+                await _context.SaveChangesAsync();
+            }
         }
         else
         {
-            // Reset if setting back to Pending
+            // Reset to Pending (only for waitlisted users at this point due to earlier check)
+            registration.PaymentStatus = "Pending";
             registration.PaymentVerifiedAt = null;
+            message = "Payment status reset to pending";
+            await _context.SaveChangesAsync();
         }
 
-        await _context.SaveChangesAsync();
-        return true;
+        // Send notifications AFTER transaction commit
+        if (notificationAction == 1)
+        {
+            // User was promoted - send notification and update waitlist positions
+            await NotifyUserPromotedFromWaitlistAsync(evt, registration.User);
+            await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
+        }
+        else if (notificationAction == 2)
+        {
+            // Payment verified but roster full
+            await NotifyUserPaymentVerifiedButFullAsync(evt, registration.User);
+        }
+
+        // Create the registration DTO for response
+        var registrationDto = new EventRegistrationDto(
+            registration.Id,
+            registration.EventId,
+            new UserDto(
+                registration.User.Id,
+                registration.User.Email,
+                registration.User.FirstName,
+                registration.User.LastName,
+                registration.User.PhoneNumber,
+                registration.User.Positions,
+                registration.User.VenmoHandle,
+                registration.User.Role,
+                registration.User.CreatedAt,
+                null,  // Badges not included in payment update response
+                0      // Total badge count not included
+            ),
+            registration.Status,
+            registration.RegisteredAt,
+            registration.RegisteredPosition,
+            registration.PaymentStatus,
+            registration.PaymentMarkedAt,
+            registration.PaymentVerifiedAt,
+            registration.TeamAssignment,
+            registration.RosterOrder,
+            registration.WaitlistPosition,
+            registration.PromotedAt,
+            registration.PaymentDeadlineAt,
+            registration.IsWaitlisted
+        );
+
+        return new PaymentUpdateResultDto(true, promoted, message, registrationDto);
+    }
+
+    /// <summary>
+    /// Notify user that their payment was verified but the roster is full.
+    /// They remain on the waitlist with priority.
+    /// </summary>
+    private async Task NotifyUserPaymentVerifiedButFullAsync(Event evt, User user)
+    {
+        if (string.IsNullOrEmpty(user.PushToken))
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+
+        await _notificationService.SendPushNotificationAsync(
+            user.PushToken,
+            "Payment Verified - On Waitlist",
+            $"Your payment for {eventName} was verified. You're on the priority waitlist and will be added when a spot opens.",
+            new { eventId = evt.Id.ToString(), type = "payment_verified_waitlist" },
+            userId: user.Id,
+            type: "payment_verified_waitlist",
+            organizationId: evt.OrganizationId,
+            eventId: evt.Id);
     }
 
     // Team assignment methods
@@ -889,29 +1095,63 @@ public class EventService : IEventService
         var wasRegistered = registration.Status == "Registered";
         var wasWaitlisted = registration.Status == "Waitlisted";
 
-        // Cancel the registration
-        registration.Status = "Cancelled";
-        registration.WaitlistPosition = null;
-        registration.PaymentDeadlineAt = null;
+        // Capture user and event for notification after transaction
+        var removedUser = registration.User;
+        var eventForNotification = registration.Event;
 
-        await _context.SaveChangesAsync();
+        // Use Serializable transaction to atomically remove and promote
+        await using var transaction = await _context.Database
+            .BeginTransactionAsync(IsolationLevel.Serializable);
 
-        // If a registered user was removed, promote next from waitlist
-        if (wasRegistered)
+        PromotionResult? promotionResult = null;
+
+        try
         {
-            await _waitlistService.PromoteNextFromWaitlistAsync(eventId);
-        }
-        // If a waitlisted user was removed, renumber the waitlist
-        else if (wasWaitlisted)
-        {
-            await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
-        }
+            // Cancel the registration
+            registration.Status = "Cancelled";
+            registration.WaitlistPosition = null;
+            registration.PaymentDeadlineAt = null;
 
-        return true;
+            await _context.SaveChangesAsync();
+
+            // If a registered user was removed, promote next from waitlist
+            if (wasRegistered)
+            {
+                promotionResult = await _waitlistService.PromoteFromWaitlistAsync(
+                    eventId,
+                    spotCount: 1,
+                    callerOwnsTransaction: true  // We manage the transaction
+                );
+            }
+            // If a waitlisted user was removed, renumber the waitlist
+            else if (wasWaitlisted)
+            {
+                await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
+            }
+
+            await transaction.CommitAsync();
+
+            // Send notifications AFTER commit to prevent false notifications on rollback
+            if (promotionResult != null)
+            {
+                await _waitlistService.SendPendingNotificationsAsync(
+                    promotionResult.PendingNotifications);
+            }
+
+            // Notify the removed user
+            await NotifyUserRemovedFromEventAsync(eventForNotification, removedUser);
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     // Notification helpers
-    private async Task NotifyOrganizerWaitlistJoinedAsync(Event evt, User user, int waitlistPosition)
+    private async Task NotifyOrganizerNewWaitlistSignupAsync(Event evt, User user, int waitlistPosition)
     {
         if (string.IsNullOrEmpty(evt.Creator.PushToken))
         {
@@ -924,11 +1164,54 @@ public class EventService : IEventService
 
         await _notificationService.SendPushNotificationAsync(
             evt.Creator.PushToken,
-            "New Waitlist Entry",
+            "New Waitlist Signup",
             $"{userName} joined the waitlist (#{waitlistPosition}) for {eventName}",
-            new { eventId = evt.Id.ToString(), type = "waitlist_joined" },
+            new { eventId = evt.Id.ToString(), type = "waitlist_signup" },
             userId: evt.CreatorId,
-            type: "waitlist_joined",
+            type: "waitlist_signup",
+            organizationId: evt.OrganizationId,
+            eventId: evt.Id);
+    }
+
+    private async Task NotifyUserPromotedFromWaitlistAsync(Event evt, User user)
+    {
+        if (string.IsNullOrEmpty(user.PushToken))
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+
+        await _notificationService.SendPushNotificationAsync(
+            user.PushToken,
+            "You're In!",
+            $"You've been promoted from the waitlist for {eventName}.",
+            new { eventId = evt.Id.ToString(), type = "promoted_from_waitlist" },
+            userId: user.Id,
+            type: "promoted_from_waitlist",
+            organizationId: evt.OrganizationId,
+            eventId: evt.Id);
+    }
+
+    /// <summary>
+    /// Notify a user that they have been removed from an event by the organizer.
+    /// </summary>
+    private async Task NotifyUserRemovedFromEventAsync(Event evt, User user)
+    {
+        if (string.IsNullOrEmpty(user.PushToken))
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+
+        await _notificationService.SendPushNotificationAsync(
+            user.PushToken,
+            "Removed from Event",
+            $"You have been removed from {eventName} by the organizer.",
+            new { eventId = evt.Id.ToString(), type = "removed_from_event" },
+            userId: user.Id,
+            type: "removed_from_event",
             organizationId: evt.OrganizationId,
             eventId: evt.Id);
     }

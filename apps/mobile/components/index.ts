@@ -36,6 +36,7 @@ export { NotificationItem } from './NotificationItem';
 
 // Roster/Matchup components
 export { DraggableRoster } from './DraggableRoster';
+export { DraggableWaitlist } from './DraggableWaitlist';
 export { PlayerDetailModal } from './PlayerDetailModal';
 
 // Badge components

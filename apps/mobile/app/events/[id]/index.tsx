@@ -68,15 +68,13 @@ export default function EventDetailScreen() {
     if (selectedEvent.canManage) {
       // Organizers default to roster
       defaultTab = 'roster';
-    } else if (selectedEvent.isRegistered && selectedEvent.cost > 0) {
-      // Registered users with unpaid/pending status default to info (payment section)
-      if (
-        selectedEvent.myPaymentStatus === 'Pending' ||
-        selectedEvent.myPaymentStatus === 'MarkedPaid'
-      ) {
+    } else if (selectedEvent.isRegistered || selectedEvent.amIWaitlisted) {
+      // Registered or waitlisted users
+      if (selectedEvent.cost > 0 && selectedEvent.myPaymentStatus !== 'Verified') {
+        // Unpaid users default to info (payment section)
         defaultTab = 'info';
       } else {
-        // Paid users default to roster
+        // Paid users (or free events) default to roster
         defaultTab = 'roster';
       }
     }
@@ -255,6 +253,8 @@ export default function EventDetailScreen() {
                 'Payment Marked',
                 'The organizer will verify your payment. You can check your Venmo app to confirm the transaction.'
               );
+            } else {
+              Alert.alert('Error', 'Failed to mark payment. Please try again.');
             }
           },
         },

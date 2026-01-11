@@ -5,13 +5,15 @@ import type {
   UpdateEventRequest,
   MarkPaymentRequest,
   UpdatePaymentStatusRequest,
+  PaymentUpdateResultDto,
   UpdateTeamAssignmentRequest,
   UpdateRosterOrderRequest,
   RosterOrderItem,
   RegisterForEventRequest,
   RegistrationResultDto,
   Position,
-  TeamAssignment
+  TeamAssignment,
+  WaitlistOrderItem
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -105,16 +107,18 @@ export const eventService = {
 
   /**
    * Update payment status (organizer only)
+   * Returns detailed result including whether user was promoted to roster
    */
   async updatePaymentStatus(
     eventId: string,
     registrationId: string,
     request: UpdatePaymentStatusRequest
-  ): Promise<void> {
-    await apiClient.instance.put(
+  ): Promise<PaymentUpdateResultDto> {
+    const response = await apiClient.instance.put<PaymentUpdateResultDto>(
       `/events/${eventId}/registrations/${registrationId}/payment`,
       request
     );
+    return response.data;
   },
 
   // Team assignment methods
@@ -154,6 +158,19 @@ export const eventService = {
   async updateRosterOrder(eventId: string, items: RosterOrderItem[]): Promise<void> {
     await apiClient.instance.put(
       `/events/${eventId}/roster-order`,
+      { items }
+    );
+  },
+
+  // Waitlist management (organizer)
+
+  /**
+   * Reorder waitlist positions (organizer only)
+   * All waitlisted users must be included with sequential positions starting from 1
+   */
+  async reorderWaitlist(eventId: string, items: WaitlistOrderItem[]): Promise<void> {
+    await apiClient.instance.put(
+      `/events/${eventId}/waitlist/reorder`,
       { items }
     );
   },

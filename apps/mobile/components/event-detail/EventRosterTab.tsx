@@ -1,10 +1,8 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -14,11 +12,13 @@ import type {
   EventDto,
   TeamAssignment,
   RosterOrderItem,
+  WaitlistOrderItem,
 } from '@bhmhockey/shared';
 import { useEventStore } from '../../stores/eventStore';
 import { EmptyState } from '../EmptyState';
 import { SectionHeader } from '../SectionHeader';
 import { DraggableRoster } from '../DraggableRoster';
+import { DraggableWaitlist } from '../DraggableWaitlist';
 import { PlayerDetailModal } from '../PlayerDetailModal';
 import { colors, spacing, radius } from '../../theme';
 
@@ -34,6 +34,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const [selectedPlayer, setSelectedPlayer] = useState<EventRegistrationDto | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const isUpdatingRoster = useRef(false);
+  const hasLoadedOnce = useRef(false);
   const { updatePaymentStatus, updateTeamAssignment, removeRegistration } = useEventStore();
 
   // Filter into registered and waitlisted
@@ -50,17 +51,27 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     [allRegistrations]
   );
 
+  // Reset loaded state when eventId changes
+  useEffect(() => {
+    hasLoadedOnce.current = false;
+  }, [eventId]);
+
   // Load registrations with cleanup to prevent memory leaks
+  // Re-fetch when registeredCount or waitlistCount changes (e.g., after registration)
   useEffect(() => {
     let cancelled = false;
 
     const loadRegistrations = async () => {
       if (!eventId) return;
-      setIsLoading(true);
+      // Only show loading spinner on initial load, not on re-fetches
+      if (!hasLoadedOnce.current) {
+        setIsLoading(true);
+      }
       try {
         const registrationsData = await eventService.getRegistrations(eventId);
         if (!cancelled) {
           setAllRegistrations(registrationsData);
+          hasLoadedOnce.current = true;
         }
       } catch (error) {
         if (!cancelled) {
@@ -78,7 +89,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [eventId, event.registeredCount, event.waitlistCount]);
 
   const reloadRegistrations = useCallback(async () => {
     if (!eventId) return;
@@ -108,8 +119,16 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
       {
         text: 'Yes, Mark Paid',
         onPress: async () => {
-          const success = await updatePaymentStatus(eventId, registration.id, 'Verified');
-          if (success) await reloadRegistrations();
+          const result = await updatePaymentStatus(eventId, registration.id, 'Verified');
+          if (result) {
+            await reloadRegistrations();
+            const message = result.promoted
+              ? 'Payment verified and user promoted to roster'
+              : 'Payment verified';
+            Alert.alert('Success', message);
+          } else {
+            Alert.alert('Error', 'Failed to verify payment');
+          }
         },
       },
     ]);
@@ -121,8 +140,16 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
       {
         text: 'Yes, Verify',
         onPress: async () => {
-          const success = await updatePaymentStatus(eventId, registration.id, 'Verified');
-          if (success) await reloadRegistrations();
+          const result = await updatePaymentStatus(eventId, registration.id, 'Verified');
+          if (result) {
+            await reloadRegistrations();
+            const message = result.promoted
+              ? 'Payment verified and user promoted to roster'
+              : 'Payment verified';
+            Alert.alert('Success', message);
+          } else {
+            Alert.alert('Error', 'Failed to verify payment');
+          }
         },
       },
     ]);
@@ -139,7 +166,11 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
           style: 'destructive',
           onPress: async () => {
             const success = await updatePaymentStatus(eventId, registration.id, 'Pending');
-            if (success) await reloadRegistrations();
+            if (success) {
+              await reloadRegistrations();
+            } else {
+              Alert.alert('Error', 'Failed to reset payment status');
+            }
           },
         },
       ]
@@ -173,6 +204,11 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         },
       ]
     );
+  };
+
+  // Waitlist item tap handler - shows player detail modal (same as roster)
+  const handleWaitlistItemPress = (registration: EventRegistrationDto) => {
+    handlePlayerPress(registration);
   };
 
   // Roster order change handler
@@ -215,31 +251,16 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     }
   };
 
-  // Waitlist item render
-  const renderWaitlistItem = (item: EventRegistrationDto) => (
-    <View key={item.id} style={styles.waitlistRow}>
-      <View style={styles.waitlistPositionBadge}>
-        <Text style={styles.waitlistPositionText} allowFontScaling={false}>
-          #{item.waitlistPosition}
-        </Text>
-      </View>
-      <View style={styles.waitlistUserInfo}>
-        <Text style={styles.waitlistUserName} allowFontScaling={false}>
-          {item.user.firstName} {item.user.lastName}
-        </Text>
-        <Text style={styles.waitlistUserMeta} allowFontScaling={false}>
-          {item.registeredPosition || 'Skater'}
-        </Text>
-      </View>
-      {canManage && (
-        <TouchableOpacity style={styles.removeButtonSmall} onPress={() => handleRemove(item)}>
-          <Text style={styles.removeButtonText} allowFontScaling={false}>
-            Remove
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  // Waitlist reorder handler
+  const handleWaitlistReorder = async (items: WaitlistOrderItem[]) => {
+    try {
+      await eventService.reorderWaitlist(eventId, items);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save waitlist order. Please try again.');
+      await reloadRegistrations();
+      throw error; // Re-throw so DraggableWaitlist can revert optimistic update
+    }
+  };
 
   if (isLoading) {
     return (
@@ -277,7 +298,12 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
           <View style={styles.waitlistContainer}>
             <SectionHeader title="Waitlist" count={waitlist.length} />
             <View style={styles.waitlistSection}>
-              {waitlist.map((item) => renderWaitlistItem(item))}
+              <DraggableWaitlist
+                waitlist={waitlist}
+                canManage={canManage}
+                onItemPress={handleWaitlistItemPress}
+                onReorder={handleWaitlistReorder}
+              />
             </View>
           </View>
         )}
@@ -290,7 +316,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         showPayment={showPayment}
         isAdmin={canManage}
         onClose={handleCloseModal}
-        onSwapTeam={canManage ? handleSwapTeam : undefined}
+        onSwapTeam={canManage && !selectedPlayer?.isWaitlisted ? handleSwapTeam : undefined}
         onRemove={canManage ? handleRemove : undefined}
         onMarkPaid={canManage ? handleMarkPaid : undefined}
         onVerifyPayment={canManage ? handleVerifyPayment : undefined}
@@ -328,52 +354,5 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border.default,
-  },
-  waitlistRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
-  },
-  waitlistPositionBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.status.warningSubtle,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
-  },
-  waitlistPositionText: {
-    color: colors.status.warning,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  waitlistUserInfo: {
-    flex: 1,
-  },
-  waitlistUserName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  waitlistUserMeta: {
-    fontSize: 13,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  removeButtonSmall: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.status.error,
-  },
-  removeButtonText: {
-    color: colors.status.error,
-    fontSize: 12,
-    fontWeight: '600',
   },
 });

@@ -603,8 +603,9 @@ public class EventsControllerTests
         SetupAuthenticatedUser();
         var registrationId = Guid.NewGuid();
         var request = new UpdatePaymentStatusRequest("Verified");
+        var successResult = new PaymentUpdateResultDto(true, false, "Payment verified successfully", null);
         _mockEventService.Setup(s => s.UpdatePaymentStatusAsync(_testEventId, registrationId, "Verified", _testUserId))
-            .ReturnsAsync(true);
+            .ReturnsAsync(successResult);
 
         // Act
         var result = await _controller.UpdatePaymentStatus(_testEventId, registrationId, request);
@@ -620,8 +621,9 @@ public class EventsControllerTests
         SetupAuthenticatedUser();
         var registrationId = Guid.NewGuid();
         var request = new UpdatePaymentStatusRequest("Pending");
+        var successResult = new PaymentUpdateResultDto(true, false, "Payment status reset to pending", null);
         _mockEventService.Setup(s => s.UpdatePaymentStatusAsync(_testEventId, registrationId, "Pending", _testUserId))
-            .ReturnsAsync(true);
+            .ReturnsAsync(successResult);
 
         // Act
         var result = await _controller.UpdatePaymentStatus(_testEventId, registrationId, request);
@@ -637,9 +639,10 @@ public class EventsControllerTests
         SetupAuthenticatedUser();
         var registrationId = Guid.NewGuid();
         var request = new UpdatePaymentStatusRequest("Verified");
-        // Service returns false when user is not the event creator
+        // Service returns failure result when user is not the event creator
+        var failureResult = new PaymentUpdateResultDto(false, false, "You are not authorized to manage this event", null);
         _mockEventService.Setup(s => s.UpdatePaymentStatusAsync(_testEventId, registrationId, "Verified", _testUserId))
-            .ReturnsAsync(false);
+            .ReturnsAsync(failureResult);
 
         // Act
         var result = await _controller.UpdatePaymentStatus(_testEventId, registrationId, request);
