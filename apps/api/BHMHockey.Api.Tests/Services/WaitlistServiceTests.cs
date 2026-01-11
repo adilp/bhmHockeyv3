@@ -1395,4 +1395,226 @@ public class WaitlistServiceTests : IDisposable
     }
 
     #endregion
+
+    #region GetVerifiedWaitlistUsersAsync Tests
+
+    [Fact]
+    public async Task GetVerifiedWaitlistUsersAsync_ReturnsOnlyVerifiedUsers()
+    {
+        // Arrange - Mix of verified and unverified waitlist users
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+
+        var verifiedUser1 = await CreateTestUser("verified1@example.com");
+        var verifiedUser2 = await CreateTestUser("verified2@example.com");
+        var pendingUser = await CreateTestUser("pending@example.com");
+        var nullPaymentUser = await CreateTestUser("null@example.com");
+        var markedPaidUser = await CreateTestUser("marked@example.com");
+
+        // Verified users
+        var verifiedReg1 = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = verifiedUser1.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 1,
+            PaymentStatus = "Verified",
+            RegisteredPosition = "Skater",
+            RegisteredAt = DateTime.UtcNow.AddHours(-2)
+        };
+        _context.EventRegistrations.Add(verifiedReg1);
+
+        var verifiedReg2 = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = verifiedUser2.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 2,
+            PaymentStatus = "Verified",
+            RegisteredPosition = "Skater",
+            RegisteredAt = DateTime.UtcNow.AddHours(-1)
+        };
+        _context.EventRegistrations.Add(verifiedReg2);
+
+        // Non-verified users (should be excluded)
+        var pendingReg = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = pendingUser.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 3,
+            PaymentStatus = "Pending",
+            RegisteredPosition = "Skater",
+            RegisteredAt = DateTime.UtcNow.AddHours(-3)
+        };
+        _context.EventRegistrations.Add(pendingReg);
+
+        var nullReg = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = nullPaymentUser.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 4,
+            PaymentStatus = null,
+            RegisteredPosition = "Skater",
+            RegisteredAt = DateTime.UtcNow.AddHours(-4)
+        };
+        _context.EventRegistrations.Add(nullReg);
+
+        var markedPaidReg = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = markedPaidUser.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 5,
+            PaymentStatus = "MarkedPaid",
+            RegisteredPosition = "Skater",
+            RegisteredAt = DateTime.UtcNow.AddHours(-5)
+        };
+        _context.EventRegistrations.Add(markedPaidReg);
+
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetVerifiedWaitlistUsersAsync(evt.Id);
+
+        // Assert - Only verified users returned
+        result.Should().HaveCount(2);
+        result.Select(r => r.UserId).Should().Contain(verifiedUser1.Id);
+        result.Select(r => r.UserId).Should().Contain(verifiedUser2.Id);
+        result.Select(r => r.UserId).Should().NotContain(pendingUser.Id);
+        result.Select(r => r.UserId).Should().NotContain(nullPaymentUser.Id);
+        result.Select(r => r.UserId).Should().NotContain(markedPaidUser.Id);
+    }
+
+    [Fact]
+    public async Task GetVerifiedWaitlistUsersAsync_OrderedByRegisteredAtAscending()
+    {
+        // Arrange - Verified users registered at different times
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+
+        var user1 = await CreateTestUser("user1@example.com");
+        var user2 = await CreateTestUser("user2@example.com");
+        var user3 = await CreateTestUser("user3@example.com");
+
+        var baseTime = DateTime.UtcNow;
+
+        // Add in non-chronological order to verify sorting
+        var reg2 = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = user2.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 1,
+            PaymentStatus = "Verified",
+            RegisteredPosition = "Skater",
+            RegisteredAt = baseTime.AddHours(-2) // Middle
+        };
+        _context.EventRegistrations.Add(reg2);
+
+        var reg3 = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = user3.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 2,
+            PaymentStatus = "Verified",
+            RegisteredPosition = "Skater",
+            RegisteredAt = baseTime.AddHours(-1) // Most recent
+        };
+        _context.EventRegistrations.Add(reg3);
+
+        var reg1 = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = user1.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 3,
+            PaymentStatus = "Verified",
+            RegisteredPosition = "Skater",
+            RegisteredAt = baseTime.AddHours(-3) // Earliest
+        };
+        _context.EventRegistrations.Add(reg1);
+
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetVerifiedWaitlistUsersAsync(evt.Id);
+
+        // Assert - Ordered by RegisteredAt ascending (earliest first)
+        result.Should().HaveCount(3);
+        result[0].UserId.Should().Be(user1.Id); // Earliest RegisteredAt
+        result[1].UserId.Should().Be(user2.Id); // Middle
+        result[2].UserId.Should().Be(user3.Id); // Most recent
+    }
+
+    #endregion
+
+    #region PromoteFromWaitlistAsync Additional Tests
+
+    [Fact]
+    public async Task PromoteFromWaitlistAsync_NoVerifiedUsers_NotifiesAllUnverifiedNonePromoted()
+    {
+        // Arrange - Only unverified users on waitlist, 2 spots available
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, maxPlayers: 10);
+
+        var unverifiedUser1 = await CreateTestUser("unverified1@example.com", pushToken: "ExponentPushToken[unverified1]");
+        var unverifiedUser2 = await CreateTestUser("unverified2@example.com", pushToken: "ExponentPushToken[unverified2]");
+
+        var unverifiedReg1 = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = unverifiedUser1.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 1,
+            PaymentStatus = "Pending",
+            RegisteredPosition = "Skater",
+            RegisteredAt = DateTime.UtcNow.AddHours(-2)
+        };
+        _context.EventRegistrations.Add(unverifiedReg1);
+
+        var unverifiedReg2 = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = unverifiedUser2.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 2,
+            PaymentStatus = null,
+            RegisteredPosition = "Skater",
+            RegisteredAt = DateTime.UtcNow.AddHours(-1)
+        };
+        _context.EventRegistrations.Add(unverifiedReg2);
+
+        await _context.SaveChangesAsync();
+
+        // Act - 2 spots available, 0 verified users
+        var result = await _sut.PromoteFromWaitlistAsync(evt.Id, spotCount: 2);
+
+        // Assert - No promotions, both users notified of available spots
+        result.Promoted.Should().BeEmpty();
+        result.PendingNotifications.Should().HaveCount(2);
+        result.PendingNotifications.All(n => n.Type == NotificationType.SpotAvailable).Should().BeTrue();
+        result.PendingNotifications.Should().Contain(n => n.User.Id == unverifiedUser1.Id);
+        result.PendingNotifications.Should().Contain(n => n.User.Id == unverifiedUser2.Id);
+
+        // Verify users are still waitlisted (not promoted)
+        var reg1After = await _context.EventRegistrations.FirstAsync(r => r.Id == unverifiedReg1.Id);
+        var reg2After = await _context.EventRegistrations.FirstAsync(r => r.Id == unverifiedReg2.Id);
+        reg1After.Status.Should().Be("Waitlisted");
+        reg2After.Status.Should().Be("Waitlisted");
+    }
+
+    #endregion
 }
