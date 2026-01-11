@@ -21,7 +21,7 @@ const variantColors: Record<EventCardVariant, string | null> = {
   organizing: colors.primary.purple,
 };
 
-function formatDateTime(dateString: string): string {
+function formatDateTime(dateString: string): { date: string; time: string } {
   const date = new Date(dateString);
   const now = new Date();
 
@@ -39,20 +39,19 @@ function formatDateTime(dateString: string): string {
 
   // Check if today or tomorrow
   if (eventDay.getTime() === today.getTime()) {
-    return `Today at ${timeStr}`;
+    return { date: 'Today', time: timeStr };
   }
   if (eventDay.getTime() === tomorrow.getTime()) {
-    return `Tomorrow at ${timeStr}`;
+    return { date: 'Tomorrow', time: timeStr };
   }
 
   // Otherwise show full date
-  return date.toLocaleDateString('en-US', {
+  const dateStr = date.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
   });
+  return { date: dateStr, time: timeStr };
 }
 
 function getPaymentBadgeVariant(status?: string): { text: string; variant: 'green' | 'warning' | 'error' } {
@@ -78,15 +77,19 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
 
       <View style={styles.content}>
         {/* Organization row - most prominent, first thing users see */}
+        {/* If no org, use event name as title; fallback to "Pickup" */}
         <View style={styles.orgRow}>
-          <OrgAvatar name={event.organizationName || 'Pickup'} size="small" />
+          <OrgAvatar name={event.organizationName || event.name || 'Pickup'} size="small" />
           <Text style={styles.orgName} numberOfLines={1}>
-            {event.organizationName || 'Pickup'}
+            {event.organizationName || event.name || 'Pickup'}
           </Text>
         </View>
 
         {/* Date and venue */}
-        <Text style={styles.dateTime}>{formatDateTime(event.eventDate)}</Text>
+        <Text style={styles.dateTime}>
+          <Text style={styles.dateText}>{formatDateTime(event.eventDate).date}</Text>
+          <Text style={styles.timeText}> at {formatDateTime(event.eventDate).time}</Text>
+        </Text>
         {event.venue && (
           <Text style={styles.venue} numberOfLines={1}>{event.venue}</Text>
         )}
@@ -98,8 +101,8 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
           </View>
         )}
 
-        {/* Event name - only show if provided */}
-        {event.name && (
+        {/* Event name - only show if org exists (otherwise name is already the title) */}
+        {event.organizationName && event.name && (
           <Text style={styles.name} numberOfLines={1}>{event.name}</Text>
         )}
 
@@ -244,9 +247,15 @@ const styles = StyleSheet.create({
   },
   dateTime: {
     fontSize: 16,
-    fontWeight: '600',
     color: colors.text.primary,
     marginBottom: 2,
+  },
+  dateText: {
+    fontWeight: '600',
+  },
+  timeText: {
+    fontWeight: '400',
+    color: colors.text.secondary,
   },
   venue: {
     fontSize: 13,
@@ -261,8 +270,8 @@ const styles = StyleSheet.create({
   },
   orgName: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.text.primary,
+    fontWeight: '400',
+    color: colors.text.secondary,
     flex: 1,
   },
   name: {

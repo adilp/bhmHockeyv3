@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import type { EventDto, SkillLevel } from '@bhmhockey/shared';
 import { SkillLevelBadges } from '../SkillLevelBadges';
@@ -24,9 +23,6 @@ export function EventInfoTab({
   onRefresh,
   isRefreshing = false,
 }: EventInfoTabProps) {
-  const [showDetails, setShowDetails] = useState(false);
-
-  const orgName = event.organizationName || 'Pickup Game';
   // Waitlist takes priority - if you're waitlisted, show waitlist payment section
   const showWaitlistPaymentCard = event.amIWaitlisted && event.cost > 0;
   const showPaymentCard = event.isRegistered && !event.amIWaitlisted && event.cost > 0;
@@ -100,10 +96,17 @@ export function EventInfoTab({
           TICKET CARD
           ═══════════════════════════════════════════════════════════════════ */}
       <View style={styles.ticketCard}>
-        {/* Org Name Header */}
+        {/* Header - org name or event title for pickup games */}
         <Text style={styles.orgName} numberOfLines={1}>
-          {orgName.toUpperCase()}
+          {(event.organizationName || event.name || 'Pickup Game').toUpperCase()}
         </Text>
+
+        {/* Event Title - only show if org exists (otherwise title is already the header) */}
+        {event.organizationName && event.name && (
+          <Text style={styles.eventTitle} numberOfLines={2}>
+            {event.name}
+          </Text>
+        )}
 
         <View style={styles.ticketDivider} />
 
@@ -315,21 +318,9 @@ export function EventInfoTab({
       </View>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          MORE DETAILS (Collapsible)
+          DETAILS SECTION
           ═══════════════════════════════════════════════════════════════════ */}
       {hasMoreDetails && (
-        <TouchableOpacity
-          style={styles.detailsToggle}
-          onPress={() => setShowDetails(!showDetails)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.detailsToggleText}>
-            {showDetails ? '▲ Hide Details' : '▼ More Details'}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {showDetails && hasMoreDetails && (
         <View style={styles.detailsSection}>
           {/* Description */}
           {event.description && (
@@ -400,6 +391,13 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     textAlign: 'center',
     letterSpacing: 1,
+  },
+  eventTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.primary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   ticketDivider: {
     height: 1,
@@ -592,18 +590,10 @@ const styles = StyleSheet.create({
   },
 
   // ═══════════════════════════════════════════════════════════════════
-  // MORE DETAILS
+  // DETAILS SECTION
   // ═══════════════════════════════════════════════════════════════════
-  detailsToggle: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  detailsToggleText: {
-    fontSize: 14,
-    color: colors.text.muted,
-    fontWeight: '500',
-  },
   detailsSection: {
+    marginTop: spacing.md,
     backgroundColor: colors.bg.dark,
     borderRadius: radius.lg,
     padding: spacing.md,
