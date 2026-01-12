@@ -55,25 +55,14 @@ export function EventInfoTab({
     return `${minutes}m`;
   };
 
-  const getPaymentStatusColor = () => {
+  const getPaymentBadgeInfo = (): { text: string; variant: 'green' | 'warning' | 'error' } => {
     switch (event.myPaymentStatus) {
       case 'Verified':
-        return colors.primary.green;
+        return { text: 'Paid', variant: 'green' };
       case 'MarkedPaid':
-        return colors.status.warning;
+        return { text: 'Awaiting Verification', variant: 'warning' };
       default:
-        return colors.status.error;
-    }
-  };
-
-  const getPaymentStatusLabel = () => {
-    switch (event.myPaymentStatus) {
-      case 'Verified':
-        return 'PAID';
-      case 'MarkedPaid':
-        return 'PENDING';
-      default:
-        return 'UNPAID';
+        return { text: 'Unpaid', variant: 'error' };
     }
   };
 
@@ -235,9 +224,7 @@ export function EventInfoTab({
               <View style={styles.paymentRow}>
                 <View style={styles.paymentAmount}>
                   <Text style={styles.amountValue}>${event.cost.toFixed(2)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getPaymentStatusColor() }]}>
-                    <Text style={styles.statusBadgeText}>{getPaymentStatusLabel()}</Text>
-                  </View>
+                  <Badge variant={getPaymentBadgeInfo().variant}>{getPaymentBadgeInfo().text}</Badge>
                 </View>
 
                 {event.myTeamAssignment && (
@@ -483,17 +470,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     color: colors.text.primary,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
-    marginTop: spacing.xs,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.bg.darkest,
+    marginBottom: spacing.xs,
   },
   teamSection: {
     alignItems: 'center',

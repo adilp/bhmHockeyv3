@@ -62,20 +62,8 @@ const getSkillLevelInfo = (registration: EventRegistrationDto): { level: SkillLe
   return { level: skillLevel, color: colors.skillLevel[skillLevel] || colors.text.muted };
 };
 
-const getPaymentInfo = (status?: string): { label: string; color: string; bgColor: string } => {
-  switch (status) {
-    case 'Verified':
-      return { label: 'Paid', color: colors.primary.green, bgColor: colors.subtle.green };
-    case 'MarkedPaid':
-      return { label: 'Pending', color: colors.status.warning, bgColor: colors.status.warningSubtle };
-    case 'Pending':
-    default:
-      return { label: 'Unpaid', color: colors.status.error, bgColor: colors.status.errorSubtle };
-  }
-};
-
 // Static player cell (non-draggable, just displays)
-// 3-line layout: Name, Payment Badge, Achievement Badges
+// 2-line layout: Name, Achievement Badges
 // Vertical skill level bar component
 function SkillBar({ level, color, side }: { level: SkillLevel | null; color: string; side: 'left' | 'right' }) {
   if (!level) return null;
@@ -98,9 +86,8 @@ function PlayerCell({
   onPress: () => void;
   onLongPress: () => void;
 }) {
-  const { user, paymentStatus } = registration;
+  const { user } = registration;
   const fullName = `${user.firstName} ${user.lastName}`;
-  const paymentInfo = getPaymentInfo(paymentStatus);
   const skillInfo = getSkillLevelInfo(registration);
 
   return (
@@ -124,13 +111,7 @@ function PlayerCell({
       >
         {fullName}
       </Text>
-      {/* Line 2: Payment Badge */}
-      <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-        <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]} allowFontScaling={false}>
-          {paymentInfo.label}
-        </Text>
-      </View>
-      {/* Line 3: Achievement Badges */}
+      {/* Line 2: Achievement Badges */}
       <BadgeIconsRow
         badges={user.badges || []}
         totalCount={user.totalBadgeCount || 0}
@@ -140,7 +121,7 @@ function PlayerCell({
 }
 
 // Drag overlay - follows finger during drag
-// Mirrors PlayerCell 3-line layout for consistent drag visuals
+// Mirrors PlayerCell 2-line layout for consistent drag visuals
 function DragOverlay({
   dragInfo,
   translateX,
@@ -151,9 +132,8 @@ function DragOverlay({
   translateY: SharedValue<number>;
 }) {
   const { registration, side, startY } = dragInfo;
-  const { user, paymentStatus } = registration;
+  const { user } = registration;
   const fullName = `${user.firstName} ${user.lastName}`;
-  const paymentInfo = getPaymentInfo(paymentStatus);
   const skillInfo = getSkillLevelInfo(registration);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -200,13 +180,7 @@ function DragOverlay({
         >
           {fullName}
         </Text>
-        {/* Line 2: Payment Badge */}
-        <View style={[styles.paymentBadge, { backgroundColor: paymentInfo.bgColor }]}>
-          <Text style={[styles.paymentBadgeText, { color: paymentInfo.color }]} allowFontScaling={false}>
-            {paymentInfo.label}
-          </Text>
-        </View>
-        {/* Line 3: Achievement Badges */}
+        {/* Line 2: Achievement Badges */}
         <BadgeIconsRow
           badges={user.badges || []}
           totalCount={user.totalBadgeCount || 0}
@@ -718,17 +692,6 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '90deg' }],
     width: 70,
     textAlign: 'center',
-  },
-  paymentBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-    marginHorizontal: spacing.xs,
-    flexShrink: 0,
-  },
-  paymentBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
   },
   slotBadge: {
     width: 32,

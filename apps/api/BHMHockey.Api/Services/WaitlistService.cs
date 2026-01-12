@@ -121,8 +121,9 @@ public class WaitlistService : IWaitlistService
             // Notify user their registration was cancelled
             await NotifyRegistrationExpiredAsync(registration);
 
-            // Promote next person from waitlist
-            await PromoteNextFromWaitlistAsync(registration.EventId);
+            // Promote next verified user from waitlist (or notify unverified users of spot)
+            var promotionResult = await PromoteFromWaitlistAsync(registration.EventId, spotCount: 1);
+            await SendPendingNotificationsAsync(promotionResult.PendingNotifications);
         }
     }
 
