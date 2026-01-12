@@ -20,6 +20,15 @@ import type { EventVisibility, SkillLevel, EventDto, Organization } from '@bhmho
 import { SkillLevelSelector } from './SkillLevelSelector';
 import { colors, spacing, radius } from '../theme';
 
+// Platform-specific Picker props for dark theme
+const pickerProps = Platform.select({
+  ios: { itemStyle: { color: colors.text.primary }, themeVariant: 'dark' as const },
+  android: { mode: 'dialog' as const },
+}) ?? {};
+
+const getPickerItemColor = (): string | undefined =>
+  Platform.OS === 'ios' ? colors.text.primary : undefined;
+
 export interface EventFormData {
   organizationId?: string;
   name?: string;
@@ -77,6 +86,9 @@ export function EventForm({
   const [showOrgPicker, setShowOrgPicker] = useState(false);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
 
+  // Track if defaults have been applied (to prevent re-applying on org change)
+  const defaultsAppliedRef = useRef(false);
+
   // Populate form with initial data (for edit mode)
   useEffect(() => {
     if (initialData) {
@@ -92,6 +104,87 @@ export function EventForm({
       setSkillLevels((initialData.skillLevels as SkillLevel[]) || []);
     }
   }, [initialData]);
+
+  // Apply organization defaults on initial mount in create mode
+  useEffect(() => {
+    // Only apply defaults once, on mount, in create mode, with an organization selected
+    if (mode !== 'create' || !selectedOrgId || defaultsAppliedRef.current) return;
+
+    const org = organizations.find(o => o.id === selectedOrgId);
+    if (!org) return;
+
+    // Check if org has ANY defaults set
+    const defaultFields = [
+      org.defaultDayOfWeek,
+      org.defaultStartTime,
+      org.defaultDurationMinutes,
+      org.defaultMaxPlayers,
+      org.defaultCost,
+      org.defaultVenue,
+      org.defaultVisibility,
+    ];
+    const hasDefaults = defaultFields.some(field => field != null);
+    if (!hasDefaults) return;
+
+    // Apply date/time defaults
+    if (org.defaultDayOfWeek != null || org.defaultStartTime != null) {
+      const now = new Date();
+      let targetDate = new Date();
+
+      // Calculate next occurrence of defaultDayOfWeek if set
+      if (org.defaultDayOfWeek != null) {
+        const currentDay = now.getDay();
+        const targetDay = org.defaultDayOfWeek;
+        let daysToAdd = targetDay - currentDay;
+
+        // If today is the target day, check if we should use today or next week
+        if (daysToAdd === 0 && org.defaultStartTime) {
+          const [hours, minutes] = org.defaultStartTime.split(':').map(Number);
+          const targetTime = new Date(now);
+          targetTime.setHours(hours, minutes, 0, 0);
+
+          // If current time is after the default time, use next week
+          if (now >= targetTime) {
+            daysToAdd = 7;
+          }
+        } else if (daysToAdd < 0) {
+          // Target day is earlier in the week, so next week
+          daysToAdd += 7;
+        }
+
+        targetDate = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+      }
+
+      // Apply defaultStartTime if set
+      if (org.defaultStartTime) {
+        const [hours, minutes] = org.defaultStartTime.split(':').map(Number);
+        targetDate.setHours(hours, minutes, 0, 0);
+      }
+
+      setEventDate(targetDate);
+    }
+
+    // Apply other defaults
+    if (org.defaultDurationMinutes != null) {
+      setDuration(String(org.defaultDurationMinutes));
+    }
+    if (org.defaultMaxPlayers != null) {
+      setMaxPlayers(String(org.defaultMaxPlayers));
+    }
+    if (org.defaultCost != null) {
+      setCost(String(org.defaultCost));
+    }
+    if (org.defaultVenue != null) {
+      setVenue(org.defaultVenue);
+    }
+    if (org.defaultVisibility != null) {
+      setVisibility(org.defaultVisibility);
+    }
+
+    // Mark defaults as applied and show notification
+    defaultsAppliedRef.current = true;
+    Alert.alert('Event Defaults Applied', `Using event defaults from ${org.name}`);
+  }, [mode, selectedOrgId, organizations]);
 
   // Reset visibility when org changes (OrganizationMembers only valid with org)
   useEffect(() => {
@@ -445,16 +538,15 @@ export function EventForm({
                 </TouchableOpacity>
               </View>
               <Picker
-                selectedValue={selectedOrgId || 'personal'}
+                selectedValue={selectedOrgId ?? 'personal'}
                 onValueChange={(value) => setSelectedOrgId(value === 'personal' ? null : value)}
                 style={styles.modalPicker}
                 dropdownIconColor={colors.text.primary}
-                {...(Platform.OS === 'android' ? { mode: 'dialog' as const } : {})}
-                {...(Platform.OS === 'ios' ? { itemStyle: { color: colors.text.primary }, themeVariant: 'dark' as const } : {})}
+                {...pickerProps}
               >
-                <Picker.Item label="Myself (Pickup Game)" value="personal" color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
+                <Picker.Item label="Myself (Pickup Game)" value="personal" color={getPickerItemColor()} />
                 {organizations.map((org) => (
-                  <Picker.Item key={org.id} label={org.name} value={org.id} color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
+                  <Picker.Item key={org.id} label={org.name} value={org.id} color={getPickerItemColor()} />
                 ))}
               </Picker>
             </View>
@@ -477,17 +569,16 @@ export function EventForm({
               </View>
               <Picker
                 selectedValue={visibility}
-                onValueChange={(value) => setVisibility(value)}
+                onValueChange={setVisibility}
                 style={styles.modalPicker}
                 dropdownIconColor={colors.text.primary}
-                {...(Platform.OS === 'android' ? { mode: 'dialog' as const } : {})}
-                {...(Platform.OS === 'ios' ? { itemStyle: { color: colors.text.primary }, themeVariant: 'dark' as const } : {})}
+                {...pickerProps}
               >
-                <Picker.Item label="Public - Anyone can join" value="Public" color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
+                <Picker.Item label="Public - Anyone can join" value="Public" color={getPickerItemColor()} />
                 {hasOrganization && (
-                  <Picker.Item label="Members Only - Organization subscribers" value="OrganizationMembers" color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
+                  <Picker.Item label="Members Only - Organization subscribers" value="OrganizationMembers" color={getPickerItemColor()} />
                 )}
-                <Picker.Item label="Invite Only - Private event" value="InviteOnly" color={Platform.OS === 'ios' ? colors.text.primary : undefined} />
+                <Picker.Item label="Invite Only - Private event" value="InviteOnly" color={getPickerItemColor()} />
               </Picker>
             </View>
           </View>

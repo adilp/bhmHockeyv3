@@ -10,7 +10,14 @@ public record OrganizationDto(
     int SubscriberCount,
     bool IsSubscribed,
     bool IsAdmin,      // True if current user is an admin of this organization
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    int? DefaultDayOfWeek,
+    TimeSpan? DefaultStartTime,
+    int? DefaultDurationMinutes,
+    int? DefaultMaxPlayers,
+    decimal? DefaultCost,
+    string? DefaultVenue,
+    string? DefaultVisibility
 );
 
 // Member/subscriber info for admin view
@@ -28,14 +35,28 @@ public record CreateOrganizationRequest(
     string Name,
     string? Description,
     string? Location,
-    List<string>? SkillLevels  // Gold, Silver, Bronze, D-League (multiple allowed)
+    List<string>? SkillLevels,  // Gold, Silver, Bronze, D-League (multiple allowed)
+    int? DefaultDayOfWeek,
+    TimeSpan? DefaultStartTime,
+    int? DefaultDurationMinutes,
+    int? DefaultMaxPlayers,
+    decimal? DefaultCost,
+    string? DefaultVenue,
+    string? DefaultVisibility
 );
 
 public record UpdateOrganizationRequest(
     string? Name,
     string? Description,
     string? Location,
-    List<string>? SkillLevels  // Gold, Silver, Bronze, D-League (multiple allowed)
+    List<string>? SkillLevels,  // Gold, Silver, Bronze, D-League (multiple allowed)
+    int? DefaultDayOfWeek,
+    TimeSpan? DefaultStartTime,
+    int? DefaultDurationMinutes,
+    int? DefaultMaxPlayers,
+    decimal? DefaultCost,
+    string? DefaultVenue,
+    string? DefaultVisibility
 );
 
 public record OrganizationSubscriptionDto(

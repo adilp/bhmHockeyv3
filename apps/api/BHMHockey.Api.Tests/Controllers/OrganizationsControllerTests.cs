@@ -115,7 +115,7 @@ public class OrganizationsControllerTests
     {
         // Arrange
         SetupAuthenticatedUser(_testUserId);
-        var request = new CreateOrganizationRequest("New Org", "Description", "Boston", new List<string> { "Gold" });
+        var request = new CreateOrganizationRequest("New Org", "Description", "Boston", new List<string> { "Gold" }, null, null, null, null, null, null, null);
         var createdOrg = CreateOrgDto("New Org");
         _mockOrgService.Setup(s => s.CreateAsync(request, _testUserId)).ReturnsAsync(createdOrg);
 
@@ -138,7 +138,7 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        var request = new UpdateOrganizationRequest("Updated Name", null, null, null);
+        var request = new UpdateOrganizationRequest("Updated Name", null, null, null, null, null, null, null, null, null, null);
         var updatedOrg = CreateOrgDto("Updated Name");
         _mockOrgService.Setup(s => s.UpdateAsync(orgId, request, _testUserId)).ReturnsAsync(updatedOrg);
 
@@ -155,7 +155,7 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        var request = new UpdateOrganizationRequest("Updated Name", null, null, null);
+        var request = new UpdateOrganizationRequest("Updated Name", null, null, null, null, null, null, null, null, null, null);
         _mockOrgService.Setup(s => s.UpdateAsync(orgId, request, _testUserId)).ReturnsAsync((OrganizationDto?)null);
 
         // Act
@@ -298,7 +298,14 @@ public class OrganizationsControllerTests
             10,
             isSubscribed,
             isCreator,
-            DateTime.UtcNow
+            DateTime.UtcNow,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
         );
     }
 

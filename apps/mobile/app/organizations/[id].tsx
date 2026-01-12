@@ -11,6 +11,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { organizationService } from '@bhmhockey/api-client';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -366,6 +367,17 @@ export default function OrganizationDetailScreen() {
           </Text>
         )}
 
+        {/* Event Defaults Button - visible to admins only */}
+        {isAdmin && (
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => router.push(`/organizations/${id}/settings`)}
+          >
+            <Ionicons name="settings-outline" size={20} color={colors.text.secondary} />
+            <Text style={styles.settingsButtonText}>Event Defaults</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Share Invite Button - visible to all members */}
         {(organization.isSubscribed || isAdmin) && (
           <TouchableOpacity
@@ -638,6 +650,24 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
+  },
+  settingsButton: {
+    backgroundColor: colors.bg.hover,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  settingsButtonText: {
+    color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   shareButton: {
     backgroundColor: colors.bg.hover,

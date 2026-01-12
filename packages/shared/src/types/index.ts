@@ -40,6 +40,14 @@ export interface Organization {
   isSubscribed: boolean;
   isAdmin: boolean;       // True if current user is an admin of this organization
   createdAt: string;
+  // Event defaults
+  defaultDayOfWeek?: number | null;      // 0=Sunday, 6=Saturday
+  defaultStartTime?: string | null;       // "HH:mm:ss" format
+  defaultDurationMinutes?: number | null;
+  defaultMaxPlayers?: number | null;
+  defaultCost?: number | null;
+  defaultVenue?: string | null;
+  defaultVisibility?: EventVisibility | null;
 }
 
 // Organization admin info
@@ -83,6 +91,14 @@ export interface CreateOrganizationRequest {
   description?: string;
   location?: string;
   skillLevels?: SkillLevel[];  // Multiple skill levels allowed
+  // Event defaults
+  defaultDayOfWeek?: number | null;      // 0=Sunday, 6=Saturday
+  defaultStartTime?: string | null;       // "HH:mm:ss" format
+  defaultDurationMinutes?: number | null;
+  defaultMaxPlayers?: number | null;
+  defaultCost?: number | null;
+  defaultVenue?: string | null;
+  defaultVisibility?: EventVisibility | null;
 }
 
 export interface UpdateOrganizationRequest {
@@ -90,6 +106,14 @@ export interface UpdateOrganizationRequest {
   description?: string;
   location?: string;
   skillLevels?: SkillLevel[];  // Multiple skill levels allowed
+  // Event defaults
+  defaultDayOfWeek?: number | null;      // 0=Sunday, 6=Saturday
+  defaultStartTime?: string | null;       // "HH:mm:ss" format
+  defaultDurationMinutes?: number | null;
+  defaultMaxPlayers?: number | null;
+  defaultCost?: number | null;
+  defaultVenue?: string | null;
+  defaultVisibility?: EventVisibility | null;
 }
 
 // Event types

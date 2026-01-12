@@ -13,6 +13,15 @@ public class Organization
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    // Event Defaults (all optional)
+    public int? DefaultDayOfWeek { get; set; }  // 0=Sunday, 6=Saturday
+    public TimeSpan? DefaultStartTime { get; set; }  // Time of day
+    public int? DefaultDurationMinutes { get; set; }
+    public int? DefaultMaxPlayers { get; set; }
+    public decimal? DefaultCost { get; set; }
+    public string? DefaultVenue { get; set; }
+    public string? DefaultVisibility { get; set; }  // "Public", "OrganizationMembers", "InviteOnly"
+
     // Navigation properties
     public ICollection<OrganizationSubscription> Subscriptions { get; set; } = new List<OrganizationSubscription>();
     public ICollection<Event> Events { get; set; } = new List<Event>();

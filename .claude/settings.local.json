@@ -10,7 +10,9 @@
       "Bash(git diff:*)",
       "Bash(grep:*)",
       "Bash(git show:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(dotnet test:*)",
+      "Bash(yarn tsc:*)"
     ]
   }
 }

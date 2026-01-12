@@ -30,9 +30,59 @@ public class OrganizationService : IOrganizationService
         }
     }
 
+    private void ValidateEventDefaults(
+        int? defaultDayOfWeek,
+        int? defaultDurationMinutes,
+        int? defaultMaxPlayers,
+        decimal? defaultCost,
+        string? defaultVenue,
+        string? defaultVisibility)
+    {
+        if (defaultDayOfWeek.HasValue && (defaultDayOfWeek.Value < 0 || defaultDayOfWeek.Value > 6))
+        {
+            throw new InvalidOperationException("DefaultDayOfWeek must be between 0 (Sunday) and 6 (Saturday).");
+        }
+
+        if (defaultDurationMinutes.HasValue && (defaultDurationMinutes.Value < 15 || defaultDurationMinutes.Value > 480))
+        {
+            throw new InvalidOperationException("DefaultDurationMinutes must be between 15 and 480 minutes.");
+        }
+
+        if (defaultMaxPlayers.HasValue && (defaultMaxPlayers.Value < 2 || defaultMaxPlayers.Value > 100))
+        {
+            throw new InvalidOperationException("DefaultMaxPlayers must be between 2 and 100.");
+        }
+
+        if (defaultCost.HasValue && defaultCost.Value < 0)
+        {
+            throw new InvalidOperationException("DefaultCost must be greater than or equal to 0.");
+        }
+
+        if (defaultVenue != null && defaultVenue.Length > 200)
+        {
+            throw new InvalidOperationException("DefaultVenue must not exceed 200 characters.");
+        }
+
+        if (defaultVisibility != null)
+        {
+            var validVisibilities = new HashSet<string> { "Public", "OrganizationMembers", "InviteOnly" };
+            if (!validVisibilities.Contains(defaultVisibility))
+            {
+                throw new InvalidOperationException($"Invalid DefaultVisibility: '{defaultVisibility}'. Valid values: Public, OrganizationMembers, InviteOnly");
+            }
+        }
+    }
+
     public async Task<OrganizationDto> CreateAsync(CreateOrganizationRequest request, Guid creatorId)
     {
         ValidateSkillLevels(request.SkillLevels);
+        ValidateEventDefaults(
+            request.DefaultDayOfWeek,
+            request.DefaultDurationMinutes,
+            request.DefaultMaxPlayers,
+            request.DefaultCost,
+            request.DefaultVenue,
+            request.DefaultVisibility);
 
         // Check for duplicate name
         var existingOrg = await _context.Organizations
@@ -48,7 +98,14 @@ public class OrganizationService : IOrganizationService
             Description = request.Description,
             Location = request.Location,
             SkillLevels = request.SkillLevels,
-            CreatorId = creatorId
+            CreatorId = creatorId,
+            DefaultDayOfWeek = request.DefaultDayOfWeek,
+            DefaultStartTime = request.DefaultStartTime,
+            DefaultDurationMinutes = request.DefaultDurationMinutes,
+            DefaultMaxPlayers = request.DefaultMaxPlayers,
+            DefaultCost = request.DefaultCost,
+            DefaultVenue = request.DefaultVenue,
+            DefaultVisibility = request.DefaultVisibility
         };
 
         _context.Organizations.Add(organization);
@@ -111,6 +168,14 @@ public class OrganizationService : IOrganizationService
         var isAdmin = await _adminService.IsUserAdminAsync(id, userId);
         if (!isAdmin) return null;
 
+        ValidateEventDefaults(
+            request.DefaultDayOfWeek,
+            request.DefaultDurationMinutes,
+            request.DefaultMaxPlayers,
+            request.DefaultCost,
+            request.DefaultVenue,
+            request.DefaultVisibility);
+
         if (request.Name != null && request.Name != organization.Name)
         {
             // Check for duplicate name
@@ -129,6 +194,13 @@ public class OrganizationService : IOrganizationService
             ValidateSkillLevels(request.SkillLevels);
             organization.SkillLevels = request.SkillLevels;
         }
+        if (request.DefaultDayOfWeek != null) organization.DefaultDayOfWeek = request.DefaultDayOfWeek;
+        if (request.DefaultStartTime != null) organization.DefaultStartTime = request.DefaultStartTime;
+        if (request.DefaultDurationMinutes != null) organization.DefaultDurationMinutes = request.DefaultDurationMinutes;
+        if (request.DefaultMaxPlayers != null) organization.DefaultMaxPlayers = request.DefaultMaxPlayers;
+        if (request.DefaultCost != null) organization.DefaultCost = request.DefaultCost;
+        if (request.DefaultVenue != null) organization.DefaultVenue = request.DefaultVenue;
+        if (request.DefaultVisibility != null) organization.DefaultVisibility = request.DefaultVisibility;
 
         organization.UpdatedAt = DateTime.UtcNow;
 
@@ -311,7 +383,14 @@ public class OrganizationService : IOrganizationService
             subscriberCount,
             isSubscribed,
             isAdmin,
-            org.CreatedAt
+            org.CreatedAt,
+            org.DefaultDayOfWeek,
+            org.DefaultStartTime,
+            org.DefaultDurationMinutes,
+            org.DefaultMaxPlayers,
+            org.DefaultCost,
+            org.DefaultVenue,
+            org.DefaultVisibility
         );
     }
 }

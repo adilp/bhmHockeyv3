@@ -194,7 +194,7 @@ public class UsersControllerTests
         // Arrange
         var userId = Guid.NewGuid();
         var orgDto = new OrganizationDto(
-            Guid.NewGuid(), "Test Org", "Description", "Boston", new List<string> { "Gold" }, Guid.NewGuid(), 10, true, false, DateTime.UtcNow);
+            Guid.NewGuid(), "Test Org", "Description", "Boston", new List<string> { "Gold" }, Guid.NewGuid(), 10, true, false, DateTime.UtcNow, null, null, null, null, null, null, null);
         var subscriptions = new List<OrganizationSubscriptionDto>
         {
             new OrganizationSubscriptionDto(Guid.NewGuid(), orgDto, true, DateTime.UtcNow)

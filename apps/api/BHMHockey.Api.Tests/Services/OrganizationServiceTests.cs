@@ -289,7 +289,7 @@ public class OrganizationServiceTests : IDisposable
         // Arrange
         var creator = await CreateTestUser();
         var org = await CreateTestOrganization(creator.Id, "Original Name");
-        var request = new UpdateOrganizationRequest("Updated Name", null, null, null);
+        var request = new UpdateOrganizationRequest("Updated Name", null, null, null, null, null, null, null, null, null, null);
 
         // Act
         var result = await _sut.UpdateAsync(org.Id, request, creator.Id);
@@ -306,7 +306,7 @@ public class OrganizationServiceTests : IDisposable
         var creator = await CreateTestUser("creator@example.com");
         var otherUser = await CreateTestUser("other@example.com");
         var org = await CreateTestOrganization(creator.Id);
-        var request = new UpdateOrganizationRequest("Hacked Name", null, null, null);
+        var request = new UpdateOrganizationRequest("Hacked Name", null, null, null, null, null, null, null, null, null, null);
 
         // Act
         var result = await _sut.UpdateAsync(org.Id, request, otherUser.Id);
@@ -332,7 +332,7 @@ public class OrganizationServiceTests : IDisposable
             skillLevels: new List<string> { "Gold" }
         );
 
-        var request = new UpdateOrganizationRequest("Updated Name", null, null, null);
+        var request = new UpdateOrganizationRequest("Updated Name", null, null, null, null, null, null, null, null, null, null);
 
         // Act
         var result = await _sut.UpdateAsync(org.Id, request, creator.Id);
@@ -355,7 +355,14 @@ public class OrganizationServiceTests : IDisposable
             null,
             null,
             null,
-            new List<string> { "Platinum" } // Invalid skill level
+            new List<string> { "Platinum" }, // Invalid skill level
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
         );
 
         // Act & Assert
@@ -412,7 +419,7 @@ public class OrganizationServiceTests : IDisposable
     {
         // Arrange
         var creator = await CreateTestUser();
-        var request = new CreateOrganizationRequest("New Org", "Description", "Location", new List<string> { "Silver" });
+        var request = new CreateOrganizationRequest("New Org", "Description", "Location", new List<string> { "Silver" }, null, null, null, null, null, null, null);
 
         // Act
         var result = await _sut.CreateAsync(request, creator.Id);
@@ -434,7 +441,14 @@ public class OrganizationServiceTests : IDisposable
             "New Org",
             "Description",
             "Location",
-            new List<string> { "Platinum" } // Invalid skill level
+            new List<string> { "Platinum" }, // Invalid skill level
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
         );
 
         // Act & Assert
@@ -599,7 +613,7 @@ public class OrganizationServiceTests : IDisposable
         var org = await CreateTestOrganization(creator.Id, "Original Name");
         await AddAdminToOrganization(org.Id, nonCreatorAdmin.Id, creator.Id);
 
-        var request = new UpdateOrganizationRequest("Updated By Non-Creator Admin", null, null, null);
+        var request = new UpdateOrganizationRequest("Updated By Non-Creator Admin", null, null, null, null, null, null, null, null, null, null);
 
         // Act
         var result = await _sut.UpdateAsync(org.Id, request, nonCreatorAdmin.Id);
@@ -651,7 +665,7 @@ public class OrganizationServiceTests : IDisposable
     {
         // Arrange
         var creator = await CreateTestUser();
-        var request = new CreateOrganizationRequest("New Org", "Description", "Location", new List<string> { "Silver" });
+        var request = new CreateOrganizationRequest("New Org", "Description", "Location", new List<string> { "Silver" }, null, null, null, null, null, null, null);
 
         // Act
         var result = await _sut.CreateAsync(request, creator.Id);
