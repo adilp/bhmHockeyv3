@@ -18,6 +18,7 @@ import {
   handleNotificationData,
   handleForegroundNotification,
 } from '../utils/notifications';
+import { useOtaUpdates } from '../hooks';
 
 // Disable font scaling globally to prevent text overflow on devices with large font settings
 // This must be set before any components render
@@ -35,6 +36,8 @@ TextInput.defaultProps.allowFontScaling = false;
 function RootLayoutContent() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated } = useAuthStore();
+
+  useOtaUpdates();
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
   const lastHandledNotificationId = useRef<string | null>(null);
@@ -56,78 +59,58 @@ function RootLayoutContent() {
   }, []);
 
   // Set up push notifications when authenticated
-  // This runs in _layout.tsx which stays mounted for the entire app lifecycle
+  // Runs in _layout.tsx which stays mounted for the entire app lifecycle
   useEffect(() => {
-    console.log('🔔 [Layout] Auth state changed, isAuthenticated:', isAuthenticated);
     if (!isAuthenticated) {
-      console.log('🔔 [Layout] Not authenticated, skipping push notification setup');
       return;
     }
 
-    console.log('🔔 [Layout] Setting up push notifications...');
-
-    // Register for push notifications and save token to backend
     registerForPushNotificationsAsync().then((token) => {
       if (token) {
-        console.log('🔔 [Layout] Got push token, saving to backend:', token);
         savePushTokenToBackend(token);
-      } else {
-        console.log('🔔 [Layout] No push token received (might be simulator or permissions denied)');
       }
     });
 
-    // Check for cold start: app was launched by tapping a notification while killed
-    // This catches the notification that addNotificationResponseReceivedListener misses
+    // Handle cold start: app launched by tapping notification while killed
+    // Catches the notification that addNotificationResponseReceivedListener misses
     getLastNotificationResponse().then((response) => {
-      if (response) {
-        const notificationId = response.notification.request.identifier;
-        // Avoid handling the same notification twice (stale response check)
-        if (lastHandledNotificationId.current === notificationId) {
-          console.log('🔔 [Layout] Cold start: Already handled this notification, skipping');
-          return;
-        }
-        lastHandledNotificationId.current = notificationId;
-
-        console.log('🔔 [Layout] Cold start: App was launched via notification tap');
-        const data = response.notification.request.content.data;
-        // Delay navigation slightly to ensure the app is fully mounted
-        setTimeout(() => {
-          console.log('🔔 [Layout] Handling cold start notification data:', data);
-          handleNotificationData(data);
-        }, 500);
+      if (!response) {
+        return;
       }
+
+      const notificationId = response.notification.request.identifier;
+      if (lastHandledNotificationId.current === notificationId) {
+        return;
+      }
+
+      lastHandledNotificationId.current = notificationId;
+      const data = response.notification.request.content.data;
+
+      // Delay navigation to ensure app is fully mounted
+      setTimeout(() => {
+        handleNotificationData(data);
+      }, 500);
     });
 
-    // Listen for notifications received while app is in foreground
     notificationListener.current = addNotificationReceivedListener((notification) => {
-      console.log('🔔 [Layout] Notification received:', notification);
       const data = notification.request.content.data;
       handleForegroundNotification(data);
     });
 
-    // Listen for user tapping on a notification (while app is running or in background)
     responseListener.current = addNotificationResponseReceivedListener((response) => {
       const notificationId = response.notification.request.identifier;
-      // Avoid handling the same notification twice
       if (lastHandledNotificationId.current === notificationId) {
-        console.log('🔔 [Layout] Notification tapped: Already handled, skipping');
         return;
       }
-      lastHandledNotificationId.current = notificationId;
 
-      console.log('🔔 [Layout] Notification tapped:', response);
+      lastHandledNotificationId.current = notificationId;
       const data = response.notification.request.content.data;
       handleNotificationData(data);
     });
 
     return () => {
-      console.log('🔔 [Layout] Cleaning up notification listeners');
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-      }
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
     };
   }, [isAuthenticated]);
 
