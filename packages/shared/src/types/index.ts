@@ -424,3 +424,199 @@ export interface UserSummaryDto {
   badges: UserBadgeDto[];     // Top 3 badges by displayOrder
   totalBadgeCount: number;    // Total badges user has earned
 }
+
+// ============================================
+// Tournament Types (TRN-001)
+// ============================================
+
+// Tournament format options
+export type TournamentFormat = 'SingleElimination' | 'DoubleElimination' | 'RoundRobin';
+
+// Team formation options
+export type TournamentTeamFormation = 'OrganizerAssigned' | 'PreFormed';
+
+// Tournament status (lifecycle state machine)
+export type TournamentStatus =
+  | 'Draft'           // Created but not visible to public
+  | 'Open'            // Registration open, visible to public
+  | 'RegistrationClosed'  // Past deadline, preparing to start
+  | 'InProgress'      // Tournament ongoing, games being played
+  | 'Completed'       // All games finished, badges awarded
+  | 'Postponed'       // Temporarily paused with new dates
+  | 'Cancelled';      // Tournament cancelled
+
+// Fee type options
+export type TournamentFeeType = 'PerPlayer' | 'PerTeam';
+
+// Tournament admin roles
+export type TournamentAdminRole = 'Owner' | 'Admin' | 'Scorekeeper';
+
+// Tournament DTO - full tournament details
+export interface TournamentDto {
+  id: string;
+  organizationId?: string;
+  organizationName?: string;
+  creatorId: string;
+
+  // Basic info
+  name: string;
+  description?: string;
+
+  // Format & Configuration
+  format: TournamentFormat;
+  teamFormation: TournamentTeamFormation;
+
+  // Status
+  status: TournamentStatus;
+
+  // Dates
+  startDate: string;
+  endDate: string;
+  registrationDeadline: string;
+  postponedToDate?: string;
+
+  // Team configuration
+  maxTeams: number;
+  minPlayersPerTeam?: number;
+  maxPlayersPerTeam?: number;
+  allowMultiTeam: boolean;
+  allowSubstitutions: boolean;
+
+  // Payment
+  entryFee: number;
+  feeType?: TournamentFeeType;
+
+  // Round Robin config
+  pointsWin: number;
+  pointsTie: number;
+  pointsLoss: number;
+  playoffFormat?: TournamentFormat;
+  playoffTeamsCount?: number;
+
+  // Content
+  rulesContent?: string;
+  waiverUrl?: string;
+  venue?: string;
+
+  // Configuration (JSON strings)
+  notificationSettings?: string;
+  customQuestions?: string;
+  eligibilityRequirements?: string;
+  tiebreakerOrder?: string;
+
+  // Timestamps
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+
+  // Computed fields
+  canManage: boolean;
+}
+
+// Request to create a tournament
+export interface CreateTournamentRequest {
+  organizationId?: string;
+
+  // Basic info
+  name: string;
+  description?: string;
+
+  // Format & Configuration
+  format: TournamentFormat;
+  teamFormation: TournamentTeamFormation;
+
+  // Dates
+  startDate: string;
+  endDate: string;
+  registrationDeadline: string;
+
+  // Team configuration
+  maxTeams: number;
+  minPlayersPerTeam?: number;
+  maxPlayersPerTeam?: number;
+  allowMultiTeam?: boolean;
+  allowSubstitutions?: boolean;
+
+  // Payment
+  entryFee?: number;
+  feeType?: TournamentFeeType;
+
+  // Round Robin config
+  pointsWin?: number;
+  pointsTie?: number;
+  pointsLoss?: number;
+  playoffFormat?: TournamentFormat;
+  playoffTeamsCount?: number;
+
+  // Content
+  rulesContent?: string;
+  waiverUrl?: string;
+  venue?: string;
+
+  // Configuration (JSON strings)
+  notificationSettings?: string;
+  customQuestions?: string;
+  eligibilityRequirements?: string;
+  tiebreakerOrder?: string;
+}
+
+// Request to update a tournament (all fields optional for patch semantics)
+export interface UpdateTournamentRequest {
+  // Basic info
+  name?: string;
+  description?: string;
+
+  // Format & Configuration
+  format?: TournamentFormat;
+  teamFormation?: TournamentTeamFormation;
+
+  // Dates
+  startDate?: string;
+  endDate?: string;
+  registrationDeadline?: string;
+
+  // Team configuration
+  maxTeams?: number;
+  minPlayersPerTeam?: number;
+  maxPlayersPerTeam?: number;
+  allowMultiTeam?: boolean;
+  allowSubstitutions?: boolean;
+
+  // Payment
+  entryFee?: number;
+  feeType?: TournamentFeeType;
+
+  // Round Robin config
+  pointsWin?: number;
+  pointsTie?: number;
+  pointsLoss?: number;
+  playoffFormat?: TournamentFormat;
+  playoffTeamsCount?: number;
+
+  // Content
+  rulesContent?: string;
+  waiverUrl?: string;
+  venue?: string;
+
+  // Configuration (JSON strings)
+  notificationSettings?: string;
+  customQuestions?: string;
+  eligibilityRequirements?: string;
+  tiebreakerOrder?: string;
+}
+
+// Tournament admin DTO
+export interface TournamentAdminDto {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: TournamentAdminRole;
+  addedAt: string;
+  addedByUserId?: string;
+  addedByName?: string;
+}
