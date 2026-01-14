@@ -167,6 +167,22 @@ public record UpdateTournamentRequest
 }
 
 /// <summary>
+/// Request DTO for postponing a tournament with optional new dates
+/// </summary>
+public record PostponeTournamentRequest
+{
+    /// <summary>
+    /// Optional new start date for the tournament
+    /// </summary>
+    public DateTime? NewStartDate { get; set; }
+
+    /// <summary>
+    /// Optional new end date for the tournament
+    /// </summary>
+    public DateTime? NewEndDate { get; set; }
+}
+
+/// <summary>
 /// DTO for tournament admin information
 /// </summary>
 public record TournamentAdminDto

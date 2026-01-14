@@ -11,10 +11,14 @@ namespace BHMHockey.Api.Controllers;
 public class TournamentsController : ControllerBase
 {
     private readonly ITournamentService _tournamentService;
+    private readonly ITournamentLifecycleService _lifecycleService;
 
-    public TournamentsController(ITournamentService tournamentService)
+    public TournamentsController(
+        ITournamentService tournamentService,
+        ITournamentLifecycleService lifecycleService)
     {
         _tournamentService = tournamentService;
+        _lifecycleService = lifecycleService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -208,4 +212,233 @@ public class TournamentsController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
+
+    #region Lifecycle Endpoints
+
+    /// <summary>
+    /// Publish a tournament (Draft → Open). Makes it visible and opens registration.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Tournament published successfully</response>
+    /// <response code="400">Invalid state transition</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/publish")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentDto>> Publish(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _lifecycleService.PublishAsync(id, userId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Close registration for a tournament (Open → RegistrationClosed).
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Registration closed successfully</response>
+    /// <response code="400">Invalid state transition</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/close-registration")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentDto>> CloseRegistration(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _lifecycleService.CloseRegistrationAsync(id, userId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Start a tournament (RegistrationClosed → InProgress). Locks the bracket.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Tournament started successfully</response>
+    /// <response code="400">Invalid state transition</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/start")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentDto>> Start(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _lifecycleService.StartAsync(id, userId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Complete a tournament (InProgress → Completed). Terminal state.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Tournament completed successfully</response>
+    /// <response code="400">Invalid state transition</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/complete")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentDto>> Complete(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _lifecycleService.CompleteAsync(id, userId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Postpone a tournament (InProgress → Postponed). Optionally set new dates.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="request">Optional new start and end dates</param>
+    /// <response code="200">Tournament postponed successfully</response>
+    /// <response code="400">Invalid state transition</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/postpone")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentDto>> Postpone(Guid id, [FromBody] PostponeTournamentRequest? request = null)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _lifecycleService.PostponeAsync(id, userId, request?.NewStartDate, request?.NewEndDate);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Resume a postponed tournament (Postponed → InProgress).
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Tournament resumed successfully</response>
+    /// <response code="400">Invalid state transition</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/resume")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentDto>> Resume(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _lifecycleService.ResumeAsync(id, userId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Cancel a tournament (Any non-terminal state → Cancelled). Terminal state.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Tournament cancelled successfully</response>
+    /// <response code="400">Invalid state transition (e.g., already completed)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentDto>> Cancel(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _lifecycleService.CancelAsync(id, userId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    #endregion
 }

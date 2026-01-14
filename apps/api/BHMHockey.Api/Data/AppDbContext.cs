@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<UserBadge> UserBadges { get; set; }
     public DbSet<Tournament> Tournaments { get; set; }
     public DbSet<TournamentAdmin> TournamentAdmins { get; set; }
+    public DbSet<TournamentAuditLog> TournamentAuditLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -338,6 +339,35 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.AddedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // TournamentAuditLog configuration
+        modelBuilder.Entity<TournamentAuditLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.FromStatus).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.ToStatus).IsRequired().HasMaxLength(50);
+
+            // Index for querying audit logs by tournament
+            entity.HasIndex(e => e.TournamentId);
+            entity.HasIndex(e => e.Timestamp);
+
+            entity.HasOne(e => e.Tournament)
+                .WithMany()
+                .HasForeignKey(e => e.TournamentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // JSONB for PostgreSQL, regular string for InMemory
+            if (!Database.ProviderName?.Contains("InMemory") ?? false)
+            {
+                entity.Property(e => e.Details).HasColumnType("jsonb");
+            }
         });
     }
 }
