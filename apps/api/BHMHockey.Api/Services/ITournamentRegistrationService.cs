@@ -58,4 +58,15 @@ public interface ITournamentRegistrationService
     /// <returns>List of all registrations including user details</returns>
     /// <exception cref="UnauthorizedAccessException">Thrown when user is not a tournament admin</exception>
     Task<List<TournamentRegistrationDto>> GetAllAsync(Guid tournamentId, Guid userId);
+
+    /// <summary>
+    /// Marks a registration's payment as complete (player action).
+    /// Only allowed when PaymentStatus is "Pending".
+    /// </summary>
+    Task<bool> MarkPaymentAsync(Guid tournamentId, Guid userId);
+
+    /// <summary>
+    /// Verifies or rejects a registration's payment (admin action).
+    /// </summary>
+    Task<TournamentRegistrationDto?> VerifyPaymentAsync(Guid tournamentId, Guid registrationId, bool verified, Guid adminUserId);
 }

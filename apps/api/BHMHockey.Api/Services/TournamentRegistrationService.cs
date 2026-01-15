@@ -287,6 +287,92 @@ public class TournamentRegistrationService : ITournamentRegistrationService
         return registrations.Select(MapToDto).ToList();
     }
 
+    public async Task<bool> MarkPaymentAsync(Guid tournamentId, Guid userId)
+    {
+        var registration = await _context.TournamentRegistrations
+            .Include(r => r.Tournament)
+                .ThenInclude(t => t.Creator)
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r =>
+                r.TournamentId == tournamentId &&
+                r.UserId == userId &&
+                r.Status != "Cancelled");
+
+        if (registration == null) return false;
+
+        // Can't mark payment for free tournaments
+        if (registration.Tournament.EntryFee <= 0) return false;
+
+        // Can only mark as paid if currently Pending
+        if (registration.PaymentStatus != "Pending") return false;
+
+        registration.PaymentStatus = "MarkedPaid";
+        registration.PaymentMarkedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        // Notify the tournament creator that a user marked their payment
+        if (!string.IsNullOrEmpty(registration.Tournament.Creator?.PushToken))
+        {
+            var userName = $"{registration.User.FirstName} {registration.User.LastName}".Trim();
+            if (string.IsNullOrEmpty(userName)) userName = registration.User.Email;
+            var tournamentName = registration.Tournament.Name ?? "Tournament";
+
+            await _notificationService.SendPushNotificationAsync(
+                registration.Tournament.Creator.PushToken,
+                "Payment Pending Verification",
+                $"{userName} marked their payment for {tournamentName}. Tap to view.",
+                new Dictionary<string, string>
+                {
+                    { "type", "payment_marked" },
+                    { "tournamentId", tournamentId.ToString() }
+                }
+            );
+        }
+
+        return true;
+    }
+
+    public async Task<TournamentRegistrationDto?> VerifyPaymentAsync(Guid tournamentId, Guid registrationId, bool verified, Guid adminUserId)
+    {
+        // Check if user is admin using tournament service
+        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, adminUserId);
+        if (!isAdmin)
+        {
+            throw new UnauthorizedAccessException("You do not have permission to verify payments for this tournament");
+        }
+
+        // Find registration by registrationId and tournamentId (include User and Tournament)
+        var registration = await _context.TournamentRegistrations
+            .Include(r => r.User)
+            .Include(r => r.AssignedTeam)
+            .Include(r => r.Tournament)
+            .FirstOrDefaultAsync(r =>
+                r.Id == registrationId &&
+                r.TournamentId == tournamentId);
+
+        if (registration == null) return null;
+
+        // Cannot verify payment for free tournaments
+        if (registration.Tournament.EntryFee <= 0) return null;
+
+        // Update payment status based on verified flag
+        if (verified)
+        {
+            registration.PaymentStatus = "Verified";
+            registration.PaymentVerifiedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            registration.PaymentStatus = "Pending";
+            registration.PaymentVerifiedAt = null;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return MapToDto(registration);
+    }
+
     /// <summary>
     /// Maps a TournamentRegistration entity to TournamentRegistrationDto.
     /// Includes UserDto for the user and AssignedTeamName if AssignedTeamId is set.

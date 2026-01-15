@@ -76,3 +76,14 @@ public record TournamentRegistrationResultDto(
     int? WaitlistPosition,
     string Message
 );
+
+/// <summary>
+/// Request DTO for verifying a tournament registration payment (admin action)
+/// </summary>
+public record VerifyTournamentPaymentRequest
+{
+    /// <summary>
+    /// True to verify the payment, false to reject/reset to pending
+    /// </summary>
+    public required bool Verified { get; set; }
+}

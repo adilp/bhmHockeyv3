@@ -936,5 +936,78 @@ public class TournamentsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Mark payment as complete for current user's registration. Requires authentication.
+    /// </summary>
+    /// <remarks>
+    /// Players call this endpoint after completing their payment (e.g., via Venmo).
+    /// This transitions PaymentStatus from Pending to MarkedPaid.
+    /// The organizer must then verify the payment.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Payment marked successfully</response>
+    /// <response code="400">Cannot mark payment (not pending, free tournament, or not registered)</response>
+    /// <response code="401">Not authenticated</response>
+    [HttpPost("{id:guid}/register/mark-payment")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> MarkPayment(Guid id)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _registrationService.MarkPaymentAsync(id, userId);
+
+        if (!result)
+        {
+            return BadRequest(new { message = "Cannot mark payment. Registration may not exist, payment already marked, or tournament is free." });
+        }
+
+        return Ok(new { message = "Payment marked successfully. Awaiting verification from organizer." });
+    }
+
+    /// <summary>
+    /// Verify or reject a registration's payment. Admin only.
+    /// </summary>
+    /// <remarks>
+    /// Tournament admins use this to verify that a player's payment has been received.
+    /// Set verified=true to confirm payment, or verified=false to reset to pending status.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="registrationId">Registration ID to verify</param>
+    /// <param name="request">Verification request with verified boolean</param>
+    /// <response code="200">Payment status updated successfully</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    /// <response code="404">Registration not found</response>
+    [HttpPut("{id:guid}/registrations/{registrationId:guid}/payment")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentRegistrationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TournamentRegistrationDto>> VerifyPayment(
+        Guid id,
+        Guid registrationId,
+        [FromBody] VerifyTournamentPaymentRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var registration = await _registrationService.VerifyPaymentAsync(id, registrationId, request.Verified, userId);
+
+            if (registration == null)
+            {
+                return NotFound(new { message = "Registration not found" });
+            }
+
+            return Ok(registration);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
     #endregion
 }

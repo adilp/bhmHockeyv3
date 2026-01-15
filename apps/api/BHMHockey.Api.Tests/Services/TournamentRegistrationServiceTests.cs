@@ -111,7 +111,8 @@ public class TournamentRegistrationServiceTests : IDisposable
         string name = "Test Tournament",
         DateTime? registrationDeadline = null,
         string? customQuestions = null,
-        string? waiverUrl = null)
+        string? waiverUrl = null,
+        decimal entryFee = 50)
     {
         var tournament = new Tournament
         {
@@ -131,7 +132,7 @@ public class TournamentRegistrationServiceTests : IDisposable
             MaxPlayersPerTeam = 10,
             AllowMultiTeam = false,
             AllowSubstitutions = true,
-            EntryFee = 50,
+            EntryFee = entryFee,
             FeeType = "PerPlayer",
             CustomQuestions = customQuestions,
             WaiverUrl = waiverUrl,
@@ -857,6 +858,305 @@ public class TournamentRegistrationServiceTests : IDisposable
         var registration = await _context.TournamentRegistrations
             .FirstOrDefaultAsync(r => r.TournamentId == tournament.Id && r.UserId == registeredUser.Id);
         registration!.Status.Should().Be("Cancelled");
+    }
+
+    #endregion
+
+    #region Payment Tests (TRN-008)
+
+    [Fact]
+    public async Task MarkPaymentAsync_WithPendingPayment_TransitionsToMarkedPaid()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Registered");
+
+        // Set initial payment status to Pending
+        registration.PaymentStatus = "Pending";
+        registration.PaymentMarkedAt = null;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().BeTrue();
+
+        // Verify database update
+        var updated = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registration.Id);
+        updated.Should().NotBeNull();
+        updated!.PaymentStatus.Should().Be("MarkedPaid");
+        updated.PaymentMarkedAt.Should().NotBeNull();
+        updated.PaymentMarkedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_WhenAlreadyMarkedPaid_ReturnsFalse()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Registered");
+
+        // Already marked as paid
+        registration.PaymentStatus = "MarkedPaid";
+        registration.PaymentMarkedAt = DateTime.UtcNow.AddHours(-1);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_WhenAlreadyVerified_ReturnsFalse()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Registered");
+
+        // Already verified by admin
+        registration.PaymentStatus = "Verified";
+        registration.PaymentVerifiedAt = DateTime.UtcNow.AddHours(-1);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_ForFreeTournament_ReturnsFalse()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+
+        // Create free tournament (EntryFee = 0)
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+        tournament.EntryFee = 0;
+        await _context.SaveChangesAsync();
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Registered");
+
+        // Free tournaments should have null PaymentStatus
+        registration.PaymentStatus = null;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().BeFalse();
+
+        // Verify PaymentStatus remains null
+        var updated = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registration.Id);
+        updated!.PaymentStatus.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_WhenNotRegistered_ReturnsFalse()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        // No registration exists for this user
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_WhenRegistrationCancelled_ReturnsFalse()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Cancelled");
+        registration.PaymentStatus = "Pending";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().BeFalse();
+
+        // Verify status unchanged
+        var unchanged = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registration.Id);
+        unchanged!.PaymentStatus.Should().Be("Pending");
+        unchanged.PaymentMarkedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task VerifyPaymentAsync_AsAdmin_TransitionsToVerified()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Registered");
+        registration.PaymentStatus = "MarkedPaid";
+        registration.PaymentMarkedAt = DateTime.UtcNow.AddHours(-1);
+        await _context.SaveChangesAsync();
+
+        // Setup admin check
+        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, creator.Id))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _sut.VerifyPaymentAsync(tournament.Id, registration.Id, verified: true, creator.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.PaymentStatus.Should().Be("Verified");
+        result.PaymentVerifiedAt.Should().NotBeNull();
+        result.PaymentVerifiedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+
+        // Verify database update
+        var updated = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registration.Id);
+        updated!.PaymentStatus.Should().Be("Verified");
+        updated.PaymentVerifiedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task VerifyPaymentAsync_AsNonAdmin_ThrowsUnauthorized()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var nonAdmin = await CreateTestUser("nonadmin@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Registered");
+        registration.PaymentStatus = "MarkedPaid";
+        await _context.SaveChangesAsync();
+
+        // Setup non-admin check
+        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, nonAdmin.Id))
+            .ReturnsAsync(false);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.VerifyPaymentAsync(tournament.Id, registration.Id, verified: true, nonAdmin.Id));
+
+        // Verify no changes made
+        var unchanged = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registration.Id);
+        unchanged!.PaymentStatus.Should().Be("MarkedPaid");
+        unchanged.PaymentVerifiedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task VerifyPaymentAsync_ResetToPending_Succeeds()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Registered");
+
+        // Previously verified
+        registration.PaymentStatus = "Verified";
+        registration.PaymentVerifiedAt = DateTime.UtcNow.AddHours(-2);
+        await _context.SaveChangesAsync();
+
+        // Setup admin check
+        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, creator.Id))
+            .ReturnsAsync(true);
+
+        // Act - Admin resets verification back to pending
+        var result = await _sut.VerifyPaymentAsync(tournament.Id, registration.Id, verified: false, creator.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.PaymentStatus.Should().Be("Pending");
+        result.PaymentVerifiedAt.Should().BeNull();
+
+        // Verify database update
+        var updated = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registration.Id);
+        updated!.PaymentStatus.Should().Be("Pending");
+        updated.PaymentVerifiedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task VerifyPaymentAsync_RegistrationNotFound_ReturnsNull()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+
+        var nonExistentRegistrationId = Guid.NewGuid();
+
+        // Setup admin check
+        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, creator.Id))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _sut.VerifyPaymentAsync(tournament.Id, nonExistentRegistrationId, verified: true, creator.Id);
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task VerifyPaymentAsync_FreeTournament_ReturnsNull()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+
+        // Create free tournament (EntryFee = 0)
+        var tournament = await CreateTestTournament(creator.Id, status: "Open");
+        tournament.EntryFee = 0;
+        await _context.SaveChangesAsync();
+
+        var registration = await CreateTestRegistration(tournament.Id, user.Id, "Registered");
+
+        // Free tournaments have null PaymentStatus
+        registration.PaymentStatus = null;
+        await _context.SaveChangesAsync();
+
+        // Setup admin check
+        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, creator.Id))
+            .ReturnsAsync(true);
+
+        // Act
+        var result = await _sut.VerifyPaymentAsync(tournament.Id, registration.Id, verified: true, creator.Id);
+
+        // Assert
+        result.Should().BeNull();
+
+        // Verify PaymentStatus remains null
+        var unchanged = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.Id == registration.Id);
+        unchanged!.PaymentStatus.Should().BeNull();
     }
 
     #endregion
