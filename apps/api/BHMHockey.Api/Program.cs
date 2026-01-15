@@ -134,6 +134,7 @@ builder.Services.AddScoped<ITournamentLifecycleService, TournamentLifecycleServi
 builder.Services.AddScoped<ITournamentTeamService, TournamentTeamService>();
 builder.Services.AddScoped<ITournamentMatchService, TournamentMatchService>();
 builder.Services.AddScoped<IBracketGenerationService, BracketGenerationService>();
+builder.Services.AddScoped<ITournamentRegistrationService, TournamentRegistrationService>();
 
 // Background Services
 builder.Services.AddHostedService<WaitlistBackgroundService>();

@@ -27,6 +27,7 @@ public class AppDbContext : DbContext
     public DbSet<TournamentAuditLog> TournamentAuditLogs { get; set; }
     public DbSet<TournamentTeam> TournamentTeams { get; set; }
     public DbSet<TournamentMatch> TournamentMatches { get; set; }
+    public DbSet<TournamentRegistration> TournamentRegistrations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -440,6 +441,46 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.LoserNextMatchId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // TournamentRegistration configuration
+        modelBuilder.Entity<TournamentRegistration>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(50).HasDefaultValue("Registered");
+            entity.Property(e => e.Position).HasMaxLength(50);
+            entity.Property(e => e.WaiverStatus).HasMaxLength(50);
+            entity.Property(e => e.PaymentStatus).HasMaxLength(50);
+
+            // Unique constraint: user can only have one registration per tournament
+            entity.HasIndex(e => new { e.TournamentId, e.UserId }).IsUnique();
+
+            // Index for querying registrations by tournament
+            entity.HasIndex(e => e.TournamentId);
+
+            // Index for querying registrations by status
+            entity.HasIndex(e => new { e.TournamentId, e.Status });
+
+            entity.HasOne(e => e.Tournament)
+                .WithMany()
+                .HasForeignKey(e => e.TournamentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.AssignedTeam)
+                .WithMany()
+                .HasForeignKey(e => e.AssignedTeamId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // JSONB for PostgreSQL, regular string for InMemory
+            if (!Database.ProviderName?.Contains("InMemory") ?? false)
+            {
+                entity.Property(e => e.CustomResponses).HasColumnType("jsonb");
+            }
         });
     }
 }

@@ -15,19 +15,22 @@ public class TournamentsController : ControllerBase
     private readonly ITournamentTeamService _teamService;
     private readonly ITournamentMatchService _matchService;
     private readonly IBracketGenerationService _bracketGenerationService;
+    private readonly ITournamentRegistrationService _registrationService;
 
     public TournamentsController(
         ITournamentService tournamentService,
         ITournamentLifecycleService lifecycleService,
         ITournamentTeamService teamService,
         ITournamentMatchService matchService,
-        IBracketGenerationService bracketGenerationService)
+        IBracketGenerationService bracketGenerationService,
+        ITournamentRegistrationService registrationService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
         _teamService = teamService;
         _matchService = matchService;
         _bracketGenerationService = bracketGenerationService;
+        _registrationService = registrationService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -773,6 +776,163 @@ public class TournamentsController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(ex.Message);
+        }
+    }
+
+    #endregion
+
+    #region Registration Endpoints
+
+    /// <summary>
+    /// Register for a tournament. Requires authentication.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="request">Registration request with position and optional custom responses</param>
+    /// <response code="201">Registration created successfully</response>
+    /// <response code="400">Invalid request or registration not allowed</response>
+    /// <response code="401">Not authenticated</response>
+    [HttpPost("{id:guid}/register")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentRegistrationResultDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<TournamentRegistrationResultDto>> Register(Guid id, [FromBody] CreateTournamentRegistrationRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _registrationService.RegisterAsync(id, request, userId);
+            return StatusCode(StatusCodes.Status201Created, result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get current user's registration for a tournament. Requires authentication.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Returns the registration</response>
+    /// <response code="404">Not registered for this tournament</response>
+    /// <response code="401">Not authenticated</response>
+    [HttpGet("{id:guid}/register")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentRegistrationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<TournamentRegistrationDto>> GetMyRegistration(Guid id)
+    {
+        var userId = GetCurrentUserId();
+        var registration = await _registrationService.GetMyRegistrationAsync(id, userId);
+
+        if (registration == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(registration);
+    }
+
+    /// <summary>
+    /// Update current user's registration. Requires authentication.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="request">Update request with optional position and custom responses</param>
+    /// <response code="200">Registration updated successfully</response>
+    /// <response code="400">Invalid request or update not allowed</response>
+    /// <response code="404">Not registered for this tournament</response>
+    /// <response code="401">Not authenticated</response>
+    [HttpPut("{id:guid}/register")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentRegistrationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<TournamentRegistrationDto>> UpdateMyRegistration(Guid id, [FromBody] UpdateTournamentRegistrationRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var registration = await _registrationService.UpdateAsync(id, request, userId);
+
+            if (registration == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(registration);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Withdraw registration (self-service). Requires authentication.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="204">Registration withdrawn successfully</response>
+    /// <response code="404">Not registered for this tournament</response>
+    /// <response code="401">Not authenticated</response>
+    [HttpDelete("{id:guid}/register")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> WithdrawRegistration(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var withdrawn = await _registrationService.WithdrawAsync(id, userId);
+
+            if (!withdrawn)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// List all registrations for a tournament. Admin only.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Returns list of all registrations</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to view registrations</response>
+    [HttpGet("{id:guid}/registrations")]
+    [Authorize]
+    [ProducesResponseType(typeof(List<TournamentRegistrationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<List<TournamentRegistrationDto>>> GetAllRegistrations(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var registrations = await _registrationService.GetAllAsync(id, userId);
+            return Ok(registrations);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
 

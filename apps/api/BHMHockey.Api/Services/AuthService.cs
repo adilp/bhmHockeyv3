@@ -79,11 +79,11 @@ public class AuthService : IAuthService
         return new AuthResponse(token, refreshToken, userDto);
     }
 
-    public async Task<AuthResponse> RefreshTokenAsync(string refreshToken)
+    public Task<AuthResponse> RefreshTokenAsync(string refreshToken)
     {
         // Simplified refresh token logic for Phase 1
         // In production, store refresh tokens in database
-        throw new NotImplementedException("Refresh token functionality will be implemented in next iteration");
+        return Task.FromException<AuthResponse>(new NotImplementedException("Refresh token functionality will be implemented in next iteration"));
     }
 
     public async Task<bool> LogoutAsync(Guid userId)
