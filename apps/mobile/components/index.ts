@@ -51,3 +51,8 @@ export {
   RegistrationFooter,
 } from './event-detail';
 export type { TabKey } from './event-detail';
+
+// Tournament components
+export { TournamentStatusBadge } from './TournamentStatusBadge';
+export { TournamentCard } from './TournamentCard';
+export { BracketMatchBox } from './BracketMatchBox';
