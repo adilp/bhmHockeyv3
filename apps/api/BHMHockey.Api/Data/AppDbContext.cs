@@ -26,6 +26,7 @@ public class AppDbContext : DbContext
     public DbSet<TournamentAdmin> TournamentAdmins { get; set; }
     public DbSet<TournamentAuditLog> TournamentAuditLogs { get; set; }
     public DbSet<TournamentTeam> TournamentTeams { get; set; }
+    public DbSet<TournamentTeamMember> TournamentTeamMembers { get; set; }
     public DbSet<TournamentMatch> TournamentMatches { get; set; }
     public DbSet<TournamentRegistration> TournamentRegistrations { get; set; }
 
@@ -481,6 +482,25 @@ public class AppDbContext : DbContext
             {
                 entity.Property(e => e.CustomResponses).HasColumnType("jsonb");
             }
+        });
+
+        // TournamentTeamMember configuration
+        modelBuilder.Entity<TournamentTeamMember>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Unique constraint: one user per team
+            entity.HasIndex(e => new { e.TeamId, e.UserId }).IsUnique();
         });
     }
 }

@@ -737,3 +737,47 @@ export interface ForfeitMatchRequest {
   forfeitingTeamId: string;
   reason: string;
 }
+
+// ============================================
+// Tournament Team Assignment Types (TRN-009)
+// ============================================
+
+// Request to assign a player to a specific team
+export interface AssignPlayerToTeamRequest {
+  teamId: string;
+}
+
+// Request for auto-assigning all unassigned players to teams
+export interface AutoAssignTeamsRequest {
+  balanceBySkillLevel?: boolean;
+}
+
+// Request to bulk create empty teams
+export interface BulkCreateTeamsRequest {
+  count: number;
+  namePrefix: string;
+}
+
+// Response from bulk create teams
+export interface BulkCreateTeamsResponse {
+  teams: TournamentTeamDto[];
+  message: string;
+}
+
+// Result of team assignment operations
+export interface TeamAssignmentResultDto {
+  success: boolean;
+  message: string;
+  assignedCount: number;
+  unassignedCount: number;
+}
+
+// Tournament team member (minimal - TRN-011 will extend)
+export interface TournamentTeamMemberDto {
+  id: string;
+  teamId: string;
+  userId: string;
+  userName: string;
+  role: string;
+  joinedAt: string;
+}

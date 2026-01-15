@@ -16,6 +16,7 @@ public class TournamentsController : ControllerBase
     private readonly ITournamentMatchService _matchService;
     private readonly IBracketGenerationService _bracketGenerationService;
     private readonly ITournamentRegistrationService _registrationService;
+    private readonly ITournamentTeamAssignmentService _teamAssignmentService;
 
     public TournamentsController(
         ITournamentService tournamentService,
@@ -23,7 +24,8 @@ public class TournamentsController : ControllerBase
         ITournamentTeamService teamService,
         ITournamentMatchService matchService,
         IBracketGenerationService bracketGenerationService,
-        ITournamentRegistrationService registrationService)
+        ITournamentRegistrationService registrationService,
+        ITournamentTeamAssignmentService teamAssignmentService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
@@ -31,6 +33,7 @@ public class TournamentsController : ControllerBase
         _matchService = matchService;
         _bracketGenerationService = bracketGenerationService;
         _registrationService = registrationService;
+        _teamAssignmentService = teamAssignmentService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -1002,6 +1005,113 @@ public class TournamentsController : ControllerBase
             }
 
             return Ok(registration);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Team Assignment Endpoints
+
+    /// <summary>
+    /// Assign a player to a specific team. Requires tournament admin role.
+    /// </summary>
+    [HttpPut("{id:guid}/registrations/{registrationId:guid}/team")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentRegistrationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TournamentRegistrationDto>> AssignPlayerToTeam(
+        Guid id,
+        Guid registrationId,
+        [FromBody] AssignPlayerToTeamRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var registration = await _teamAssignmentService.AssignPlayerToTeamAsync(id, registrationId, request.TeamId, userId);
+
+            if (registration == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(registration);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Auto-assign all unassigned registrations to teams. Requires tournament admin role.
+    /// </summary>
+    /// <remarks>
+    /// Distributes goalies evenly across teams first, then assigns skaters.
+    /// If balanceBySkillLevel is true, uses snake-draft by skill level (Gold > Silver > Bronze > D-League).
+    /// </remarks>
+    [HttpPost("{id:guid}/assign-teams")]
+    [Authorize]
+    [ProducesResponseType(typeof(TeamAssignmentResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TeamAssignmentResultDto>> AutoAssignTeams(
+        Guid id,
+        [FromBody] AutoAssignTeamsRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _teamAssignmentService.AutoAssignTeamsAsync(id, request.BalanceBySkillLevel, userId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Create multiple empty teams in bulk. Requires tournament admin role.
+    /// </summary>
+    /// <remarks>
+    /// Creates teams with sequential names based on the provided prefix.
+    /// Example: count=4, namePrefix="Team" creates "Team 1", "Team 2", "Team 3", "Team 4"
+    /// </remarks>
+    [HttpPost("{id:guid}/create-teams")]
+    [Authorize]
+    [ProducesResponseType(typeof(BulkCreateTeamsResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<BulkCreateTeamsResponse>> BulkCreateTeams(
+        Guid id,
+        [FromBody] BulkCreateTeamsRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var response = await _teamAssignmentService.BulkCreateTeamsAsync(id, request.Count, request.NamePrefix, userId);
+            return StatusCode(StatusCodes.Status201Created, response);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (UnauthorizedAccessException ex)
         {
