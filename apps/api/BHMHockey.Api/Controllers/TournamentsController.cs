@@ -14,17 +14,20 @@ public class TournamentsController : ControllerBase
     private readonly ITournamentLifecycleService _lifecycleService;
     private readonly ITournamentTeamService _teamService;
     private readonly ITournamentMatchService _matchService;
+    private readonly IBracketGenerationService _bracketGenerationService;
 
     public TournamentsController(
         ITournamentService tournamentService,
         ITournamentLifecycleService lifecycleService,
         ITournamentTeamService teamService,
-        ITournamentMatchService matchService)
+        ITournamentMatchService matchService,
+        IBracketGenerationService bracketGenerationService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
         _teamService = teamService;
         _matchService = matchService;
+        _bracketGenerationService = bracketGenerationService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -638,6 +641,58 @@ public class TournamentsController : ControllerBase
         }
 
         return Ok(match);
+    }
+
+    #endregion
+
+    #region Bracket Generation
+
+    /// <summary>
+    /// Generates a single elimination bracket for the tournament.
+    /// Creates all matches with proper seeding and bye handling.
+    /// </summary>
+    [HttpPost("{id}/generate-bracket")]
+    [Authorize]
+    public async Task<ActionResult<List<TournamentMatchDto>>> GenerateBracket(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var matches = await _bracketGenerationService.GenerateSingleEliminationBracketAsync(id, userId);
+            return Ok(matches);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Clears all matches from the tournament bracket.
+    /// Use this before regenerating a bracket.
+    /// </summary>
+    [HttpDelete("{id}/bracket")]
+    [Authorize]
+    public async Task<ActionResult> ClearBracket(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            await _bracketGenerationService.ClearBracketAsync(id, userId);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     #endregion
