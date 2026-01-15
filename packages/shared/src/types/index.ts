@@ -620,3 +620,103 @@ export interface TournamentAdminDto {
   addedByUserId?: string;
   addedByName?: string;
 }
+
+// ============================================
+// Tournament Team Types (TRN-003)
+// ============================================
+
+// Tournament team status
+export type TournamentTeamStatus = 'Registered' | 'Waitlisted' | 'Active' | 'Eliminated' | 'Winner';
+
+// Tournament team DTO
+export interface TournamentTeamDto {
+  id: string;
+  tournamentId: string;
+  name: string;
+
+  // Captain info
+  captainUserId?: string;
+  captainName?: string;
+
+  // Status & Position
+  status: TournamentTeamStatus;
+  waitlistPosition?: number;
+  seed?: number;
+  finalPlacement?: number;
+  hasBye: boolean;
+
+  // Statistics
+  wins: number;
+  losses: number;
+  ties: number;
+  points: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifferential: number;
+
+  // Payment
+  paymentStatus?: PaymentStatus;
+
+  // Timestamps
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTournamentTeamRequest {
+  name: string;
+  seed?: number;
+}
+
+export interface UpdateTournamentTeamRequest {
+  name?: string;
+  seed?: number;
+}
+
+// ============================================
+// Tournament Match Types (TRN-003)
+// ============================================
+
+// Tournament match status
+export type TournamentMatchStatus = 'Scheduled' | 'InProgress' | 'Completed' | 'Cancelled' | 'Forfeit' | 'Bye';
+
+// Tournament match DTO
+export interface TournamentMatchDto {
+  id: string;
+  tournamentId: string;
+
+  // Teams
+  homeTeamId?: string;
+  homeTeamName?: string;
+  awayTeamId?: string;
+  awayTeamName?: string;
+
+  // Match Info
+  round: number;
+  matchNumber: number;
+  bracketPosition?: string;
+
+  // Schedule & Venue
+  isBye: boolean;
+  scheduledTime?: string;
+  venue?: string;
+
+  // Status & Score
+  status: TournamentMatchStatus;
+  homeScore?: number;
+  awayScore?: number;
+
+  // Winner
+  winnerTeamId?: string;
+  winnerTeamName?: string;
+
+  // Forfeit
+  forfeitReason?: string;
+
+  // Bracket Navigation
+  nextMatchId?: string;
+  loserNextMatchId?: string;
+
+  // Timestamps
+  createdAt: string;
+  updatedAt: string;
+}

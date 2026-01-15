@@ -12,13 +12,19 @@ public class TournamentsController : ControllerBase
 {
     private readonly ITournamentService _tournamentService;
     private readonly ITournamentLifecycleService _lifecycleService;
+    private readonly ITournamentTeamService _teamService;
+    private readonly ITournamentMatchService _matchService;
 
     public TournamentsController(
         ITournamentService tournamentService,
-        ITournamentLifecycleService lifecycleService)
+        ITournamentLifecycleService lifecycleService,
+        ITournamentTeamService teamService,
+        ITournamentMatchService matchService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
+        _teamService = teamService;
+        _matchService = matchService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -438,6 +444,200 @@ public class TournamentsController : ControllerBase
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
+    }
+
+    #endregion
+
+    #region Team Endpoints
+
+    /// <summary>
+    /// Get all teams for a tournament.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Returns list of teams</response>
+    [HttpGet("{id:guid}/teams")]
+    [ProducesResponseType(typeof(List<TournamentTeamDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<TournamentTeamDto>>> GetTeams(Guid id)
+    {
+        var teams = await _teamService.GetAllAsync(id);
+        return Ok(teams);
+    }
+
+    /// <summary>
+    /// Get a team by ID.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <response code="200">Returns the team</response>
+    /// <response code="404">Team not found</response>
+    [HttpGet("{id:guid}/teams/{teamId:guid}")]
+    [ProducesResponseType(typeof(TournamentTeamDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TournamentTeamDto>> GetTeamById(Guid id, Guid teamId)
+    {
+        var team = await _teamService.GetByIdAsync(id, teamId);
+
+        if (team == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(team);
+    }
+
+    /// <summary>
+    /// Create a new team. Requires authentication and tournament admin role.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="request">Team creation request</param>
+    /// <response code="201">Team created successfully</response>
+    /// <response code="400">Invalid request data</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/teams")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentTeamDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentTeamDto>> CreateTeam(Guid id, [FromBody] CreateTournamentTeamRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var team = await _teamService.CreateAsync(id, request, userId);
+            return CreatedAtAction(nameof(GetTeamById), new { id, teamId = team.Id }, team);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Update a team. Requires authentication and tournament admin role.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <param name="request">Update request</param>
+    /// <response code="200">Team updated successfully</response>
+    /// <response code="400">Invalid request data</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    /// <response code="404">Team not found</response>
+    [HttpPut("{id:guid}/teams/{teamId:guid}")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentTeamDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TournamentTeamDto>> UpdateTeam(Guid id, Guid teamId, [FromBody] UpdateTournamentTeamRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var team = await _teamService.UpdateAsync(id, teamId, request, userId);
+
+            if (team == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(team);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete a team. Requires authentication and tournament admin role.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <response code="204">Team deleted successfully</response>
+    /// <response code="400">Invalid operation</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    /// <response code="404">Team not found</response>
+    [HttpDelete("{id:guid}/teams/{teamId:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteTeam(Guid id, Guid teamId)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var deleted = await _teamService.DeleteAsync(id, teamId, userId);
+
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Match Endpoints
+
+    /// <summary>
+    /// Get all matches for a tournament.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Returns list of matches</response>
+    [HttpGet("{id:guid}/matches")]
+    [ProducesResponseType(typeof(List<TournamentMatchDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<TournamentMatchDto>>> GetMatches(Guid id)
+    {
+        var matches = await _matchService.GetAllAsync(id);
+        return Ok(matches);
+    }
+
+    /// <summary>
+    /// Get a match by ID.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="matchId">Match ID</param>
+    /// <response code="200">Returns the match</response>
+    /// <response code="404">Match not found</response>
+    [HttpGet("{id:guid}/matches/{matchId:guid}")]
+    [ProducesResponseType(typeof(TournamentMatchDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TournamentMatchDto>> GetMatchById(Guid id, Guid matchId)
+    {
+        var match = await _matchService.GetByIdAsync(id, matchId);
+
+        if (match == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(match);
     }
 
     #endregion
