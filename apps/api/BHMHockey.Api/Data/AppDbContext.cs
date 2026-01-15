@@ -24,6 +24,9 @@ public class AppDbContext : DbContext
     public DbSet<UserBadge> UserBadges { get; set; }
     public DbSet<Tournament> Tournaments { get; set; }
     public DbSet<TournamentAdmin> TournamentAdmins { get; set; }
+    public DbSet<TournamentAuditLog> TournamentAuditLogs { get; set; }
+    public DbSet<TournamentTeam> TournamentTeams { get; set; }
+    public DbSet<TournamentMatch> TournamentMatches { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -337,6 +340,105 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.AddedByUser)
                 .WithMany()
                 .HasForeignKey(e => e.AddedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // TournamentAuditLog configuration
+        modelBuilder.Entity<TournamentAuditLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.FromStatus).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.ToStatus).IsRequired().HasMaxLength(50);
+
+            // Index for querying audit logs by tournament
+            entity.HasIndex(e => e.TournamentId);
+            entity.HasIndex(e => e.Timestamp);
+
+            entity.HasOne(e => e.Tournament)
+                .WithMany()
+                .HasForeignKey(e => e.TournamentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // JSONB for PostgreSQL, regular string for InMemory
+            if (!Database.ProviderName?.Contains("InMemory") ?? false)
+            {
+                entity.Property(e => e.Details).HasColumnType("jsonb");
+            }
+        });
+
+        // TournamentTeam configuration
+        modelBuilder.Entity<TournamentTeam>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(50).HasDefaultValue("Registered");
+
+            // Index for querying teams by tournament
+            entity.HasIndex(e => e.TournamentId);
+
+            // Index for querying teams by status
+            entity.HasIndex(e => new { e.TournamentId, e.Status });
+
+            entity.HasOne(e => e.Tournament)
+                .WithMany()
+                .HasForeignKey(e => e.TournamentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Captain)
+                .WithMany()
+                .HasForeignKey(e => e.CaptainUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // TournamentMatch configuration
+        modelBuilder.Entity<TournamentMatch>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(50).HasDefaultValue("Scheduled");
+            entity.Property(e => e.BracketPosition).HasMaxLength(50);
+            entity.Property(e => e.Venue).HasMaxLength(255);
+
+            // Index for querying matches by tournament
+            entity.HasIndex(e => e.TournamentId);
+
+            // Index for bracket position queries
+            entity.HasIndex(e => new { e.TournamentId, e.Round, e.MatchNumber });
+
+            entity.HasOne(e => e.Tournament)
+                .WithMany()
+                .HasForeignKey(e => e.TournamentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.HomeTeam)
+                .WithMany()
+                .HasForeignKey(e => e.HomeTeamId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.AwayTeam)
+                .WithMany()
+                .HasForeignKey(e => e.AwayTeamId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.WinnerTeam)
+                .WithMany()
+                .HasForeignKey(e => e.WinnerTeamId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Self-referencing relationships for bracket navigation
+            entity.HasOne(e => e.NextMatch)
+                .WithMany()
+                .HasForeignKey(e => e.NextMatchId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.LoserNextMatch)
+                .WithMany()
+                .HasForeignKey(e => e.LoserNextMatchId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
     }

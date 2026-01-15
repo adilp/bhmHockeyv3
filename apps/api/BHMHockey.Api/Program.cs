@@ -130,6 +130,10 @@ builder.Services.AddScoped<IEventReminderService, EventReminderService>();
 builder.Services.AddScoped<INotificationPersistenceService, NotificationPersistenceService>();
 builder.Services.AddScoped<IBadgeService, BadgeService>();
 builder.Services.AddScoped<ITournamentService, TournamentService>();
+builder.Services.AddScoped<ITournamentLifecycleService, TournamentLifecycleService>();
+builder.Services.AddScoped<ITournamentTeamService, TournamentTeamService>();
+builder.Services.AddScoped<ITournamentMatchService, TournamentMatchService>();
+builder.Services.AddScoped<IBracketGenerationService, BracketGenerationService>();
 
 // Background Services
 builder.Services.AddHostedService<WaitlistBackgroundService>();
