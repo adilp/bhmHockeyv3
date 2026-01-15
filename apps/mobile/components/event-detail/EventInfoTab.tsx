@@ -139,6 +139,7 @@ export function EventInfoTab({
         {/* Skill Levels */}
         {event.skillLevels && event.skillLevels.length > 0 && (
           <View style={styles.skillLevelsRow}>
+            <Text style={styles.skillLevelsLabel}>Skill Levels:</Text>
             <SkillLevelBadges levels={event.skillLevels as SkillLevel[]} size="small" />
           </View>
         )}
@@ -425,6 +426,11 @@ const styles = StyleSheet.create({
   skillLevelsRow: {
     alignItems: 'center',
     marginTop: spacing.sm,
+  },
+  skillLevelsLabel: {
+    fontSize: 12,
+    color: colors.text.muted,
+    marginBottom: spacing.xs,
   },
 
   // ═══════════════════════════════════════════════════════════════════
