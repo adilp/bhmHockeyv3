@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using BHMHockey.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BHMHockey.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260114231030_AddTournamentAuditLog")]
+    partial class AddTournamentAuditLog
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -596,165 +599,6 @@ namespace BHMHockey.Api.Migrations
                     b.ToTable("TournamentAuditLogs");
                 });
 
-            modelBuilder.Entity("BHMHockey.Api.Models.Entities.TournamentMatch", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("AwayScore")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("AwayTeamId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BracketPosition")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ForfeitReason")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("HomeScore")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("HomeTeamId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsBye")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid?>("LoserNextMatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("MatchNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("NextMatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Round")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("ScheduledTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Scheduled");
-
-                    b.Property<Guid>("TournamentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Venue")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<Guid?>("WinnerTeamId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AwayTeamId");
-
-                    b.HasIndex("HomeTeamId");
-
-                    b.HasIndex("LoserNextMatchId");
-
-                    b.HasIndex("NextMatchId");
-
-                    b.HasIndex("TournamentId");
-
-                    b.HasIndex("WinnerTeamId");
-
-                    b.HasIndex("TournamentId", "Round", "MatchNumber");
-
-                    b.ToTable("TournamentMatches");
-                });
-
-            modelBuilder.Entity("BHMHockey.Api.Models.Entities.TournamentTeam", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("CaptainUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("FinalPlacement")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("GoalsAgainst")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("GoalsFor")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("HasBye")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("Losses")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("PaymentStatus")
-                        .HasColumnType("text");
-
-                    b.Property<int>("Points")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("Seed")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Registered");
-
-                    b.Property<int>("Ties")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TournamentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("WaitlistPosition")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Wins")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CaptainUserId");
-
-                    b.HasIndex("TournamentId");
-
-                    b.HasIndex("TournamentId", "Status");
-
-                    b.ToTable("TournamentTeams");
-                });
-
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1028,70 +872,6 @@ namespace BHMHockey.Api.Migrations
                     b.Navigation("Tournament");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("BHMHockey.Api.Models.Entities.TournamentMatch", b =>
-                {
-                    b.HasOne("BHMHockey.Api.Models.Entities.TournamentTeam", "AwayTeam")
-                        .WithMany()
-                        .HasForeignKey("AwayTeamId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BHMHockey.Api.Models.Entities.TournamentTeam", "HomeTeam")
-                        .WithMany()
-                        .HasForeignKey("HomeTeamId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BHMHockey.Api.Models.Entities.TournamentMatch", "LoserNextMatch")
-                        .WithMany()
-                        .HasForeignKey("LoserNextMatchId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BHMHockey.Api.Models.Entities.TournamentMatch", "NextMatch")
-                        .WithMany()
-                        .HasForeignKey("NextMatchId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BHMHockey.Api.Models.Entities.Tournament", "Tournament")
-                        .WithMany()
-                        .HasForeignKey("TournamentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BHMHockey.Api.Models.Entities.TournamentTeam", "WinnerTeam")
-                        .WithMany()
-                        .HasForeignKey("WinnerTeamId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("AwayTeam");
-
-                    b.Navigation("HomeTeam");
-
-                    b.Navigation("LoserNextMatch");
-
-                    b.Navigation("NextMatch");
-
-                    b.Navigation("Tournament");
-
-                    b.Navigation("WinnerTeam");
-                });
-
-            modelBuilder.Entity("BHMHockey.Api.Models.Entities.TournamentTeam", b =>
-                {
-                    b.HasOne("BHMHockey.Api.Models.Entities.User", "Captain")
-                        .WithMany()
-                        .HasForeignKey("CaptainUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("BHMHockey.Api.Models.Entities.Tournament", "Tournament")
-                        .WithMany()
-                        .HasForeignKey("TournamentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Captain");
-
-                    b.Navigation("Tournament");
                 });
 
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.UserBadge", b =>
