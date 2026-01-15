@@ -7,6 +7,7 @@ export { userService } from './services/users';
 export { organizationService } from './services/organizations';
 export { eventService } from './services/events';
 export { notificationService } from './services/notifications';
+export { tournamentService } from './services/tournaments';
 
 // Export storage
 export { authStorage } from './storage/auth';

@@ -14,17 +14,20 @@ public class TournamentsController : ControllerBase
     private readonly ITournamentLifecycleService _lifecycleService;
     private readonly ITournamentTeamService _teamService;
     private readonly ITournamentMatchService _matchService;
+    private readonly IBracketGenerationService _bracketGenerationService;
 
     public TournamentsController(
         ITournamentService tournamentService,
         ITournamentLifecycleService lifecycleService,
         ITournamentTeamService teamService,
-        ITournamentMatchService matchService)
+        ITournamentMatchService matchService,
+        IBracketGenerationService bracketGenerationService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
         _teamService = teamService;
         _matchService = matchService;
+        _bracketGenerationService = bracketGenerationService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -638,6 +641,139 @@ public class TournamentsController : ControllerBase
         }
 
         return Ok(match);
+    }
+
+    /// <summary>
+    /// Enter or update the score for a match. Requires authentication and tournament admin role.
+    /// </summary>
+    /// <remarks>
+    /// Updates match scores, determines winner, advances winner to next match in bracket,
+    /// and updates team statistics. For tied scores in elimination formats, OvertimeWinnerId is required.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="matchId">Match ID</param>
+    /// <param name="request">Score entry request</param>
+    /// <response code="200">Score entered successfully</response>
+    /// <response code="400">Invalid request (e.g., tied score without overtime winner in elimination)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    /// <response code="404">Match not found</response>
+    [HttpPut("{id:guid}/matches/{matchId:guid}/score")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentMatchDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TournamentMatchDto>> EnterScore(Guid id, Guid matchId, [FromBody] EnterScoreRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var match = await _matchService.EnterScoreAsync(id, matchId, request, userId);
+            return Ok(match);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Record a forfeit for a match. Requires authentication and tournament admin role.
+    /// </summary>
+    /// <remarks>
+    /// Sets the non-forfeiting team as winner, updates team statistics (win/loss),
+    /// advances winner to next match in bracket, and sets forfeiting team status to Eliminated
+    /// in elimination formats.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="matchId">Match ID</param>
+    /// <param name="request">Forfeit request with forfeiting team ID and reason</param>
+    /// <response code="200">Forfeit recorded successfully</response>
+    /// <response code="400">Invalid request (e.g., forfeiting team not in match)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    /// <response code="404">Match not found</response>
+    [HttpPost("{id:guid}/matches/{matchId:guid}/forfeit")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentMatchDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TournamentMatchDto>> ForfeitMatch(Guid id, Guid matchId, [FromBody] ForfeitMatchRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var match = await _matchService.ForfeitMatchAsync(id, matchId, request, userId);
+            return Ok(match);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Bracket Generation
+
+    /// <summary>
+    /// Generates a single elimination bracket for the tournament.
+    /// Creates all matches with proper seeding and bye handling.
+    /// </summary>
+    [HttpPost("{id}/generate-bracket")]
+    [Authorize]
+    public async Task<ActionResult<List<TournamentMatchDto>>> GenerateBracket(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var matches = await _bracketGenerationService.GenerateSingleEliminationBracketAsync(id, userId);
+            return Ok(matches);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Clears all matches from the tournament bracket.
+    /// Use this before regenerating a bracket.
+    /// </summary>
+    [HttpDelete("{id}/bracket")]
+    [Authorize]
+    public async Task<ActionResult> ClearBracket(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            await _bracketGenerationService.ClearBracketAsync(id, userId);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     #endregion
