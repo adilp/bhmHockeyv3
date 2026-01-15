@@ -720,3 +720,20 @@ export interface TournamentMatchDto {
   createdAt: string;
   updatedAt: string;
 }
+
+// ============================================
+// Tournament Match Request Types (TRN-005)
+// ============================================
+
+// Request to enter match scores
+export interface EnterScoreRequest {
+  homeScore: number;
+  awayScore: number;
+  overtimeWinnerId?: string;  // Required when tied in elimination formats
+}
+
+// Request to forfeit a match
+export interface ForfeitMatchRequest {
+  forfeitingTeamId: string;
+  reason: string;
+}

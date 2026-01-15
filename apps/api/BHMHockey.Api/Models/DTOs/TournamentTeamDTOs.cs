@@ -101,3 +101,58 @@ public record TournamentMatchDto
     public required DateTime CreatedAt { get; init; }
     public required DateTime UpdatedAt { get; init; }
 }
+
+/// <summary>
+/// Request DTO for entering match scores.
+/// For elimination formats with tied scores, OvertimeWinnerId is required.
+/// </summary>
+public record EnterScoreRequest
+{
+    /// <summary>
+    /// Score for the home team (must be >= 0)
+    /// </summary>
+    public required int HomeScore { get; init; }
+
+    /// <summary>
+    /// Score for the away team (must be >= 0)
+    /// </summary>
+    public required int AwayScore { get; init; }
+
+    /// <summary>
+    /// Required when HomeScore == AwayScore in elimination formats.
+    /// Must be either HomeTeamId or AwayTeamId.
+    /// </summary>
+    public Guid? OvertimeWinnerId { get; init; }
+}
+
+/// <summary>
+/// Request DTO for marking a match as forfeit.
+/// </summary>
+public record ForfeitMatchRequest
+{
+    /// <summary>
+    /// The team that is forfeiting the match.
+    /// Must be either HomeTeamId or AwayTeamId.
+    /// </summary>
+    public required Guid ForfeitingTeamId { get; init; }
+
+    /// <summary>
+    /// Reason for the forfeit (e.g., "No-show", "Insufficient players")
+    /// </summary>
+    public required string Reason { get; init; }
+}
+
+/// <summary>
+/// DTO for score entry audit log details (serialized to JSON in audit log)
+/// </summary>
+public record ScoreEntryAuditDto
+{
+    public Guid MatchId { get; init; }
+    public int? OldHomeScore { get; init; }
+    public int? OldAwayScore { get; init; }
+    public Guid? OldWinnerId { get; init; }
+    public int NewHomeScore { get; init; }
+    public int NewAwayScore { get; init; }
+    public Guid NewWinnerId { get; init; }
+    public bool IsEdit { get; init; }
+}
