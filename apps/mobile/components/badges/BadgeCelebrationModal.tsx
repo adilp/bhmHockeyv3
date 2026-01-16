@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  TouchableWithoutFeedback,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -147,11 +146,9 @@ export function BadgeCelebrationModal({
       {/* Confetti layer */}
       <Confetti isActive={showConfetti} onComplete={handleConfettiComplete} />
 
-      {/* Dark backdrop */}
-      <TouchableWithoutFeedback onPress={onDismiss}>
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <TouchableWithoutFeedback>
-            <View style={styles.modal}>
+      {/* Dark backdrop - no dismiss on tap */}
+      <Animated.View style={[styles.backdrop, backdropStyle]}>
+        <View style={styles.modal}>
               {/* Badge icon with glow */}
               <Animated.View style={[styles.badgeContainer, badgeContainerStyle]}>
                 {/* Glow effect */}
@@ -203,9 +200,7 @@ export function BadgeCelebrationModal({
                 </Text>
               )}
             </View>
-          </TouchableWithoutFeedback>
-        </Animated.View>
-      </TouchableWithoutFeedback>
+      </Animated.View>
     </Modal>
   );
 }
