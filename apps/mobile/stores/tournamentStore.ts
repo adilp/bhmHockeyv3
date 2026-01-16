@@ -5,6 +5,12 @@ import type {
   CreateTournamentRequest,
   TournamentTeamDto,
   TournamentMatchDto,
+  TournamentRegistrationDto,
+  CreateTournamentRegistrationRequest,
+  UpdateTournamentRegistrationRequest,
+  TournamentRegistrationResultDto,
+  TeamAssignmentResultDto,
+  BulkCreateTeamsResponse,
 } from '@bhmhockey/shared';
 
 interface TournamentState {
@@ -18,6 +24,12 @@ interface TournamentState {
   processingId: string | null; // Track operations in progress
   error: string | null;
 
+  // Registration state
+  registrations: TournamentRegistrationDto[];
+  myRegistration: TournamentRegistrationDto | null;
+  isRegistering: boolean;
+  registrationError: string | null;
+
   // Actions
   fetchTournaments: () => Promise<void>;
   fetchTournamentById: (id: string) => Promise<void>;
@@ -28,6 +40,19 @@ interface TournamentState {
   generateBracket: (tournamentId: string) => Promise<boolean>;
   clearTournament: () => void;
   clearError: () => void;
+
+  // Registration actions
+  fetchMyRegistration: (tournamentId: string) => Promise<void>;
+  registerForTournament: (tournamentId: string, request: CreateTournamentRegistrationRequest) => Promise<TournamentRegistrationResultDto | null>;
+  withdrawFromTournament: (tournamentId: string) => Promise<boolean>;
+  updateRegistration: (tournamentId: string, request: UpdateTournamentRegistrationRequest) => Promise<boolean>;
+  markPayment: (tournamentId: string) => Promise<boolean>;
+  fetchAllRegistrations: (tournamentId: string) => Promise<void>;
+  verifyPayment: (tournamentId: string, registrationId: string, verified: boolean) => Promise<boolean>;
+  assignPlayerToTeam: (tournamentId: string, registrationId: string, teamId: string) => Promise<boolean>;
+  autoAssignTeams: (tournamentId: string, balanceBySkillLevel?: boolean) => Promise<TeamAssignmentResultDto | null>;
+  bulkCreateTeams: (tournamentId: string, count: number, namePrefix: string) => Promise<BulkCreateTeamsResponse | null>;
+  clearRegistrations: () => void;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -40,6 +65,12 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   isCreating: false,
   processingId: null,
   error: null,
+
+  // Registration state
+  registrations: [],
+  myRegistration: null,
+  isRegistering: false,
+  registrationError: null,
 
   // Fetch all tournaments
   fetchTournaments: async () => {
@@ -201,4 +232,229 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
 
   // Clear error state
   clearError: () => set({ error: null }),
+
+  // Fetch current user's registration for a tournament
+  fetchMyRegistration: async (tournamentId: string) => {
+    set({ registrationError: null });
+    try {
+      const registration = await tournamentService.getMyRegistration(tournamentId);
+      set({ myRegistration: registration });
+    } catch (error: any) {
+      // 404 is expected if user hasn't registered yet
+      if (error?.response?.status === 404) {
+        set({ myRegistration: null });
+      } else {
+        console.error('Failed to fetch registration:', error);
+        set({
+          registrationError: error instanceof Error ? error.message : 'Failed to load registration',
+          myRegistration: null,
+        });
+      }
+    }
+  },
+
+  // Register for tournament
+  registerForTournament: async (tournamentId: string, request: CreateTournamentRegistrationRequest) => {
+    set({ isRegistering: true, registrationError: null });
+    try {
+      const result = await tournamentService.registerForTournament(tournamentId, request);
+      // Refresh registration to get full details
+      await get().fetchMyRegistration(tournamentId);
+      set({ isRegistering: false });
+      return result;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to register for tournament';
+      set({
+        registrationError: errorMessage,
+        isRegistering: false,
+      });
+      return null;
+    }
+  },
+
+  // Withdraw from tournament
+  withdrawFromTournament: async (tournamentId: string) => {
+    set({ isRegistering: true, registrationError: null });
+    try {
+      await tournamentService.withdrawRegistration(tournamentId);
+      set({ myRegistration: null, isRegistering: false });
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to withdraw from tournament';
+      set({
+        registrationError: errorMessage,
+        isRegistering: false,
+      });
+      return false;
+    }
+  },
+
+  // Update registration
+  updateRegistration: async (tournamentId: string, request: UpdateTournamentRegistrationRequest) => {
+    set({ isRegistering: true, registrationError: null });
+    try {
+      const updatedRegistration = await tournamentService.updateMyRegistration(tournamentId, request);
+      set({ myRegistration: updatedRegistration, isRegistering: false });
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to update registration';
+      set({
+        registrationError: errorMessage,
+        isRegistering: false,
+      });
+      return false;
+    }
+  },
+
+  // Mark payment as sent
+  markPayment: async (tournamentId: string) => {
+    set({ isRegistering: true, registrationError: null });
+    try {
+      await tournamentService.markPayment(tournamentId);
+      // Refresh registration to get updated payment status
+      await get().fetchMyRegistration(tournamentId);
+      set({ isRegistering: false });
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to mark payment';
+      set({
+        registrationError: errorMessage,
+        isRegistering: false,
+      });
+      return false;
+    }
+  },
+
+  // Admin: Fetch all registrations for a tournament
+  fetchAllRegistrations: async (tournamentId: string) => {
+    set({ isLoading: true, registrationError: null });
+    try {
+      const registrations = await tournamentService.getAllRegistrations(tournamentId);
+      // Sort by registration date (earliest first)
+      const sortedRegistrations = registrations.sort(
+        (a, b) => new Date(a.registeredAt).getTime() - new Date(b.registeredAt).getTime()
+      );
+      set({ registrations: sortedRegistrations, isLoading: false });
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to load registrations';
+      set({
+        registrationError: errorMessage,
+        isLoading: false,
+      });
+    }
+  },
+
+  // Admin: Verify payment
+  verifyPayment: async (tournamentId: string, registrationId: string, verified: boolean) => {
+    set({ registrationError: null });
+    try {
+      await tournamentService.verifyPayment(tournamentId, registrationId, { verified });
+
+      // Update registration in the array
+      const { registrations } = get();
+      const updatedRegistrations = registrations.map(reg => {
+        if (reg.id === registrationId) {
+          return {
+            ...reg,
+            paymentStatus: verified ? ('Verified' as const) : ('Pending' as const),
+            paymentVerifiedAt: verified ? new Date().toISOString() : undefined,
+          };
+        }
+        return reg;
+      });
+      set({ registrations: updatedRegistrations });
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to verify payment';
+      set({ registrationError: errorMessage });
+      return false;
+    }
+  },
+
+  // Admin: Assign player to team
+  assignPlayerToTeam: async (tournamentId: string, registrationId: string, teamId: string) => {
+    set({ registrationError: null });
+    try {
+      await tournamentService.assignPlayerToTeam(tournamentId, registrationId, { teamId });
+
+      // Update registration in the array
+      const { registrations, teams } = get();
+      const team = teams.find(t => t.id === teamId);
+      const updatedRegistrations = registrations.map(reg => {
+        if (reg.id === registrationId) {
+          return {
+            ...reg,
+            assignedTeamId: teamId,
+            assignedTeamName: team?.name,
+          };
+        }
+        return reg;
+      });
+      set({ registrations: updatedRegistrations });
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to assign player to team';
+      set({ registrationError: errorMessage });
+      return false;
+    }
+  },
+
+  // Admin: Auto-assign all unassigned players to teams
+  autoAssignTeams: async (tournamentId: string, balanceBySkillLevel?: boolean) => {
+    const { processingId } = get();
+
+    // Prevent double-clicks
+    if (processingId === `auto-assign-${tournamentId}`) {
+      return null;
+    }
+
+    set({ processingId: `auto-assign-${tournamentId}`, registrationError: null });
+    try {
+      const result = await tournamentService.autoAssignTeams(tournamentId, { balanceBySkillLevel });
+
+      // Refresh registrations and teams after auto-assignment
+      await Promise.all([
+        get().fetchAllRegistrations(tournamentId),
+        get().fetchTeams(tournamentId),
+      ]);
+
+      set({ processingId: null });
+      return result;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to auto-assign teams';
+      set({
+        processingId: null,
+        registrationError: errorMessage,
+      });
+      return null;
+    }
+  },
+
+  // Admin: Bulk create teams
+  bulkCreateTeams: async (tournamentId: string, count: number, namePrefix: string) => {
+    set({ isCreating: true, registrationError: null });
+    try {
+      const result = await tournamentService.bulkCreateTeams(tournamentId, { count, namePrefix });
+
+      // Refresh teams after creation
+      await get().fetchTeams(tournamentId);
+
+      set({ isCreating: false });
+      return result;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to create teams';
+      set({
+        isCreating: false,
+        registrationError: errorMessage,
+      });
+      return null;
+    }
+  },
+
+  // Clear registration state when leaving screen
+  clearRegistrations: () => set({
+    registrations: [],
+    myRegistration: null,
+    registrationError: null,
+  }),
 }));

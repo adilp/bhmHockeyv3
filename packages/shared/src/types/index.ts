@@ -781,3 +781,61 @@ export interface TournamentTeamMemberDto {
   role: string;
   joinedAt: string;
 }
+
+// ============================================
+// Tournament Registration Types (TRN-007)
+// ============================================
+
+// Tournament registration status
+export type TournamentRegistrationStatus = 'Registered' | 'Waitlisted' | 'Cancelled';
+
+// Tournament waiver status
+export type TournamentWaiverStatus = 'Pending' | 'Accepted';
+
+// Tournament registration DTO - full registration details with user info
+export interface TournamentRegistrationDto {
+  id: string;
+  tournamentId: string;
+  user: User;
+  status: TournamentRegistrationStatus;
+  position?: string;
+  waitlistPosition?: number;
+  promotedAt?: string;
+  isWaitlisted: boolean;
+  assignedTeamId?: string;
+  assignedTeamName?: string;
+  customResponses?: string;
+  waiverStatus?: TournamentWaiverStatus;
+  paymentStatus?: PaymentStatus;
+  paymentMarkedAt?: string;
+  paymentVerifiedAt?: string;
+  paymentDeadlineAt?: string;
+  registeredAt: string;
+  updatedAt: string;
+  cancelledAt?: string;
+}
+
+// Request to register for a tournament
+export interface CreateTournamentRegistrationRequest {
+  position: string;
+  customResponses?: string;
+  waiverAccepted: boolean;
+}
+
+// Request to update a tournament registration
+export interface UpdateTournamentRegistrationRequest {
+  position?: string;
+  customResponses?: string;
+}
+
+// Result of tournament registration operation
+export interface TournamentRegistrationResultDto {
+  status: TournamentRegistrationStatus;
+  waitlistPosition?: number;
+  message: string;
+}
+
+// Request to verify tournament payment
+export interface VerifyTournamentPaymentRequest {
+  verified: boolean;
+}

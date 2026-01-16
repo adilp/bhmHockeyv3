@@ -7,10 +7,12 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-router';
 import { useTournamentStore } from '../../../stores/tournamentStore';
-import { TournamentStatusBadge, Badge } from '../../../components';
+import { useAuthStore } from '../../../stores/authStore';
+import { TournamentStatusBadge, Badge, RegistrationStatusSheet } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
 import type { TournamentDto, TournamentFormat } from '@bhmhockey/shared';
 
@@ -69,9 +71,26 @@ interface InfoTabProps {
   tournament: TournamentDto;
   isRefreshing: boolean;
   onRefresh: () => void;
+  myRegistration: any;
+  onShowStatusSheet: () => void;
 }
 
-function InfoTab({ tournament, isRefreshing, onRefresh }: InfoTabProps) {
+function InfoTab({ tournament, isRefreshing, onRefresh, myRegistration, onShowStatusSheet }: InfoTabProps) {
+  // Map registration status to badge variant and display text
+  const getRegistrationStatusConfig = (status: string, isWaitlisted: boolean): { variant: 'green' | 'warning' | 'error' | 'default'; label: string } => {
+    if (isWaitlisted) {
+      return { variant: 'warning', label: 'Waitlisted' };
+    }
+    switch (status) {
+      case 'Registered':
+        return { variant: 'green', label: 'Registered' };
+      case 'Cancelled':
+        return { variant: 'error', label: 'Cancelled' };
+      default:
+        return { variant: 'default', label: status };
+    }
+  };
+
   return (
     <ScrollView
       style={styles.scrollView}
@@ -189,6 +208,56 @@ function InfoTab({ tournament, isRefreshing, onRefresh }: InfoTabProps) {
         </View>
       )}
 
+      {/* Your Registration Section */}
+      {myRegistration && myRegistration.status !== 'Cancelled' && (
+        <View style={styles.infoSection}>
+          <Text style={styles.sectionLabel}>YOUR REGISTRATION</Text>
+          <TouchableOpacity
+            style={styles.registrationCard}
+            onPress={onShowStatusSheet}
+            activeOpacity={0.7}
+          >
+            <View style={styles.registrationHeader}>
+              <Badge variant={getRegistrationStatusConfig(myRegistration.status, myRegistration.isWaitlisted).variant}>
+                {getRegistrationStatusConfig(myRegistration.status, myRegistration.isWaitlisted).label}
+              </Badge>
+              <Text style={styles.tapToViewText}>Tap to view details</Text>
+            </View>
+
+            {myRegistration.position && (
+              <View style={styles.registrationRow}>
+                <Text style={styles.registrationLabel}>Position:</Text>
+                <Text style={styles.registrationValue}>{myRegistration.position}</Text>
+              </View>
+            )}
+
+            <View style={styles.registrationRow}>
+              <Text style={styles.registrationLabel}>Team:</Text>
+              <Text style={styles.registrationValue}>
+                {myRegistration.assignedTeamName || 'Not assigned yet'}
+              </Text>
+            </View>
+
+            {tournament.entryFee > 0 && (
+              <View style={styles.registrationRow}>
+                <Text style={styles.registrationLabel}>Payment:</Text>
+                <Badge
+                  variant={
+                    myRegistration.paymentStatus === 'Verified' ? 'green' :
+                    myRegistration.paymentStatus === 'MarkedPaid' ? 'warning' :
+                    'error'
+                  }
+                >
+                  {myRegistration.paymentStatus === 'Verified' ? 'Verified' :
+                   myRegistration.paymentStatus === 'MarkedPaid' ? 'Pending' :
+                   'Required'}
+                </Badge>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Bottom spacing */}
       <View style={styles.bottomSpacer} />
     </ScrollView>
@@ -252,26 +321,39 @@ export default function TournamentDetailScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showStatusSheet, setShowStatusSheet] = useState(false);
+
+  const { isAuthenticated, user } = useAuthStore();
 
   const {
     currentTournament,
+    myRegistration,
     isLoading,
     error,
     fetchTournamentById,
+    fetchMyRegistration,
+    withdrawFromTournament,
+    markPayment,
     clearTournament,
     clearError,
+    clearRegistrations,
   } = useTournamentStore();
 
   useFocusEffect(
     useCallback(() => {
       if (id) {
         fetchTournamentById(id);
+        // Fetch user's registration if authenticated
+        if (isAuthenticated) {
+          fetchMyRegistration(id);
+        }
       }
       return () => {
         clearTournament();
         clearError();
+        clearRegistrations();
       };
-    }, [id])
+    }, [id, isAuthenticated])
   );
 
   const handleRefresh = async () => {
@@ -279,9 +361,56 @@ export default function TournamentDetailScreen() {
     setIsRefreshing(true);
     try {
       await fetchTournamentById(id);
+      if (isAuthenticated) {
+        await fetchMyRegistration(id);
+      }
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  const handleWithdraw = async () => {
+    if (!id) return;
+    const success = await withdrawFromTournament(id);
+    if (success) {
+      Alert.alert('Success', 'You have withdrawn from the tournament.');
+      // Refresh data
+      await handleRefresh();
+    }
+  };
+
+  const handleMarkPayment = async () => {
+    if (!id) return;
+
+    Alert.alert(
+      'Confirm Payment',
+      'Have you completed payment to the tournament organizer? They will verify receipt.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: "Yes, I've Paid",
+          onPress: async () => {
+            const success = await markPayment(id);
+            if (success) {
+              Alert.alert('Payment Marked', 'The organizer will verify your payment.');
+              // Refresh registration
+              await fetchMyRegistration(id);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEdit = () => {
+    // Future: Navigate to edit registration screen
+    // For now, just close the sheet
+    setShowStatusSheet(false);
+  };
+
+  const handleRegisterNow = () => {
+    if (!id) return;
+    router.push(`/tournaments/${id}/register`);
   };
 
   const handleTabChange = (tab: TabKey) => {
@@ -317,6 +446,8 @@ export default function TournamentDetailScreen() {
           tournament={currentTournament}
           isRefreshing={isRefreshing}
           onRefresh={handleRefresh}
+          myRegistration={myRegistration}
+          onShowStatusSheet={() => setShowStatusSheet(true)}
         />
       );
     }
@@ -329,6 +460,8 @@ export default function TournamentDetailScreen() {
     : 'Tournament';
 
   const canManage = currentTournament?.canManage || false;
+  const isRegistered = myRegistration && myRegistration.status !== 'Cancelled';
+  const canRegister = currentTournament?.status === 'Open' && isAuthenticated && !isRegistered;
 
   return (
     <View style={styles.container}>
@@ -345,6 +478,15 @@ export default function TournamentDetailScreen() {
                   style={styles.headerButton}
                 >
                   <Text style={styles.headerButtonText}>Edit</Text>
+                </TouchableOpacity>
+              )
+            : isRegistered
+            ? () => (
+                <TouchableOpacity
+                  onPress={() => setShowStatusSheet(true)}
+                  style={styles.headerButton}
+                >
+                  <Badge variant="green">Registered</Badge>
                 </TouchableOpacity>
               )
             : undefined,
@@ -396,8 +538,34 @@ export default function TournamentDetailScreen() {
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Register Now Footer (for users who can register) */}
+          {canRegister && (
+            <View style={styles.registerFooter}>
+              <TouchableOpacity
+                style={styles.registerButton}
+                onPress={handleRegisterNow}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.registerButtonText}>Register Now</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       ) : null}
+
+      {/* Registration Status Sheet */}
+      {currentTournament && myRegistration && (
+        <RegistrationStatusSheet
+          visible={showStatusSheet}
+          onClose={() => setShowStatusSheet(false)}
+          registration={myRegistration}
+          tournament={currentTournament}
+          onEdit={handleEdit}
+          onWithdraw={handleWithdraw}
+          onMarkPayment={handleMarkPayment}
+        />
+      )}
     </View>
   );
 }
@@ -575,5 +743,61 @@ const styles = StyleSheet.create({
     color: colors.bg.darkest,
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Register Footer
+  registerFooter: {
+    backgroundColor: colors.bg.dark,
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+  },
+  registerButton: {
+    backgroundColor: colors.primary.teal,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  registerButtonText: {
+    color: colors.bg.darkest,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Registration Card Styles
+  registrationCard: {
+    backgroundColor: colors.bg.elevated,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  registrationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  tapToViewText: {
+    fontSize: 12,
+    color: colors.text.muted,
+  },
+  registrationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.muted,
+    marginTop: spacing.xs,
+  },
+  registrationLabel: {
+    fontSize: 14,
+    color: colors.text.secondary,
+  },
+  registrationValue: {
+    fontSize: 14,
+    color: colors.text.primary,
+    fontWeight: '500',
   },
 });

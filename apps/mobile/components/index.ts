@@ -56,3 +56,4 @@ export type { TabKey } from './event-detail';
 export { TournamentStatusBadge } from './TournamentStatusBadge';
 export { TournamentCard } from './TournamentCard';
 export { BracketMatchBox } from './BracketMatchBox';
+export { RegistrationStatusSheet } from './RegistrationStatusSheet';

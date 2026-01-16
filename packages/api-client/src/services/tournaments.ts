@@ -8,6 +8,16 @@ import type {
   TournamentMatchDto,
   EnterScoreRequest,
   ForfeitMatchRequest,
+  TournamentRegistrationDto,
+  TournamentRegistrationResultDto,
+  CreateTournamentRegistrationRequest,
+  UpdateTournamentRegistrationRequest,
+  VerifyTournamentPaymentRequest,
+  AssignPlayerToTeamRequest,
+  AutoAssignTeamsRequest,
+  BulkCreateTeamsRequest,
+  BulkCreateTeamsResponse,
+  TeamAssignmentResultDto,
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -204,5 +214,136 @@ export const tournamentService = {
    */
   async clearBracket(tournamentId: string): Promise<void> {
     await apiClient.instance.delete(`/tournaments/${tournamentId}/bracket`);
+  },
+
+  // ============================================
+  // Registration
+  // ============================================
+
+  /**
+   * Register for a tournament
+   */
+  async registerForTournament(
+    tournamentId: string,
+    request: CreateTournamentRegistrationRequest
+  ): Promise<TournamentRegistrationResultDto> {
+    const response = await apiClient.instance.post<TournamentRegistrationResultDto>(
+      `/tournaments/${tournamentId}/register`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Get current user's registration for a tournament
+   */
+  async getMyRegistration(tournamentId: string): Promise<TournamentRegistrationDto> {
+    const response = await apiClient.instance.get<TournamentRegistrationDto>(
+      `/tournaments/${tournamentId}/register`
+    );
+    return response.data;
+  },
+
+  /**
+   * Update current user's registration
+   */
+  async updateMyRegistration(
+    tournamentId: string,
+    request: UpdateTournamentRegistrationRequest
+  ): Promise<TournamentRegistrationDto> {
+    const response = await apiClient.instance.put<TournamentRegistrationDto>(
+      `/tournaments/${tournamentId}/register`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Withdraw registration from a tournament
+   */
+  async withdrawRegistration(tournamentId: string): Promise<void> {
+    await apiClient.instance.delete(`/tournaments/${tournamentId}/register`);
+  },
+
+  /**
+   * Get all registrations for a tournament (admin only)
+   */
+  async getAllRegistrations(tournamentId: string): Promise<TournamentRegistrationDto[]> {
+    const response = await apiClient.instance.get<TournamentRegistrationDto[]>(
+      `/tournaments/${tournamentId}/registrations`
+    );
+    return response.data;
+  },
+
+  /**
+   * Mark payment as submitted for current user's registration
+   */
+  async markPayment(tournamentId: string): Promise<boolean> {
+    const response = await apiClient.instance.post<boolean>(
+      `/tournaments/${tournamentId}/register/mark-payment`
+    );
+    return response.data;
+  },
+
+  /**
+   * Verify payment for a registration (admin only)
+   */
+  async verifyPayment(
+    tournamentId: string,
+    registrationId: string,
+    request: VerifyTournamentPaymentRequest
+  ): Promise<TournamentRegistrationDto> {
+    const response = await apiClient.instance.put<TournamentRegistrationDto>(
+      `/tournaments/${tournamentId}/registrations/${registrationId}/payment`,
+      request
+    );
+    return response.data;
+  },
+
+  // ============================================
+  // Team Assignment
+  // ============================================
+
+  /**
+   * Assign a player to a team (admin only)
+   */
+  async assignPlayerToTeam(
+    tournamentId: string,
+    registrationId: string,
+    request: AssignPlayerToTeamRequest
+  ): Promise<TournamentRegistrationDto> {
+    const response = await apiClient.instance.put<TournamentRegistrationDto>(
+      `/tournaments/${tournamentId}/registrations/${registrationId}/team`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Auto-assign players to teams based on skill level (admin only)
+   */
+  async autoAssignTeams(
+    tournamentId: string,
+    request: AutoAssignTeamsRequest
+  ): Promise<TeamAssignmentResultDto> {
+    const response = await apiClient.instance.post<TeamAssignmentResultDto>(
+      `/tournaments/${tournamentId}/assign-teams`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Bulk create teams for a tournament (admin only)
+   */
+  async bulkCreateTeams(
+    tournamentId: string,
+    request: BulkCreateTeamsRequest
+  ): Promise<BulkCreateTeamsResponse> {
+    const response = await apiClient.instance.post<BulkCreateTeamsResponse>(
+      `/tournaments/${tournamentId}/create-teams`,
+      request
+    );
+    return response.data;
   },
 };
