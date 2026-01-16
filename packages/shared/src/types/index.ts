@@ -399,6 +399,14 @@ export interface UserBadgeDto {
   displayOrder: number | null;
 }
 
+export interface UncelebratedBadgeDto {
+  id: string;
+  badgeType: BadgeTypeDto;
+  context?: Record<string, unknown>;
+  earnedAt: string;  // ISO date string
+  totalAwarded: number;  // Rarity count
+}
+
 export interface UpdateBadgeOrderRequest {
   badgeIds: string[];
 }

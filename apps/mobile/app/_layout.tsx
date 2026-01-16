@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View, AppState } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import * as Notifications from 'expo-notifications';
@@ -8,7 +8,9 @@ import { initializeApiClient } from '@bhmhockey/api-client';
 import { getApiUrl } from '../config/api';
 import { colors } from '../theme';
 import { useAuthStore } from '../stores/authStore';
-import { EnvBanner } from '../components';
+import { useCelebrationStore } from '../stores/celebrationStore';
+import { BadgeCelebrationModal, EnvBanner } from '../components';
+import { useBadgeCelebration } from '../hooks';
 import {
   registerForPushNotificationsAsync,
   savePushTokenToBackend,
@@ -36,6 +38,9 @@ TextInput.defaultProps.allowFontScaling = false;
 function RootLayoutContent() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated } = useAuthStore();
+  const { fetchUncelebrated } = useCelebrationStore();
+  const isShowingCelebration = useCelebrationStore((state) => state.isShowingCelebration);
+  const { currentBadge, remaining, dismiss, navigateToTrophyCase } = useBadgeCelebration();
 
   useOtaUpdates();
   const notificationListener = useRef<Notifications.Subscription | null>(null);
@@ -114,9 +119,42 @@ function RootLayoutContent() {
     };
   }, [isAuthenticated]);
 
+  // AppState listener for badge celebration queue
+  // Checks for uncelebrated badges when app comes to foreground
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    // Fetch on mount when authenticated
+    fetchUncelebrated();
+
+    // Listen for app state changes
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // App came to foreground - check for uncelebrated badges
+        fetchUncelebrated();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isAuthenticated, fetchUncelebrated]);
+
   return (
     <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.bg.darkest }}>
       <EnvBanner />
+
+      {/* Badge celebration modal - shown when uncelebrated badges exist */}
+      {isShowingCelebration && currentBadge && (
+        <BadgeCelebrationModal
+          badge={currentBadge}
+          remaining={remaining}
+          onDismiss={dismiss}
+          onViewTrophyCase={navigateToTrophyCase}
+        />
+      )}
       <Stack
         screenOptions={{
           headerStyle: {

@@ -19,6 +19,9 @@ public class UserBadge
     // When the badge was earned
     public DateTime EarnedAt { get; set; } = DateTime.UtcNow;
 
+    // When the celebration modal was shown to the user (null = needs celebration)
+    public DateTime? CelebratedAt { get; set; }
+
     // User's custom ordering (null = not customized, use BadgeType.SortPriority)
     public int? DisplayOrder { get; set; }
 }

@@ -40,7 +40,7 @@ export { DraggableWaitlist } from './DraggableWaitlist';
 export { PlayerDetailModal } from './PlayerDetailModal';
 
 // Badge components
-export { BadgeIcon, BadgeIconsRow, TrophyCase } from './badges';
+export { BadgeIcon, BadgeIconsRow, TrophyCase, Confetti, BadgeCelebrationModal } from './badges';
 
 // Event detail components
 export {

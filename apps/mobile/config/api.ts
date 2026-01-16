@@ -16,8 +16,8 @@ import Constants from 'expo-constants';
  * Note: /health endpoint is at root level, not under /api
  */
 export function getApiUrl(): string {
-  return 'https://bhmhockey-mb3md.ondigitalocean.app/api';
-  // return 'http://192.168.3.218:5001/api';
+  // return 'https://bhmhockey-mb3md.ondigitalocean.app/api';
+  return 'http://192.168.3.218:5001/api';
 }
 
 /**

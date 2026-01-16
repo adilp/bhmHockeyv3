@@ -1,4 +1,4 @@
-import type { User, UpdateUserProfileRequest, UserBadgeDto, UpdateBadgeOrderRequest } from '@bhmhockey/shared';
+import type { User, UpdateUserProfileRequest, UserBadgeDto, UpdateBadgeOrderRequest, UncelebratedBadgeDto } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
 /**
@@ -52,5 +52,22 @@ export const userService = {
   async updateBadgeOrder(badgeIds: string[]): Promise<void> {
     const request: UpdateBadgeOrderRequest = { badgeIds };
     await apiClient.instance.patch('/users/me/badges/order', request);
+  },
+
+  /**
+   * Get uncelebrated badges for the current user
+   * Returns badges that haven't been celebrated yet with rarity information
+   */
+  async getUncelebratedBadges(): Promise<UncelebratedBadgeDto[]> {
+    const response = await apiClient.instance.get<UncelebratedBadgeDto[]>('/users/me/badges/uncelebrated');
+    return response.data;
+  },
+
+  /**
+   * Mark a badge as celebrated
+   * Sets the celebratedAt timestamp for the badge
+   */
+  async celebrateBadge(id: string): Promise<void> {
+    await apiClient.instance.patch(`/users/me/badges/${id}/celebrate`);
   },
 };

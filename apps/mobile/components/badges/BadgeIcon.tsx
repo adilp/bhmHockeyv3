@@ -8,10 +8,10 @@ interface BadgeIconProps {
   style?: StyleProp<ImageStyle>;
 }
 
-// Icon map: iconName -> 24px asset
-// All badges only need a single 24px asset - it scales to any render size
-// React Native auto-selects @2x/@3x variants based on device density
+// Icon map: iconName -> 288px asset (for crisp display at all sizes including 96px celebration modal)
 const iconMap: Record<string, ReturnType<typeof require>> = {
+  founding_member: require('../../assets/badges/founding_member.png'),
+  android_launch: require('../../assets/badges/android_launch.png'),
   trophy_gold: require('../../assets/badges/trophy_gold_24.png'),
   star_teal: require('../../assets/badges/star_teal_24.png'),
 };

@@ -77,6 +77,59 @@ public class BadgeService : IBadgeService
         await _context.SaveChangesAsync();
     }
 
+    public async Task<List<UncelebratedBadgeDto>> GetUncelebratedBadgesAsync(Guid userId)
+    {
+        // Get all uncelebrated badges for the user
+        var uncelebrated = await _context.UserBadges
+            .Include(ub => ub.BadgeType)
+            .Where(ub => ub.UserId == userId && ub.CelebratedAt == null)
+            .OrderBy(ub => ub.EarnedAt)
+            .ToListAsync();
+
+        if (!uncelebrated.Any())
+        {
+            return new List<UncelebratedBadgeDto>();
+        }
+
+        // Calculate rarity counts for all badge types in the uncelebrated list
+        var badgeTypeIds = uncelebrated.Select(ub => ub.BadgeTypeId).Distinct().ToList();
+        var rarityCounts = await _context.UserBadges
+            .Where(ub => badgeTypeIds.Contains(ub.BadgeTypeId))
+            .GroupBy(ub => ub.BadgeTypeId)
+            .Select(g => new { BadgeTypeId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.BadgeTypeId, x => x.Count);
+
+        // Map to DTOs with rarity counts
+        return uncelebrated.Select(ub => new UncelebratedBadgeDto(
+            Id: ub.Id,
+            BadgeType: new BadgeTypeDto(
+                Id: ub.BadgeType.Id,
+                Code: ub.BadgeType.Code,
+                Name: ub.BadgeType.Name,
+                Description: ub.BadgeType.Description,
+                IconName: ub.BadgeType.IconName,
+                Category: ub.BadgeType.Category
+            ),
+            Context: ub.Context,
+            EarnedAt: ub.EarnedAt,
+            TotalAwarded: rarityCounts.GetValueOrDefault(ub.BadgeTypeId, 0)
+        )).ToList();
+    }
+
+    public async Task CelebrateBadgeAsync(Guid userId, Guid userBadgeId)
+    {
+        var userBadge = await _context.UserBadges
+            .FirstOrDefaultAsync(ub => ub.Id == userBadgeId && ub.UserId == userId);
+
+        if (userBadge == null)
+        {
+            throw new InvalidOperationException("Badge not found or does not belong to user");
+        }
+
+        userBadge.CelebratedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+    }
+
     private static UserBadgeDto MapToDto(UserBadge userBadge)
     {
         return new UserBadgeDto(

@@ -29,3 +29,14 @@ public record UserBadgeDto(
 public record UpdateBadgeOrderRequest(
     List<Guid> BadgeIds
 );
+
+/// <summary>
+/// DTO for an uncelebrated badge with rarity information
+/// </summary>
+public record UncelebratedBadgeDto(
+    Guid Id,
+    BadgeTypeDto BadgeType,
+    Dictionary<string, object>? Context,
+    DateTime EarnedAt,
+    int TotalAwarded
+);

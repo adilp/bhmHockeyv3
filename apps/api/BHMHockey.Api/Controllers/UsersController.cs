@@ -207,4 +207,49 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Gets all uncelebrated badges for the current user
+    /// </summary>
+    /// <returns>List of uncelebrated badges with rarity counts, sorted by earned date</returns>
+    [HttpGet("me/badges/uncelebrated")]
+    public async Task<ActionResult<List<UncelebratedBadgeDto>>> GetUncelebratedBadges()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            Console.WriteLine($"🎖️ [GetUncelebratedBadges] Fetching for userId: {userId}");
+            var badges = await _badgeService.GetUncelebratedBadgesAsync(userId);
+            Console.WriteLine($"🎖️ [GetUncelebratedBadges] Found {badges.Count} uncelebrated badges");
+            return Ok(badges);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Marks a badge as celebrated for the current user
+    /// </summary>
+    /// <param name="id">The badge ID to celebrate</param>
+    /// <returns>204 No Content on success</returns>
+    [HttpPatch("me/badges/{id}/celebrate")]
+    public async Task<ActionResult> CelebrateBadge(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            await _badgeService.CelebrateBadgeAsync(userId, id);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }
