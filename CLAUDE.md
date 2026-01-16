@@ -115,61 +115,71 @@ npx eas-cli submit --platform ios
 
 ## Badge Assets
 
-### Location
-`apps/mobile/assets/badges/`
+### Adding a New Badge (Full Workflow)
 
-### Requirements
-- **Format**: PNG with transparent background
-- **Size**: 24x24 pixels (single asset, React Native scales automatically)
-- **Naming**: `{icon_name}_24.png` (e.g., `star_teal_24.png`, `trophy_gold_24.png`)
+#### Step 1: Create Source Image
+- Create badge at **512x512 or 1024x1024** in your design tool
+- Export as PNG with **transparent background**
+- Save source to `apps/mobile/assets/badges/` (e.g., `my_badge_source.png`)
 
-### Creating Badge Assets from Source Images
-
-Use ImageMagick to process source images (works with transparent PNGs or images with white backgrounds):
-
+#### Step 2: Resize for App
 ```bash
-# For transparent PNG sources (recommended)
-convert "source_image.png" \
-    -fuzz 5% -trim +repage \
-    -resize 24x24 \
+convert apps/mobile/assets/badges/my_badge_source.png \
+    -resize 288x288 \
     -gravity center \
     -background none \
-    -extent 24x24 \
-    "apps/mobile/assets/badges/{icon_name}_24.png"
-
-# For images with white backgrounds (removes white)
-convert "source_image.png" \
-    -fuzz 20% -transparent white \
-    -trim +repage \
-    -resize 24x24 \
-    -gravity center \
-    -background none \
-    -extent 24x24 \
-    "apps/mobile/assets/badges/{icon_name}_24.png"
+    -extent 288x288 \
+    apps/mobile/assets/badges/my_badge.png
 ```
 
-**Flags explained:**
-- `-fuzz 5%` - Tolerance for trim edge detection (increase if badge has shadows)
-- `-trim +repage` - Remove surrounding whitespace and reset canvas
-- `-resize 24x24` - Scale to 24x24 maintaining aspect ratio
-- `-gravity center -extent 24x24` - Center in 24x24 canvas with transparent padding
-
-### Registering New Badges
-
+#### Step 3: Register in Code
 Add to icon map in `apps/mobile/components/badges/BadgeIcon.tsx`:
-
 ```typescript
 const iconMap: Record<string, ReturnType<typeof require>> = {
-  trophy_gold: require('../../assets/badges/trophy_gold_24.png'),
-  star_teal: require('../../assets/badges/star_teal_24.png'),
-  new_badge: require('../../assets/badges/new_badge_24.png'),  // Add new badges here
+  founding_member: require('../../assets/badges/founding_member.png'),
+  my_badge: require('../../assets/badges/my_badge.png'),  // Add here
 };
 ```
 
-### Cache Clearing
+#### Step 4: Insert into Database
+```sql
+-- Create the badge type
+INSERT INTO "BadgeTypes" (
+  "Id", "Code", "Name", "Description", "IconName", "Category", "SortPriority", "CreatedAt"
+) VALUES (
+  gen_random_uuid(),
+  'MY_BADGE',
+  'My Badge Name',
+  'Description shown in trophy case',
+  'my_badge',  -- Must match iconMap key
+  'special',
+  10,
+  NOW()
+);
 
-After adding/updating badge assets, clear Metro cache:
+-- Award to a user (CelebratedAt = NULL triggers celebration modal)
+INSERT INTO "UserBadges" (
+  "Id", "UserId", "BadgeTypeId", "Context", "EarnedAt", "CelebratedAt"
+) VALUES (
+  gen_random_uuid(),
+  'USER_ID_HERE',
+  (SELECT "Id" FROM "BadgeTypes" WHERE "Code" = 'MY_BADGE'),
+  '{"description": "Context shown in celebration"}',
+  NOW(),
+  NULL
+);
+```
 
+#### Step 5: Clear Cache & Test
 ```bash
 cd apps/mobile && npx expo start --clear
 ```
+
+### Why 288x288?
+| Location | Display Size | On @3x Device |
+|----------|--------------|---------------|
+| Celebration Modal | 96px | 288px needed |
+| Trophy Case | 48px | 144px needed, crisp |
+| Badge Row (roster) | 24px | Downscaled, crisp |
+
+288px ensures crisp display at the largest size (96px celebration modal on @3x retina screens).

@@ -19,7 +19,7 @@ import type { UserBadgeDto } from '@bhmhockey/shared';
 import { BadgeIcon } from './BadgeIcon';
 import { colors, spacing, radius } from '../../theme';
 
-const ROW_HEIGHT = 72; // Height of each badge row for drag calculations
+const ROW_HEIGHT = 88; // Height of each badge row for drag calculations (increased for 48px icons)
 
 interface TrophyCaseProps {
   /** Array of all user badges */
@@ -104,7 +104,7 @@ function BadgeRow({
       )}
       <BadgeIcon
         iconName={badge.badgeType.iconName}
-        size={24}
+        size={48}
         style={styles.icon}
       />
       <View style={styles.badgeInfo}>
@@ -152,7 +152,7 @@ function DragOverlay({
         </View>
         <BadgeIcon
           iconName={badge.badgeType.iconName}
-          size={24}
+          size={48}
           style={styles.icon}
         />
         <View style={styles.badgeInfo}>
@@ -177,7 +177,7 @@ function DragOverlay({
  *
  * Each badge row shows:
  * - Drag handle (edit mode only)
- * - 24px icon
+ * - 48px icon
  * - Badge name (16px semibold)
  * - Context text (14px muted) - tournament name or description
  * - Earned date (12px subtle)
