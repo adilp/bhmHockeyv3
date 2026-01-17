@@ -2,6 +2,7 @@ using BHMHockey.Api.Data;
 using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace BHMHockey.Api.Services;
 
@@ -114,10 +115,10 @@ public class TournamentTeamService : ITournamentTeamService
         }
 
         // Check authorization
-        var canManage = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        var canManage = await CanUserManageTeamAsync(tournamentId, teamId, userId);
         if (!canManage)
         {
-            throw new UnauthorizedAccessException("You are not authorized to manage teams for this tournament");
+            throw new UnauthorizedAccessException("Only team captain or tournament admin can update this team");
         }
 
         // Apply updates (patch semantics - only update provided fields)
@@ -141,10 +142,10 @@ public class TournamentTeamService : ITournamentTeamService
         }
 
         // Check authorization
-        var canManage = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        var canManage = await CanUserManageTeamAsync(tournamentId, teamId, userId);
         if (!canManage)
         {
-            throw new UnauthorizedAccessException("You are not authorized to manage teams for this tournament");
+            throw new UnauthorizedAccessException("Only team captain or tournament admin can delete this team");
         }
 
         // Get tournament to check status
@@ -161,10 +162,41 @@ public class TournamentTeamService : ITournamentTeamService
                 $"Cannot delete team when tournament is in '{tournament.Status}' status. Team deletion is only allowed in: {string.Join(", ", TeamManagementStatuses)}");
         }
 
+        // Create audit log for team withdrawal
+        var auditLog = new TournamentAuditLog
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournamentId,
+            UserId = userId,
+            Action = "DeleteTeam",
+            EntityType = "Team",
+            EntityId = teamId,
+            OldValue = JsonSerializer.Serialize(new {
+                TeamName = team.Name,
+                CaptainUserId = team.CaptainUserId
+            }),
+            NewValue = null,
+            Timestamp = DateTime.UtcNow
+        };
+        _context.TournamentAuditLogs.Add(auditLog);
+
         _context.TournamentTeams.Remove(team);
         await _context.SaveChangesAsync();
 
         return true;
+    }
+
+    public async Task<bool> CanUserManageTeamAsync(Guid tournamentId, Guid teamId, Guid userId)
+    {
+        // 1. Check if user is tournament admin first
+        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        if (isAdmin) return true;
+
+        // 2. Check if user is captain of this specific team
+        var team = await _context.TournamentTeams
+            .FirstOrDefaultAsync(t => t.Id == teamId && t.TournamentId == tournamentId);
+
+        return team?.CaptainUserId == userId;
     }
 
     private Task<TournamentTeamDto> MapToDto(TournamentTeam team)

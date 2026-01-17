@@ -747,6 +747,48 @@ public class TournamentsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Transfer team captaincy to another team member. Requires authentication.
+    /// Only the current captain can transfer captaincy.
+    /// </summary>
+    /// <remarks>
+    /// The new captain must be an existing team member with Status = Accepted.
+    /// The old captain becomes a regular Player on the team.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <param name="request">Request containing the new captain's user ID</param>
+    /// <response code="200">Captain transferred successfully</response>
+    /// <response code="400">Invalid request (e.g., new captain not accepted member)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not the current captain</response>
+    [HttpPost("{id:guid}/teams/{teamId:guid}/transfer-captain")]
+    [Authorize]
+    [ProducesResponseType(typeof(TransferCaptainResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TransferCaptainResponse>> TransferCaptain(
+        Guid id,
+        Guid teamId,
+        [FromBody] TransferCaptainRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _teamMemberService.TransferCaptainAsync(id, teamId, request.NewCaptainUserId, userId);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     #endregion
 
     #region Match Endpoints

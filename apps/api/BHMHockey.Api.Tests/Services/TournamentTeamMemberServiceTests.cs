@@ -28,6 +28,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
     private readonly Mock<ITournamentService> _mockTournamentService;
+    private readonly Mock<ITournamentTeamService> _mockTournamentTeamService;
     private readonly Mock<INotificationService> _mockNotificationService;
     private readonly ITournamentTeamMemberService _sut;
 
@@ -39,11 +40,13 @@ public class TournamentTeamMemberServiceTests : IDisposable
             .Options;
         _context = new AppDbContext(options);
         _mockTournamentService = new Mock<ITournamentService>();
+        _mockTournamentTeamService = new Mock<ITournamentTeamService>();
         _mockNotificationService = new Mock<INotificationService>();
 
         _sut = new TournamentTeamMemberService(
             _context,
             _mockTournamentService.Object,
+            _mockTournamentTeamService.Object,
             _mockNotificationService.Object);
     }
 
@@ -180,7 +183,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         var tournament = await CreateTestTournament(admin.Id, "Open");
         var team = await CreateTestTeam(tournament.Id, "Team 1");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, admin.Id))
             .ReturnsAsync(true);
 
         // Act
@@ -227,7 +230,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
 
         var newPlayer = await CreateTestUser("new@example.com");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, admin.Id))
             .ReturnsAsync(true);
 
         // Act & Assert
@@ -251,7 +254,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         // Player already has Pending status on team1
         await CreateTestTeamMember(team1.Id, player.Id, "Pending");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team2.Id, admin.Id))
             .ReturnsAsync(true);
 
         // Act & Assert
@@ -275,7 +278,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         // Player already has Accepted status on team1
         await CreateTestTeamMember(team1.Id, player.Id, "Accepted");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team2.Id, admin.Id))
             .ReturnsAsync(true);
 
         // Act & Assert
@@ -299,7 +302,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         // Player has Declined status on team1 - should not block
         await CreateTestTeamMember(team1.Id, player.Id, "Declined");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team2.Id, admin.Id))
             .ReturnsAsync(true);
 
         // Act
@@ -328,7 +331,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         var tournament = await CreateTestTournament(admin.Id, "Open");
         var team = await CreateTestTeam(tournament.Id, "Team 1");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, nonAdmin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, nonAdmin.Id))
             .ReturnsAsync(false);
 
         // Act & Assert
@@ -355,7 +358,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         var team = await CreateTestTeam(tournament.Id, "Team 1");
         var member = await CreateTestTeamMember(team.Id, player.Id, "Accepted");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, admin.Id))
             .ReturnsAsync(true);
 
         // Act
@@ -383,7 +386,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         var team = await CreateTestTeam(tournament.Id, "Team 1");
         var member = await CreateTestTeamMember(team.Id, player.Id, "Accepted");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, nonAdmin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, nonAdmin.Id))
             .ReturnsAsync(false);
 
         // Act & Assert
@@ -561,12 +564,13 @@ public class TournamentTeamMemberServiceTests : IDisposable
         var player = await CreateTestUser("player@example.com");
         var tournament = await CreateTestTournament(admin.Id, "Open");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        var fakeTeamId = Guid.NewGuid();
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, fakeTeamId, admin.Id))
             .ReturnsAsync(true);
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _sut.AddPlayerAsync(tournament.Id, Guid.NewGuid(), player.Id, admin.Id));
+            () => _sut.AddPlayerAsync(tournament.Id, fakeTeamId, player.Id, admin.Id));
 
         exception.Message.Should().Contain("Team not found");
     }
@@ -579,7 +583,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         var tournament = await CreateTestTournament(admin.Id, "Open");
         var team = await CreateTestTeam(tournament.Id, "Team 1");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, admin.Id))
             .ReturnsAsync(true);
 
         // Act & Assert
@@ -598,7 +602,7 @@ public class TournamentTeamMemberServiceTests : IDisposable
         var tournament = await CreateTestTournament(admin.Id, "Open");
         var team = await CreateTestTeam(tournament.Id, "Team 1");
 
-        _mockTournamentService.Setup(ts => ts.CanUserManageTournamentAsync(tournament.Id, admin.Id))
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, admin.Id))
             .ReturnsAsync(true);
 
         // Act

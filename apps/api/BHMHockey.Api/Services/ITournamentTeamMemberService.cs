@@ -57,4 +57,14 @@ public interface ITournamentTeamMemberService
     /// <param name="teamId">Team ID</param>
     /// <returns>List of team members with all statuses</returns>
     Task<List<TournamentTeamMemberDto>> GetTeamMembersAsync(Guid tournamentId, Guid teamId);
+
+    /// <summary>
+    /// Transfers captaincy to another team member. Only current captain can transfer.
+    /// New captain must have Status = Accepted.
+    /// </summary>
+    Task<TransferCaptainResponse> TransferCaptainAsync(
+        Guid tournamentId,
+        Guid teamId,
+        Guid newCaptainUserId,
+        Guid currentUserId);
 }

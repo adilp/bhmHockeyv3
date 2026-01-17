@@ -40,4 +40,9 @@ public interface ITournamentTeamService
     /// Returns true if deleted, false if not found.
     /// </summary>
     Task<bool> DeleteAsync(Guid tournamentId, Guid teamId, Guid userId);
+
+    /// <summary>
+    /// Checks if a user can manage a specific team (is captain OR tournament admin).
+    /// </summary>
+    Task<bool> CanUserManageTeamAsync(Guid tournamentId, Guid teamId, Guid userId);
 }

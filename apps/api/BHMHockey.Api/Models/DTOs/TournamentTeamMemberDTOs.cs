@@ -47,3 +47,25 @@ public record RespondToTeamInviteRequest
     /// </summary>
     public string? CustomResponses { get; set; }
 }
+
+/// <summary>
+/// Request DTO for transferring team captaincy
+/// </summary>
+public record TransferCaptainRequest
+{
+    /// <summary>
+    /// The user ID of the new captain. Must be an existing team member with Status = Accepted.
+    /// </summary>
+    public required Guid NewCaptainUserId { get; init; }
+}
+
+/// <summary>
+/// Response DTO for captain transfer
+/// </summary>
+public record TransferCaptainResponse
+{
+    public required Guid TeamId { get; init; }
+    public required Guid OldCaptainUserId { get; init; }
+    public required Guid NewCaptainUserId { get; init; }
+    public required DateTime TransferredAt { get; init; }
+}

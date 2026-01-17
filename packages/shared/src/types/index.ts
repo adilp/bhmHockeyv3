@@ -780,14 +780,29 @@ export interface TeamAssignmentResultDto {
   unassignedCount: number;
 }
 
-// Tournament team member (minimal - TRN-011 will extend)
+// TRN-012: Captain Management
+export type TournamentTeamMemberRole = 'Captain' | 'Player';
+export type TournamentTeamMemberStatus = 'Pending' | 'Accepted' | 'Declined';
+
+// Tournament team member - full member details
 export interface TournamentTeamMemberDto {
   id: string;
   teamId: string;
   userId: string;
-  userName: string;
-  role: string;
+  userFirstName: string;
+  userLastName: string;
+  userEmail: string;
+  role: TournamentTeamMemberRole;
+  status: TournamentTeamMemberStatus;
+  position?: string;  // 'Goalie' | 'Skater'
   joinedAt: string;
+  respondedAt?: string;
+  leftAt?: string;
+}
+
+// TRN-012: Captain Management - Request to transfer captaincy
+export interface TransferCaptainRequest {
+  newCaptainUserId: string;
 }
 
 // ============================================

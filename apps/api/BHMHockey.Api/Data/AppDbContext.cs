@@ -350,8 +350,8 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Action).IsRequired().HasMaxLength(50);
-            entity.Property(e => e.FromStatus).IsRequired().HasMaxLength(50);
-            entity.Property(e => e.ToStatus).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.FromStatus).HasMaxLength(50);
+            entity.Property(e => e.ToStatus).HasMaxLength(50);
 
             // Index for querying audit logs by tournament
             entity.HasIndex(e => e.TournamentId);

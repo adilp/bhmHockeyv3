@@ -13,15 +13,18 @@ public class TournamentTeamMemberService : ITournamentTeamMemberService
 {
     private readonly AppDbContext _context;
     private readonly ITournamentService _tournamentService;
+    private readonly ITournamentTeamService _teamService;
     private readonly INotificationService _notificationService;
 
     public TournamentTeamMemberService(
         AppDbContext context,
         ITournamentService tournamentService,
+        ITournamentTeamService teamService,
         INotificationService notificationService)
     {
         _context = context;
         _tournamentService = tournamentService;
+        _teamService = teamService;
         _notificationService = notificationService;
     }
 
@@ -31,11 +34,11 @@ public class TournamentTeamMemberService : ITournamentTeamMemberService
         Guid userId,
         Guid adminUserId)
     {
-        // 1. Check admin permission
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, adminUserId);
-        if (!isAdmin)
+        // 1. Check captain OR admin permission
+        var canManage = await _teamService.CanUserManageTeamAsync(tournamentId, teamId, adminUserId);
+        if (!canManage)
         {
-            throw new UnauthorizedAccessException("You do not have permission to add players to this tournament");
+            throw new UnauthorizedAccessException("You do not have permission to add players to this team");
         }
 
         // 2. Validate tournament exists and get it (need MaxPlayersPerTeam)
@@ -140,11 +143,11 @@ public class TournamentTeamMemberService : ITournamentTeamMemberService
         Guid userId,
         Guid adminUserId)
     {
-        // 1. Check admin permission
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, adminUserId);
-        if (!isAdmin)
+        // 1. Check captain OR admin permission
+        var canManage = await _teamService.CanUserManageTeamAsync(tournamentId, teamId, adminUserId);
+        if (!canManage)
         {
-            throw new UnauthorizedAccessException("You do not have permission to remove players from this tournament");
+            throw new UnauthorizedAccessException("You do not have permission to remove players from this team");
         }
 
         // 2. Find the member (by TeamId and UserId, LeftAt = null)
@@ -159,7 +162,21 @@ public class TournamentTeamMemberService : ITournamentTeamMemberService
             return false;
         }
 
-        // 3. Set LeftAt = DateTime.UtcNow (soft delete)
+        // 3. Check if trying to remove the captain
+        var team = await _context.TournamentTeams.FindAsync(teamId);
+        if (team?.CaptainUserId == userId)
+        {
+            throw new InvalidOperationException("Captain cannot remove themselves. Transfer captaincy first or withdraw team.");
+        }
+
+        // 4. Check registration deadline
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament != null && DateTime.UtcNow >= tournament.RegistrationDeadline && !tournament.AllowSubstitutions)
+        {
+            throw new InvalidOperationException("Cannot remove players after registration deadline unless substitutions are enabled");
+        }
+
+        // 5. Set LeftAt = DateTime.UtcNow (soft delete)
         member.LeftAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
@@ -258,6 +275,102 @@ public class TournamentTeamMemberService : ITournamentTeamMemberService
 
         // 2. Map to DTOs and return
         return members.Select(MapToDto).ToList();
+    }
+
+    public async Task<TransferCaptainResponse> TransferCaptainAsync(
+        Guid tournamentId,
+        Guid teamId,
+        Guid newCaptainUserId,
+        Guid currentUserId)
+    {
+        // 1. Get team and validate captain
+        var team = await _context.TournamentTeams
+            .Include(t => t.Tournament)
+            .FirstOrDefaultAsync(t => t.Id == teamId && t.TournamentId == tournamentId);
+
+        if (team == null)
+            throw new InvalidOperationException("Team not found");
+
+        if (team.CaptainUserId != currentUserId)
+            throw new UnauthorizedAccessException("Only the current captain can transfer captaincy");
+
+        if (newCaptainUserId == currentUserId)
+            throw new InvalidOperationException("Cannot transfer captaincy to yourself");
+
+        // 2. Validate new captain is accepted team member
+        var newCaptainMember = await _context.TournamentTeamMembers
+            .Include(m => m.User)
+            .FirstOrDefaultAsync(m =>
+                m.TeamId == teamId &&
+                m.UserId == newCaptainUserId &&
+                m.LeftAt == null);
+
+        if (newCaptainMember == null)
+            throw new InvalidOperationException("New captain must be a team member");
+
+        if (newCaptainMember.Status != "Accepted")
+            throw new InvalidOperationException("New captain must have accepted their team invitation");
+
+        // 3. Get old captain member record
+        var oldCaptainMember = await _context.TournamentTeamMembers
+            .FirstOrDefaultAsync(m =>
+                m.TeamId == teamId &&
+                m.UserId == currentUserId &&
+                m.LeftAt == null);
+
+        // 4. Atomic update
+        var oldCaptainUserId = team.CaptainUserId;
+        team.CaptainUserId = newCaptainUserId;
+        team.UpdatedAt = DateTime.UtcNow;
+
+        if (oldCaptainMember != null)
+            oldCaptainMember.Role = "Player";
+
+        newCaptainMember.Role = "Captain";
+
+        // 5. Create audit log
+        var auditLog = new TournamentAuditLog
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournamentId,
+            UserId = currentUserId,
+            Action = "TransferCaptain",
+            EntityType = "Team",
+            EntityId = teamId,
+            OldValue = System.Text.Json.JsonSerializer.Serialize(new { CaptainUserId = oldCaptainUserId }),
+            NewValue = System.Text.Json.JsonSerializer.Serialize(new { CaptainUserId = newCaptainUserId }),
+            Timestamp = DateTime.UtcNow
+        };
+        _context.TournamentAuditLogs.Add(auditLog);
+
+        await _context.SaveChangesAsync();
+
+        // 6. Send notification to new captain
+        if (!string.IsNullOrEmpty(newCaptainMember.User.PushToken))
+        {
+            try
+            {
+                await _notificationService.SendPushNotificationAsync(
+                    newCaptainMember.User.PushToken,
+                    "You're Now Team Captain!",
+                    $"You are now the captain of {team.Name}",
+                    new { tournamentId, teamId },
+                    newCaptainUserId,
+                    "captain_transferred",
+                    null,
+                    null);
+            }
+            catch { /* Don't fail if notification fails */ }
+        }
+
+        // 7. Return response
+        return new TransferCaptainResponse
+        {
+            TeamId = teamId,
+            OldCaptainUserId = oldCaptainUserId!.Value,
+            NewCaptainUserId = newCaptainUserId,
+            TransferredAt = DateTime.UtcNow
+        };
     }
 
     #region Helper Methods
