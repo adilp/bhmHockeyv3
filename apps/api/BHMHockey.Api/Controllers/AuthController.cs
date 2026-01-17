@@ -102,13 +102,28 @@ public class AuthController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<List<AdminUserSearchResult>>> SearchUsers([FromQuery] string email)
     {
+        Console.WriteLine($"🔍 [SearchUsers] Called with email: {email}");
+        Console.WriteLine($"🔍 [SearchUsers] User authenticated: {User.Identity?.IsAuthenticated}");
+        Console.WriteLine($"🔍 [SearchUsers] User claims: {string.Join(", ", User.Claims.Select(c => $"{c.Type}={c.Value}"))}");
+
         if (string.IsNullOrWhiteSpace(email) || email.Length < 2)
         {
+            Console.WriteLine($"🔍 [SearchUsers] Bad request - email too short");
             return BadRequest(new { message = "Email search must be at least 2 characters" });
         }
 
-        var results = await _authService.SearchUsersAsync(email);
-        return Ok(results);
+        try
+        {
+            var results = await _authService.SearchUsersAsync(email);
+            Console.WriteLine($"🔍 [SearchUsers] Found {results.Count} results");
+            return Ok(results);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"🔍 [SearchUsers] Error: {ex.Message}");
+            Console.WriteLine($"🔍 [SearchUsers] Stack: {ex.StackTrace}");
+            throw;
+        }
     }
 
     /// <summary>
