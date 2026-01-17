@@ -17,6 +17,7 @@ public class TournamentsController : ControllerBase
     private readonly IBracketGenerationService _bracketGenerationService;
     private readonly ITournamentRegistrationService _registrationService;
     private readonly ITournamentTeamAssignmentService _teamAssignmentService;
+    private readonly ITournamentTeamMemberService _teamMemberService;
 
     public TournamentsController(
         ITournamentService tournamentService,
@@ -25,7 +26,8 @@ public class TournamentsController : ControllerBase
         ITournamentMatchService matchService,
         IBracketGenerationService bracketGenerationService,
         ITournamentRegistrationService registrationService,
-        ITournamentTeamAssignmentService teamAssignmentService)
+        ITournamentTeamAssignmentService teamAssignmentService,
+        ITournamentTeamMemberService teamMemberService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
@@ -34,6 +36,7 @@ public class TournamentsController : ControllerBase
         _bracketGenerationService = bracketGenerationService;
         _registrationService = registrationService;
         _teamAssignmentService = teamAssignmentService;
+        _teamMemberService = teamMemberService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -607,6 +610,140 @@ public class TournamentsController : ControllerBase
         catch (UnauthorizedAccessException ex)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Add a player to a team. Requires authentication and tournament admin role.
+    /// </summary>
+    /// <remarks>
+    /// Adds a player to the team with Pending status. Player receives an invitation
+    /// and can accept or decline via the respond endpoint.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <param name="request">Request containing the UserId to add</param>
+    /// <response code="201">Player added successfully</response>
+    /// <response code="400">Invalid request (e.g., team full, player already on another team)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    [HttpPost("{id:guid}/teams/{teamId:guid}/members")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentTeamMemberDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentTeamMemberDto>> AddTeamMember(
+        Guid id,
+        Guid teamId,
+        [FromBody] AddTeamMemberRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _teamMemberService.AddPlayerAsync(id, teamId, request.UserId, userId);
+            return CreatedAtAction(nameof(GetTeamMembers), new { id, teamId }, result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get all members of a team.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <response code="200">Returns list of team members</response>
+    [HttpGet("{id:guid}/teams/{teamId:guid}/members")]
+    [Authorize]
+    [ProducesResponseType(typeof(List<TournamentTeamMemberDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<List<TournamentTeamMemberDto>>> GetTeamMembers(Guid id, Guid teamId)
+    {
+        var members = await _teamMemberService.GetTeamMembersAsync(id, teamId);
+        return Ok(members);
+    }
+
+    /// <summary>
+    /// Remove a player from a team. Requires authentication and tournament admin role.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <param name="userId">User ID to remove</param>
+    /// <response code="204">Player removed successfully</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to manage this tournament</response>
+    /// <response code="404">Player not found on team</response>
+    [HttpDelete("{id:guid}/teams/{teamId:guid}/members/{userId:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveTeamMember(Guid id, Guid teamId, Guid userId)
+    {
+        try
+        {
+            var adminUserId = GetCurrentUserId();
+            var removed = await _teamMemberService.RemovePlayerAsync(id, teamId, userId, adminUserId);
+
+            if (!removed)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Player responds to team invitation. Requires authentication.
+    /// </summary>
+    /// <remarks>
+    /// Allows a player to accept or decline their team invitation.
+    /// If accepted, position is required ("Goalie" or "Skater") and a TournamentRegistration is created.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <param name="request">Response with Accept flag, optional Position and CustomResponses</param>
+    /// <response code="200">Response recorded successfully</response>
+    /// <response code="400">Invalid request (e.g., missing position, already responded)</response>
+    /// <response code="401">Not authenticated</response>
+    [HttpPost("{id:guid}/teams/{teamId:guid}/members/respond")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentTeamMemberDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<TournamentTeamMemberDto>> RespondToTeamInvite(
+        Guid id,
+        Guid teamId,
+        [FromBody] RespondToTeamInviteRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _teamMemberService.RespondAsync(
+                id,
+                teamId,
+                userId,
+                request.Accept,
+                request.Position,
+                request.CustomResponses);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
 
