@@ -10,6 +10,7 @@ namespace BHMHockey.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
+    private const string ADMIN_EMAIL = "a@a.com";
     private readonly IAuthService _authService;
 
     public AuthController(IAuthService authService)
@@ -28,6 +29,18 @@ public class AuthController : ControllerBase
         }
 
         return userId;
+    }
+
+    private string? GetCurrentUserEmail()
+    {
+        return User.FindFirst(ClaimTypes.Email)?.Value
+            ?? User.FindFirst("email")?.Value;
+    }
+
+    private bool IsAdmin()
+    {
+        var email = GetCurrentUserEmail();
+        return email?.ToLower() == ADMIN_EMAIL.ToLower();
     }
 
     [HttpPost("register")]
@@ -79,9 +92,14 @@ public class AuthController : ControllerBase
     /// <param name="userId">The user ID to reset password for</param>
     /// <returns>The temporary password to share with the user</returns>
     [HttpPost("admin/reset-password/{userId}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public async Task<ActionResult<AdminPasswordResetResponse>> AdminResetPassword(Guid userId)
     {
+        if (!IsAdmin())
+        {
+            return Forbid();
+        }
+
         try
         {
             var response = await _authService.AdminResetPasswordAsync(userId);
@@ -99,12 +117,18 @@ public class AuthController : ControllerBase
     /// <param name="email">Email to search for (partial match)</param>
     /// <returns>List of matching users</returns>
     [HttpGet("admin/users/search")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public async Task<ActionResult<List<AdminUserSearchResult>>> SearchUsers([FromQuery] string email)
     {
         Console.WriteLine($"🔍 [SearchUsers] Called with email: {email}");
-        Console.WriteLine($"🔍 [SearchUsers] User authenticated: {User.Identity?.IsAuthenticated}");
-        Console.WriteLine($"🔍 [SearchUsers] User claims: {string.Join(", ", User.Claims.Select(c => $"{c.Type}={c.Value}"))}");
+        Console.WriteLine($"🔍 [SearchUsers] User email: {GetCurrentUserEmail()}");
+        Console.WriteLine($"🔍 [SearchUsers] IsAdmin: {IsAdmin()}");
+
+        if (!IsAdmin())
+        {
+            Console.WriteLine($"🔍 [SearchUsers] Forbidden - not admin");
+            return Forbid();
+        }
 
         if (string.IsNullOrWhiteSpace(email) || email.Length < 2)
         {

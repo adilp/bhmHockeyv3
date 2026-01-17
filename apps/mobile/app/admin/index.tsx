@@ -47,15 +47,20 @@ export default function AdminScreen() {
     try {
       setIsSearching(true);
       setLastResetResult(null);
+      console.log('🔍 Searching for:', searchEmail);
       const results = await adminService.searchUsers(searchEmail);
+      console.log('🔍 Results:', results);
       setSearchResults(results);
       if (results.length === 0) {
         Alert.alert('No Results', 'No users found matching that email');
       }
     } catch (error: any) {
-      console.error('Search failed:', error);
-      const message = error?.response?.data?.message || 'Failed to search users';
-      Alert.alert('Error', message);
+      console.error('🔍 Search failed - full error:', JSON.stringify(error, null, 2));
+      console.error('🔍 Error message:', error?.message);
+      console.error('🔍 Error statusCode:', error?.statusCode);
+      // The api-client interceptor transforms errors to { message, statusCode, errors }
+      const message = error?.message || error?.response?.data?.message || 'Failed to search users';
+      Alert.alert('Error', `${message} (Status: ${error?.statusCode || 'unknown'})`);
     } finally {
       setIsSearching(false);
     }
