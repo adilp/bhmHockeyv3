@@ -10,8 +10,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { authService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing, radius } from '../../theme';
 
@@ -22,6 +24,32 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+
+  const handleForgotPassword = () => {
+    setForgotPasswordEmail(email); // Pre-fill with email if they've typed one
+    setForgotPasswordVisible(true);
+  };
+
+  const submitForgotPassword = async () => {
+    if (!forgotPasswordEmail || !forgotPasswordEmail.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+    try {
+      setForgotPasswordLoading(true);
+      const response = await authService.forgotPassword({ email: forgotPasswordEmail });
+      setForgotPasswordVisible(false);
+      Alert.alert('Request Sent', response.message);
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+      Alert.alert('Error', 'Failed to submit request. Please try again.');
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -89,6 +117,16 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity
+            style={styles.forgotPassword}
+            onPress={handleForgotPassword}
+            disabled={loading || forgotPasswordLoading}
+          >
+            <Text style={styles.forgotPasswordText}>
+              {forgotPasswordLoading ? 'Sending...' : 'Forgot Password?'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
@@ -111,6 +149,57 @@ export default function LoginScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        visible={forgotPasswordVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setForgotPasswordVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Forgot Password</Text>
+            <Text style={styles.modalSubtitle}>
+              Enter your email address and Adil Patel will reach out to help you reset your password.
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="you@example.com"
+              placeholderTextColor={colors.text.muted}
+              value={forgotPasswordEmail}
+              onChangeText={setForgotPasswordEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!forgotPasswordLoading}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setForgotPasswordVisible(false)}
+                disabled={forgotPasswordLoading}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalSubmitButton, forgotPasswordLoading && styles.buttonDisabled]}
+                onPress={submitForgotPassword}
+                disabled={forgotPasswordLoading}
+              >
+                {forgotPasswordLoading ? (
+                  <ActivityIndicator color={colors.bg.darkest} size="small" />
+                ) : (
+                  <Text style={styles.modalSubmitText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -160,6 +249,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text.primary,
   },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: spacing.md,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: colors.primary.teal,
+  },
   button: {
     backgroundColor: colors.primary.teal,
     borderRadius: radius.md,
@@ -187,6 +284,71 @@ const styles = StyleSheet.create({
   link: {
     fontSize: 14,
     color: colors.primary.teal,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: colors.text.muted,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  modalInput: {
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text.primary,
+    marginBottom: spacing.lg,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: colors.text.secondary,
+    fontSize: 16,
+  },
+  modalSubmitButton: {
+    flex: 1,
+    backgroundColor: colors.primary.teal,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  modalSubmitText: {
+    color: colors.bg.darkest,
+    fontSize: 16,
     fontWeight: '600',
   },
 });

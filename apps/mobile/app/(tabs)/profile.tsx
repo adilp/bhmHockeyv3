@@ -26,6 +26,7 @@ import {
 import { colors, spacing, radius } from '../../theme';
 
 const BADGE_SAVE_DEBOUNCE_MS = 500;
+const ADMIN_EMAIL = 'a@a.com';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -258,6 +259,16 @@ export default function ProfileScreen() {
         <Text style={styles.subtitle}>{user?.email}</Text>
       </View>
 
+      {/* Admin Panel Button - only for a@a.com */}
+      {user?.email === ADMIN_EMAIL && (
+        <TouchableOpacity
+          style={styles.adminButton}
+          onPress={() => router.push('/admin')}
+        >
+          <Text style={styles.adminButtonText}>Admin Panel</Text>
+        </TouchableOpacity>
+      )}
+
       <View style={styles.form}>
         {/* Trophy Case Section - at top for easy access */}
         <FormSection title="Trophy Case">
@@ -339,6 +350,14 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={styles.changePasswordButton}
+          onPress={() => router.push('/settings/change-password')}
+          disabled={saving}
+        >
+          <Text style={styles.changePasswordButtonText}>Change Password</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
           disabled={saving}
@@ -410,6 +429,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text.muted,
   },
+  adminButton: {
+    backgroundColor: colors.primary.purple,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  adminButtonText: {
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   form: {
     padding: spacing.lg,
   },
@@ -435,6 +467,18 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: colors.bg.darkest,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  changePasswordButton: {
+    backgroundColor: colors.bg.hover,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  changePasswordButtonText: {
+    color: colors.text.secondary,
     fontSize: 16,
     fontWeight: '600',
   },

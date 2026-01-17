@@ -24,3 +24,31 @@ public record AuthResponse(
 public record RefreshTokenRequest(
     string RefreshToken
 );
+
+public record AdminPasswordResetResponse(
+    Guid UserId,
+    string Email,
+    string TemporaryPassword,
+    string Message
+);
+
+public record AdminUserSearchResult(
+    Guid Id,
+    string Email,
+    string FirstName,
+    string LastName,
+    bool IsActive
+);
+
+public record ChangePasswordRequest(
+    string CurrentPassword,
+    string NewPassword
+);
+
+public record ForgotPasswordRequest(
+    string Email
+);
+
+public record ForgotPasswordResponse(
+    string Message
+);

@@ -1,4 +1,12 @@
-import type { LoginRequest, RegisterRequest, AuthResponse, User } from '@bhmhockey/shared';
+import type {
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+  User,
+  ChangePasswordRequest,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
+} from '@bhmhockey/shared';
 import { apiClient } from '../client';
 import { authStorage } from '../storage/auth';
 
@@ -61,5 +69,23 @@ export const authService = {
   async isAuthenticated(): Promise<boolean> {
     const token = await authStorage.getToken();
     return !!token;
+  },
+
+  /**
+   * Change password for the current user
+   */
+  async changePassword(data: ChangePasswordRequest): Promise<void> {
+    await apiClient.instance.post('/auth/change-password', data);
+  },
+
+  /**
+   * Request password reset (notifies admin)
+   */
+  async forgotPassword(data: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
+    const response = await apiClient.instance.post<ForgotPasswordResponse>(
+      '/auth/forgot-password',
+      data
+    );
+    return response.data;
   },
 };

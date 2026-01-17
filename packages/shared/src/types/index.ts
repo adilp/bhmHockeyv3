@@ -862,3 +862,40 @@ export interface TournamentRegistrationResultDto {
 export interface VerifyTournamentPaymentRequest {
   verified: boolean;
 }
+
+// ============================================
+// Admin Types
+// ============================================
+
+// Response from admin password reset
+export interface AdminPasswordResetResponse {
+  userId: string;
+  email: string;
+  temporaryPassword: string;
+  message: string;
+}
+
+// User search result for admin
+export interface AdminUserSearchResult {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  isActive: boolean;
+}
+
+// Change password request
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+// Forgot password request
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+// Forgot password response
+export interface ForgotPasswordResponse {
+  message: string;
+}

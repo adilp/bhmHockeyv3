@@ -1,6 +1,8 @@
 using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace BHMHockey.Api.Controllers;
 
@@ -13,6 +15,19 @@ public class AuthController : ControllerBase
     public AuthController(IAuthService authService)
     {
         _authService = authService;
+    }
+
+    private Guid GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst("sub")?.Value;
+
+        if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            throw new UnauthorizedAccessException("User ID not found in token");
+        }
+
+        return userId;
     }
 
     [HttpPost("register")]
@@ -55,5 +70,83 @@ public class AuthController : ControllerBase
         {
             return Unauthorized(new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Admin-only endpoint to reset a user's password.
+    /// Generates a temporary password that must be shared with the user securely.
+    /// </summary>
+    /// <param name="userId">The user ID to reset password for</param>
+    /// <returns>The temporary password to share with the user</returns>
+    [HttpPost("admin/reset-password/{userId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<AdminPasswordResetResponse>> AdminResetPassword(Guid userId)
+    {
+        try
+        {
+            var response = await _authService.AdminResetPasswordAsync(userId);
+            return Ok(response);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Admin-only endpoint to search users by email.
+    /// </summary>
+    /// <param name="email">Email to search for (partial match)</param>
+    /// <returns>List of matching users</returns>
+    [HttpGet("admin/users/search")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<List<AdminUserSearchResult>>> SearchUsers([FromQuery] string email)
+    {
+        if (string.IsNullOrWhiteSpace(email) || email.Length < 2)
+        {
+            return BadRequest(new { message = "Email search must be at least 2 characters" });
+        }
+
+        var results = await _authService.SearchUsersAsync(email);
+        return Ok(results);
+    }
+
+    /// <summary>
+    /// Change password for the currently authenticated user.
+    /// </summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            await _authService.ChangePasswordAsync(userId, request);
+            return Ok(new { message = "Password changed successfully" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Request password reset. Sends notification to admin.
+    /// Does not reveal if email exists (security).
+    /// </summary>
+    [HttpPost("forgot-password")]
+    public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest(new { message = "Email is required" });
+        }
+
+        var response = await _authService.ForgotPasswordAsync(request);
+        return Ok(response);
     }
 }

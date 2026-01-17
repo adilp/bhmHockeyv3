@@ -11,13 +11,17 @@ namespace BHMHockey.Api.Services;
 
 public class AuthService : IAuthService
 {
+    private const string ADMIN_EMAIL = "a@a.com";
+
     private readonly AppDbContext _context;
     private readonly IConfiguration _configuration;
+    private readonly INotificationService _notificationService;
 
-    public AuthService(AppDbContext context, IConfiguration configuration)
+    public AuthService(AppDbContext context, IConfiguration configuration, INotificationService notificationService)
     {
         _context = context;
         _configuration = configuration;
+        _notificationService = notificationService;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -91,6 +95,130 @@ public class AuthService : IAuthService
         // Simplified logout for Phase 1
         // In production, invalidate refresh tokens
         return await Task.FromResult(true);
+    }
+
+    public async Task<AdminPasswordResetResponse> AdminResetPasswordAsync(Guid userId)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found");
+        }
+
+        if (!user.IsActive)
+        {
+            throw new InvalidOperationException("Cannot reset password for deactivated account");
+        }
+
+        // Generate a random temporary password
+        var temporaryPassword = GenerateTemporaryPassword();
+
+        // Hash and save
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(temporaryPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return new AdminPasswordResetResponse(
+            user.Id,
+            user.Email,
+            temporaryPassword,
+            "Password reset successful. Please share this temporary password with the user securely."
+        );
+    }
+
+    public async Task<List<AdminUserSearchResult>> SearchUsersAsync(string email)
+    {
+        var users = await _context.Users
+            .Where(u => u.Email.ToLower().Contains(email.ToLower()))
+            .OrderBy(u => u.Email)
+            .Take(20)
+            .Select(u => new AdminUserSearchResult(
+                u.Id,
+                u.Email,
+                u.FirstName,
+                u.LastName,
+                u.IsActive
+            ))
+            .ToListAsync();
+
+        return users;
+    }
+
+    public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found");
+        }
+
+        // Verify current password
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new InvalidOperationException("Current password is incorrect");
+        }
+
+        // Validate new password
+        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6)
+        {
+            throw new InvalidOperationException("New password must be at least 6 characters");
+        }
+
+        // Hash and save new password
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        // Find the user requesting password reset
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower() && u.IsActive);
+
+        // Always return success message to prevent email enumeration
+        var successMessage = "If an account exists with this email, Adil Patel will reach out to help you reset your password.";
+
+        if (user == null)
+        {
+            // Don't reveal if email exists or not
+            return new ForgotPasswordResponse(successMessage);
+        }
+
+        // Find admin user to notify
+        var admin = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == ADMIN_EMAIL.ToLower() && u.IsActive);
+
+        if (admin != null && !string.IsNullOrEmpty(admin.PushToken))
+        {
+            // Send push notification to admin
+            await _notificationService.SendPushNotificationAsync(
+                admin.PushToken,
+                "Password Reset Request",
+                $"{user.FirstName} {user.LastName} ({user.Email}) needs a password reset",
+                new { type = "password_reset_request", userEmail = user.Email, userId = user.Id.ToString() },
+                admin.Id,
+                "password_reset_request"
+            );
+        }
+
+        return new ForgotPasswordResponse(successMessage);
+    }
+
+    private static string GenerateTemporaryPassword()
+    {
+        // Generate a readable temporary password: 3 words + 2 digits
+        var words = new[] { "hockey", "skate", "puck", "stick", "goal", "ice", "rink", "team", "pass", "shot" };
+        var random = new Random();
+        var word1 = words[random.Next(words.Length)];
+        var word2 = words[random.Next(words.Length)];
+        var digits = random.Next(10, 99);
+
+        return $"{char.ToUpper(word1[0])}{word1[1..]}{char.ToUpper(word2[0])}{word2[1..]}{digits}";
     }
 
     private string GenerateJwtToken(User user)
