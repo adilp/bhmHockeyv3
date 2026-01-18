@@ -62,3 +62,14 @@ export { CaptainBadge } from './tournaments/CaptainBadge';
 export { TransferCaptainModal } from './tournaments/TransferCaptainModal';
 export { TeamRosterList } from './tournaments/TeamRosterList';
 export { PendingInvitationCard } from './tournaments/PendingInvitationCard';
+
+// Bracket components
+export {
+  WinnersBracket,
+  LosersBracket,
+  GrandFinalSection,
+  LosersBracketMatchBox,
+  GrandFinalMatchBox,
+  BracketResetIndicator,
+  BracketConnector,
+} from './bracket';

@@ -73,7 +73,7 @@ const ConfettiParticle: React.FC<{ particle: Particle; time: SharedValue<number>
         { translateX: x },
         { translateY: y },
         { rotate: `${rotation}deg` },
-      ],
+      ] as const,
       opacity,
     };
   });

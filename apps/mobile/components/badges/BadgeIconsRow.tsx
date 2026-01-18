@@ -5,10 +5,14 @@ import { BadgeIcon } from './BadgeIcon';
 import { colors, spacing } from '../../theme';
 
 interface BadgeIconsRowProps {
-  /** Array of badges to display (max 3 shown) */
+  /** Array of badges to display */
   badges: UserBadgeDto[];
-  /** Total number of badges the user has earned */
-  totalCount: number;
+  /** Size of each badge icon (default 24) */
+  size?: number;
+  /** Maximum number of badges to display (default 3) */
+  maxDisplay?: number;
+  /** @deprecated Use badges.length instead - kept for backwards compatibility */
+  totalCount?: number;
   /** Optional style for the container */
   style?: StyleProp<ViewStyle>;
 }
@@ -21,22 +25,25 @@ interface BadgeIconsRowProps {
  *
  * Layout: [icon] [icon] [icon] +N
  */
-export function BadgeIconsRow({ badges, totalCount, style }: BadgeIconsRowProps) {
+export function BadgeIconsRow({ badges, size = 24, maxDisplay = 3, totalCount, style }: BadgeIconsRowProps) {
   // If no badges, render empty view to maintain height consistency
   if (!badges || badges.length === 0) {
     return <View style={[styles.container, style]} />;
   }
 
-  // Calculate overflow count
-  const overflow = totalCount - badges.length;
+  // Limit displayed badges and calculate overflow
+  const displayedBadges = badges.slice(0, maxDisplay);
+  // Use totalCount if provided (backwards compat), otherwise use badges.length
+  const total = totalCount ?? badges.length;
+  const overflow = total - displayedBadges.length;
 
   return (
     <View style={[styles.container, style]}>
-      {badges.map((badge) => (
+      {displayedBadges.map((badge) => (
         <BadgeIcon
           key={badge.id}
           iconName={badge.badgeType.iconName}
-          size={24}
+          size={size}
         />
       ))}
       {overflow > 0 && (

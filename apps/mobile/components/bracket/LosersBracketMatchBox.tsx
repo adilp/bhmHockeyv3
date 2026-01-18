@@ -1,13 +1,15 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius } from '../../theme';
 import type { TournamentMatchDto } from '@bhmhockey/shared';
 
-interface BracketMatchBoxProps {
+interface LosersBracketMatchBoxProps {
   match: TournamentMatchDto;
-  onPress?: () => void;  // For score entry
-  onTeamPress?: (teamId: string) => void;  // For team selection/highlighting
+  onPress?: () => void;
+  onTeamPress?: (teamId: string) => void;
   canEdit?: boolean;
-  isHighlighted?: boolean;  // For highlighting team's path
+  fromWinnersText?: string;
+  lossCount?: { homeTeam: number; awayTeam: number };
+  isHighlighted?: boolean;
 }
 
 interface TeamRowProps {
@@ -17,10 +19,11 @@ interface TeamRowProps {
   score?: number;
   isWinner: boolean;
   isBye?: boolean;
+  lossCount?: number;
   onPress?: () => void;
 }
 
-function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, onPress }: TeamRowProps) {
+function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, lossCount, onPress }: TeamRowProps) {
   const displayName = isBye
     ? 'BYE'
     : teamName
@@ -30,21 +33,32 @@ function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, onPress }: Te
       : 'TBD';
 
   const scoreDisplay = score !== undefined && score !== null ? String(score) : '-';
+  const isEliminated = lossCount !== undefined && lossCount >= 2;
 
   const content = (
     <View style={[styles.teamRow, isWinner && styles.winnerRow]}>
-      <Text
-        style={[
-          styles.teamName,
-          isWinner && styles.winnerText,
-          isBye && styles.byeText,
-          !teamName && !isBye && styles.tbdText,
-        ]}
-        numberOfLines={1}
-        allowFontScaling={false}
-      >
-        {displayName}
-      </Text>
+      <View style={styles.teamNameContainer}>
+        <Text
+          style={[
+            styles.teamName,
+            isWinner && styles.winnerText,
+            isBye && styles.byeText,
+            !teamName && !isBye && styles.tbdText,
+            isEliminated && styles.eliminatedText,
+          ]}
+          numberOfLines={1}
+          allowFontScaling={false}
+        >
+          {displayName}
+        </Text>
+        {lossCount !== undefined && (
+          <View style={[styles.lossChip, isEliminated && styles.lossChipEliminated]}>
+            <Text style={[styles.lossChipText, isEliminated && styles.lossChipTextEliminated]} allowFontScaling={false}>
+              L:{lossCount}
+            </Text>
+          </View>
+        )}
+      </View>
       <Text style={[styles.score, isWinner && styles.winnerText]} allowFontScaling={false}>
         {isBye ? '-' : scoreDisplay}
       </Text>
@@ -63,17 +77,21 @@ function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, onPress }: Te
   return content;
 }
 
-export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, isHighlighted = false }: BracketMatchBoxProps) {
+export function LosersBracketMatchBox({
+  match,
+  onPress,
+  onTeamPress,
+  canEdit = false,
+  fromWinnersText,
+  lossCount,
+  isHighlighted = false,
+}: LosersBracketMatchBoxProps) {
   const isCompleted = match.status === 'Completed' || match.status === 'Forfeit';
   const homeIsWinner = isCompleted && match.winnerTeamId === match.homeTeamId;
   const awayIsWinner = isCompleted && match.winnerTeamId === match.awayTeamId;
 
-  // Parse seed from bracketPosition if available (format: "R1M1" or similar)
-  // For now, we don't have seeds in the DTO directly, so we won't display them
-  // This can be enhanced when seed info is added to TournamentMatchDto
-
   const content = (
-    <View style={[styles.container, isHighlighted && styles.highlighted]}>
+    <View style={[styles.container, isHighlighted && styles.highlightedContainer]}>
       {/* Match header */}
       <View style={styles.header}>
         <Text style={styles.matchNumber} allowFontScaling={false}>Match {match.matchNumber}</Text>
@@ -87,6 +105,13 @@ export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, 
         )}
       </View>
 
+      {/* From Winners Text */}
+      {fromWinnersText && (
+        <View style={styles.fromWinnersContainer}>
+          <Text style={styles.fromWinnersText} allowFontScaling={false}>{fromWinnersText}</Text>
+        </View>
+      )}
+
       {/* BYE match */}
       {match.isBye ? (
         <View style={styles.byeContainer}>
@@ -95,6 +120,7 @@ export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, 
             teamId={match.homeTeamId}
             isWinner={false}
             isBye={false}
+            lossCount={lossCount?.homeTeam}
             onPress={match.homeTeamId && onTeamPress ? () => onTeamPress(match.homeTeamId!) : undefined}
           />
           <View style={styles.divider} />
@@ -112,6 +138,7 @@ export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, 
             teamId={match.homeTeamId}
             score={match.homeScore}
             isWinner={homeIsWinner}
+            lossCount={lossCount?.homeTeam}
             onPress={match.homeTeamId && onTeamPress ? () => onTeamPress(match.homeTeamId!) : undefined}
           />
 
@@ -123,6 +150,7 @@ export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, 
             teamId={match.awayTeamId}
             score={match.awayScore}
             isWinner={awayIsWinner}
+            lossCount={lossCount?.awayTeam}
             onPress={match.awayTeamId && onTeamPress ? () => onTeamPress(match.awayTeamId!) : undefined}
           />
         </>
@@ -169,10 +197,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     minWidth: 180,
   },
-  highlighted: {
+  highlightedContainer: {
     borderColor: colors.primary.teal,
     borderWidth: 2,
-    backgroundColor: colors.subtle.teal,
   },
   header: {
     flexDirection: 'row',
@@ -208,6 +235,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.status.error,
   },
+  fromWinnersContainer: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs / 2,
+    backgroundColor: colors.bg.elevated,
+  },
+  fromWinnersText: {
+    fontSize: 9,
+    color: colors.text.subtle,
+    fontStyle: 'italic',
+  },
   teamRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -218,12 +256,17 @@ const styles = StyleSheet.create({
   winnerRow: {
     backgroundColor: colors.subtle.green,
   },
+  teamNameContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
   teamName: {
     fontSize: 13,
     fontWeight: '500',
     color: colors.text.secondary,
-    flex: 1,
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
   },
   winnerText: {
     color: colors.primary.green,
@@ -236,6 +279,30 @@ const styles = StyleSheet.create({
   tbdText: {
     color: colors.text.subtle,
     fontStyle: 'italic',
+  },
+  eliminatedText: {
+    textDecorationLine: 'line-through',
+    color: colors.text.subtle,
+  },
+  lossChip: {
+    backgroundColor: colors.bg.elevated,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  lossChipEliminated: {
+    backgroundColor: colors.status.errorSubtle,
+    borderColor: colors.status.error,
+  },
+  lossChipText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: colors.text.muted,
+  },
+  lossChipTextEliminated: {
+    color: colors.status.error,
   },
   score: {
     fontSize: 16,

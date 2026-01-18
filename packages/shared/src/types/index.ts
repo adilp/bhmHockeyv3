@@ -705,6 +705,7 @@ export interface TournamentMatchDto {
   round: number;
   matchNumber: number;
   bracketPosition?: string;
+  bracketType?: 'Winners' | 'Losers' | 'GrandFinal'; // For double elimination tournaments
 
   // Schedule & Venue
   isBye: boolean;

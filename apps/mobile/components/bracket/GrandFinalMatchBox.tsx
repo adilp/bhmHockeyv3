@@ -1,13 +1,16 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, spacing, radius } from '../theme';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, radius } from '../../theme';
 import type { TournamentMatchDto } from '@bhmhockey/shared';
 
-interface BracketMatchBoxProps {
+interface GrandFinalMatchBoxProps {
   match: TournamentMatchDto;
-  onPress?: () => void;  // For score entry
-  onTeamPress?: (teamId: string) => void;  // For team selection/highlighting
+  onPress?: () => void;
+  onTeamPress?: (teamId: string) => void;
   canEdit?: boolean;
-  isHighlighted?: boolean;  // For highlighting team's path
+  isGF1?: boolean;
+  isGF2?: boolean;
+  isHighlighted?: boolean;
 }
 
 interface TeamRowProps {
@@ -63,20 +66,29 @@ function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, onPress }: Te
   return content;
 }
 
-export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, isHighlighted = false }: BracketMatchBoxProps) {
+export function GrandFinalMatchBox({
+  match,
+  onPress,
+  onTeamPress,
+  canEdit = false,
+  isGF1 = false,
+  isGF2 = false,
+  isHighlighted = false,
+}: GrandFinalMatchBoxProps) {
   const isCompleted = match.status === 'Completed' || match.status === 'Forfeit';
   const homeIsWinner = isCompleted && match.winnerTeamId === match.homeTeamId;
   const awayIsWinner = isCompleted && match.winnerTeamId === match.awayTeamId;
 
-  // Parse seed from bracketPosition if available (format: "R1M1" or similar)
-  // For now, we don't have seeds in the DTO directly, so we won't display them
-  // This can be enhanced when seed info is added to TournamentMatchDto
+  const headerText = isGF2 ? 'GRAND FINAL 2 (Reset)' : 'GRAND FINAL';
 
   const content = (
-    <View style={[styles.container, isHighlighted && styles.highlighted]}>
-      {/* Match header */}
+    <View style={[styles.container, isHighlighted && styles.highlightedContainer]}>
+      {/* Grand Final Header */}
       <View style={styles.header}>
-        <Text style={styles.matchNumber} allowFontScaling={false}>Match {match.matchNumber}</Text>
+        <View style={styles.headerLeft}>
+          <Ionicons name="trophy" size={14} color="#FFD700" style={styles.trophyIcon} />
+          <Text style={styles.matchNumber} allowFontScaling={false}>{headerText}</Text>
+        </View>
         {match.status === 'Forfeit' && (
           <Text style={styles.forfeitLabel} allowFontScaling={false}>FORFEIT</Text>
         )}
@@ -162,17 +174,21 @@ export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, 
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.bg.dark,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)', // Gold tint
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border.default,
+    borderWidth: 2,
+    borderColor: '#FFD700', // Gold border
     overflow: 'hidden',
     minWidth: 180,
   },
-  highlighted: {
-    borderColor: colors.primary.teal,
-    borderWidth: 2,
-    backgroundColor: colors.subtle.teal,
+  highlightedContainer: {
+    borderColor: '#FFD700',
+    borderWidth: 3,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
   },
   header: {
     flexDirection: 'row',
@@ -182,12 +198,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     backgroundColor: colors.bg.elevated,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
+    borderBottomColor: '#FFD700',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trophyIcon: {
+    marginRight: spacing.xs,
   },
   matchNumber: {
     fontSize: 10,
-    fontWeight: '600',
-    color: colors.text.muted,
+    fontWeight: '700',
+    color: '#FFD700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -216,7 +239,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   winnerRow: {
-    backgroundColor: colors.subtle.green,
+    backgroundColor: 'rgba(255, 215, 0, 0.2)', // Stronger gold tint for winner
   },
   teamName: {
     fontSize: 13,
@@ -226,7 +249,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   winnerText: {
-    color: colors.primary.green,
+    color: '#FFD700', // Gold for winner
     fontWeight: '700',
   },
   byeText: {

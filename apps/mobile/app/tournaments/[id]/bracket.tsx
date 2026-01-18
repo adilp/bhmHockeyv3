@@ -7,13 +7,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTournamentStore } from '../../../stores/tournamentStore';
-import { BracketMatchBox } from '../../../components';
+import { BracketMatchBox, WinnersBracket, LosersBracket, GrandFinalSection } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
+import { groupMatchesByBracketType } from '../../../utils/bracketUtils';
 import type { TournamentMatchDto } from '@bhmhockey/shared';
 
 /**
@@ -48,6 +50,7 @@ export default function BracketScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const { matches, currentTournament, fetchMatches, isLoading } = useTournamentStore(
@@ -67,6 +70,20 @@ export default function BracketScreen() {
       }
     }, [id, fetchMatches])
   );
+
+  // Handle team selection toggle
+  const handleTeamSelect = useCallback((teamId: string) => {
+    setSelectedTeamId(prev => prev === teamId ? null : teamId);
+  }, []);
+
+  // Check if this is a double elimination tournament
+  const isDoubleElimination = currentTournament?.format === 'DoubleElimination';
+
+  // Group matches by bracket type for double elimination
+  const groupedMatches = useMemo(() => {
+    if (!isDoubleElimination) return null;
+    return groupMatchesByBracketType(matches);
+  }, [isDoubleElimination, matches]);
 
   // Calculate total rounds for naming
   const totalRounds = useMemo(() => {
@@ -183,6 +200,16 @@ export default function BracketScreen() {
   // Show loading only on initial load
   const showLoading = isLoading && matches.length === 0;
 
+  // Get selected team name for header display
+  const selectedTeamName = useMemo(() => {
+    if (!selectedTeamId) return null;
+    const match = matches.find(m =>
+      m.homeTeamId === selectedTeamId || m.awayTeamId === selectedTeamId
+    );
+    if (!match) return null;
+    return match.homeTeamId === selectedTeamId ? match.homeTeamName : match.awayTeamName;
+  }, [selectedTeamId, matches]);
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -195,13 +222,24 @@ export default function BracketScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Bracket</Text>
+          <Text style={styles.headerTitle}>
+            {isDoubleElimination ? 'Double Elimination Bracket' : 'Bracket'}
+          </Text>
           {currentTournament && (
             <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {currentTournament.name}
+              {selectedTeamName ? `Following: ${selectedTeamName}` : currentTournament.name}
             </Text>
           )}
         </View>
+        {selectedTeamId && (
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={() => setSelectedTeamId(null)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.clearButtonText}>Clear</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Round selector chips */}
@@ -221,7 +259,71 @@ export default function BracketScreen() {
         </View>
       ) : matches.length === 0 ? (
         renderEmptyState()
+      ) : isDoubleElimination && groupedMatches ? (
+        // Double Elimination Graphical View
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          showsVerticalScrollIndicator={true}
+          contentContainerStyle={styles.doubleElimScrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.primary.teal}
+              colors={[colors.primary.teal]}
+            />
+          }
+        >
+          <View style={styles.doubleElimContainer}>
+            {/* Winners Bracket */}
+            {groupedMatches.winners.length > 0 && (
+              <View style={styles.bracketSection}>
+                <WinnersBracket
+                  matches={groupedMatches.winners}
+                  selectedTeamId={selectedTeamId || undefined}
+                  onMatchPress={handleMatchPress}
+                  onTeamPress={handleTeamSelect}
+                  canEdit={currentTournament?.canManage ?? false}
+                />
+              </View>
+            )}
+
+            {/* Divider between Winners and Losers */}
+            {groupedMatches.winners.length > 0 && groupedMatches.losers.length > 0 && (
+              <View style={styles.bracketDivider} />
+            )}
+
+            {/* Losers Bracket */}
+            {groupedMatches.losers.length > 0 && (
+              <View style={styles.bracketSection}>
+                <LosersBracket
+                  matches={groupedMatches.losers}
+                  allMatches={matches}
+                  selectedTeamId={selectedTeamId || undefined}
+                  onMatchPress={handleMatchPress}
+                  onTeamPress={handleTeamSelect}
+                  canEdit={currentTournament?.canManage ?? false}
+                />
+              </View>
+            )}
+
+            {/* Grand Finals */}
+            {groupedMatches.grandFinal.length > 0 && (
+              <View style={styles.grandFinalSection}>
+                <GrandFinalSection
+                  matches={groupedMatches.grandFinal}
+                  selectedTeamId={selectedTeamId || undefined}
+                  onMatchPress={handleMatchPress}
+                  onTeamPress={handleTeamSelect}
+                  canEdit={currentTournament?.canManage ?? false}
+                />
+              </View>
+            )}
+          </View>
+        </ScrollView>
       ) : (
+        // Single Elimination / Round Robin List View
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
@@ -281,6 +383,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text.muted,
     marginTop: 2,
+  },
+  clearButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.subtle.teal,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary.teal,
+  },
+  clearButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary.teal,
   },
 
   // Chip styles
@@ -372,5 +487,26 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // Double elimination bracket styles
+  doubleElimScrollContent: {
+    flexGrow: 1,
+  },
+  doubleElimContainer: {
+    flex: 1,
+    paddingVertical: spacing.md,
+  },
+  bracketSection: {
+    marginBottom: spacing.md,
+  },
+  bracketDivider: {
+    height: 2,
+    backgroundColor: colors.border.emphasis,
+    marginVertical: spacing.lg,
+    marginHorizontal: spacing.md,
+  },
+  grandFinalSection: {
+    paddingHorizontal: spacing.md,
   },
 });
