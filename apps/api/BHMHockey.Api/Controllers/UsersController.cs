@@ -15,17 +15,20 @@ public class UsersController : ControllerBase
     private readonly IOrganizationService _organizationService;
     private readonly IEventService _eventService;
     private readonly IBadgeService _badgeService;
+    private readonly ITournamentTeamMemberService _tournamentTeamMemberService;
 
     public UsersController(
         IUserService userService,
         IOrganizationService organizationService,
         IEventService eventService,
-        IBadgeService badgeService)
+        IBadgeService badgeService,
+        ITournamentTeamMemberService tournamentTeamMemberService)
     {
         _userService = userService;
         _organizationService = organizationService;
         _eventService = eventService;
         _badgeService = badgeService;
+        _tournamentTeamMemberService = tournamentTeamMemberService;
     }
 
     private Guid GetCurrentUserId()
@@ -250,6 +253,25 @@ public class UsersController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Gets all pending tournament team invitations for the current user
+    /// </summary>
+    /// <returns>List of pending team invitations with team and tournament info</returns>
+    [HttpGet("me/tournament-invitations")]
+    public async Task<ActionResult<List<PendingTeamInvitationDto>>> GetMyTournamentInvitations()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var invitations = await _tournamentTeamMemberService.GetUserPendingInvitationsAsync(userId);
+            return Ok(invitations);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
         }
     }
 }

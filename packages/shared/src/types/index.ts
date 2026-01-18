@@ -805,6 +805,45 @@ export interface TransferCaptainRequest {
   newCaptainUserId: string;
 }
 
+// TRN-012: Captain Management - Response from transferring captaincy
+export interface TransferCaptainResponse {
+  success: boolean;
+  message: string;
+  previousCaptainId: string;
+  newCaptainId: string;
+}
+
+// TRN-012: Team Members - Request to add a team member
+export interface AddTeamMemberRequest {
+  userId: string;
+}
+
+// TRN-012: Team Members - Request to respond to team invite
+export interface RespondToTeamInviteRequest {
+  accept: boolean;
+  position?: string;  // Required if accept=true: "Goalie" or "Skater"
+  customResponses?: string;  // JSON string
+}
+
+// TRN-012: Team Members - User search result for captain search
+export interface UserSearchResultDto {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+// TRN-012: Team Members - Pending team invitation DTO
+export interface PendingTeamInvitationDto {
+  memberId: string;
+  teamId: string;
+  teamName: string;
+  tournamentId: string;
+  tournamentName: string;
+  captainName: string;
+  invitedAt: string;
+}
+
 // ============================================
 // Tournament Registration Types (TRN-007)
 // ============================================

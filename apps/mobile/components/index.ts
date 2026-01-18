@@ -57,3 +57,7 @@ export { TournamentStatusBadge } from './TournamentStatusBadge';
 export { TournamentCard } from './TournamentCard';
 export { BracketMatchBox } from './BracketMatchBox';
 export { RegistrationStatusSheet } from './RegistrationStatusSheet';
+export { CaptainBadge } from './tournaments/CaptainBadge';
+export { TransferCaptainModal } from './tournaments/TransferCaptainModal';
+export { TeamRosterList } from './tournaments/TeamRosterList';
+export { PendingInvitationCard } from './tournaments/PendingInvitationCard';

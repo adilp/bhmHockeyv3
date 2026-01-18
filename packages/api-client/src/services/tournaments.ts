@@ -18,6 +18,13 @@ import type {
   BulkCreateTeamsRequest,
   BulkCreateTeamsResponse,
   TeamAssignmentResultDto,
+  TournamentTeamMemberDto,
+  AddTeamMemberRequest,
+  RespondToTeamInviteRequest,
+  TransferCaptainRequest,
+  TransferCaptainResponse,
+  UserSearchResultDto,
+  PendingTeamInvitationDto,
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -153,6 +160,91 @@ export const tournamentService = {
    */
   async deleteTeam(tournamentId: string, teamId: string): Promise<void> {
     await apiClient.instance.delete(`/tournaments/${tournamentId}/teams/${teamId}`);
+  },
+
+  // ============================================
+  // Team Members
+  // ============================================
+
+  /**
+   * Get all members of a tournament team
+   */
+  async getTeamMembers(tournamentId: string, teamId: string): Promise<TournamentTeamMemberDto[]> {
+    const response = await apiClient.instance.get<TournamentTeamMemberDto[]>(
+      `/tournaments/${tournamentId}/teams/${teamId}/members`
+    );
+    return response.data;
+  },
+
+  /**
+   * Add a member to a tournament team
+   */
+  async addTeamMember(tournamentId: string, teamId: string, userId: string): Promise<TournamentTeamMemberDto> {
+    const request: AddTeamMemberRequest = { userId };
+    const response = await apiClient.instance.post<TournamentTeamMemberDto>(
+      `/tournaments/${tournamentId}/teams/${teamId}/members`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Remove a member from a tournament team
+   */
+  async removeTeamMember(tournamentId: string, teamId: string, userId: string): Promise<void> {
+    await apiClient.instance.delete(`/tournaments/${tournamentId}/teams/${teamId}/members/${userId}`);
+  },
+
+  /**
+   * Respond to a team invitation (accept or decline)
+   */
+  async respondToTeamInvite(
+    tournamentId: string,
+    teamId: string,
+    request: RespondToTeamInviteRequest
+  ): Promise<TournamentTeamMemberDto> {
+    const response = await apiClient.instance.post<TournamentTeamMemberDto>(
+      `/tournaments/${tournamentId}/teams/${teamId}/members/respond`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Transfer captaincy to another team member
+   */
+  async transferCaptain(
+    tournamentId: string,
+    teamId: string,
+    request: TransferCaptainRequest
+  ): Promise<TransferCaptainResponse> {
+    const response = await apiClient.instance.post<TransferCaptainResponse>(
+      `/tournaments/${tournamentId}/teams/${teamId}/transfer-captain`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Search users for adding to a team
+   */
+  async searchUsers(tournamentId: string, teamId: string, query: string): Promise<UserSearchResultDto[]> {
+    const response = await apiClient.instance.post<UserSearchResultDto[]>(
+      `/tournaments/${tournamentId}/teams/${teamId}/search-users`,
+      null,
+      { params: { query } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get current user's pending team invitations
+   */
+  async getMyPendingInvitations(): Promise<PendingTeamInvitationDto[]> {
+    const response = await apiClient.instance.get<PendingTeamInvitationDto[]>(
+      '/users/me/tournament-invitations'
+    );
+    return response.data;
   },
 
   // ============================================

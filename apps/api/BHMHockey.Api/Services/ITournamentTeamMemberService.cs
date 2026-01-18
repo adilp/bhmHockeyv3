@@ -67,4 +67,27 @@ public interface ITournamentTeamMemberService
         Guid teamId,
         Guid newCaptainUserId,
         Guid currentUserId);
+
+    /// <summary>
+    /// Gets all pending tournament team invitations for a user.
+    /// Returns invitations where Status = "Pending" and LeftAt = null.
+    /// </summary>
+    /// <param name="userId">User ID to get invitations for</param>
+    /// <returns>List of pending team invitations with team and tournament context</returns>
+    Task<List<PendingTeamInvitationDto>> GetUserPendingInvitationsAsync(Guid userId);
+
+    /// <summary>
+    /// Searches for users to add to a team. Captain-accessible for pre-formed teams.
+    /// </summary>
+    /// <param name="tournamentId">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <param name="query">Search query (email or name, partial match)</param>
+    /// <param name="userId">User performing the search (captain or admin)</param>
+    /// <returns>List of matching users (max 20), excluding users already on the team</returns>
+    /// <exception cref="UnauthorizedAccessException">If user is not team captain or tournament admin</exception>
+    Task<List<UserSearchResultDto>> SearchUsersAsync(
+        Guid tournamentId,
+        Guid teamId,
+        string query,
+        Guid userId);
 }

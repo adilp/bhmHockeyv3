@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,15 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useTournamentStore } from '../../stores/tournamentStore';
+import { useTournamentTeamStore } from '../../stores/tournamentTeamStore';
 import { useAuthStore } from '../../stores/authStore';
-import { TournamentCard, EmptyState } from '../../components';
+import { TournamentCard, EmptyState, PendingInvitationCard, SectionHeader } from '../../components';
 import { colors, spacing, radius } from '../../theme';
-import type { TournamentDto, TournamentStatus } from '@bhmhockey/shared';
+import type { TournamentDto, TournamentStatus, PendingTeamInvitationDto } from '@bhmhockey/shared';
 
 // Filter options
 type FilterOption = 'all' | 'open' | 'inProgress' | 'completed';
@@ -45,12 +47,27 @@ export default function TournamentsScreen() {
     error,
     fetchTournaments,
   } = useTournamentStore();
+  const {
+    myInvitations,
+    fetchMyInvitations,
+    respondToInvite,
+    isProcessing,
+  } = useTournamentTeamStore();
 
   const [activeFilter, setActiveFilter] = useState<FilterOption>('all');
 
   useEffect(() => {
     fetchTournaments();
   }, []);
+
+  // Fetch invitations on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated) {
+        fetchMyInvitations();
+      }
+    }, [isAuthenticated])
+  );
 
   // Filter tournaments based on selected filter
   const filteredTournaments = useMemo(() => {
@@ -84,6 +101,82 @@ export default function TournamentsScreen() {
 
   const handleCreatePress = () => {
     router.push('/tournaments/create');
+  };
+
+  // Handle accepting an invitation with position selection
+  const handleAcceptInvitation = (invitation: PendingTeamInvitationDto) => {
+    if (isProcessing) return;
+
+    Alert.alert(
+      'Select Your Position',
+      `Accept invitation to join ${invitation.teamName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Goalie',
+          onPress: async () => {
+            const success = await respondToInvite(
+              invitation.tournamentId,
+              invitation.teamId,
+              true,
+              'Goalie'
+            );
+            if (success) {
+              Alert.alert('Success', `You've joined ${invitation.teamName}!`);
+              fetchMyInvitations(); // Refresh the list
+            } else {
+              Alert.alert('Error', 'Failed to accept invitation. Please try again.');
+            }
+          },
+        },
+        {
+          text: 'Skater',
+          onPress: async () => {
+            const success = await respondToInvite(
+              invitation.tournamentId,
+              invitation.teamId,
+              true,
+              'Skater'
+            );
+            if (success) {
+              Alert.alert('Success', `You've joined ${invitation.teamName}!`);
+              fetchMyInvitations(); // Refresh the list
+            } else {
+              Alert.alert('Error', 'Failed to accept invitation. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle declining an invitation
+  const handleDeclineInvitation = (invitation: PendingTeamInvitationDto) => {
+    if (isProcessing) return;
+
+    Alert.alert(
+      'Decline Invitation',
+      `Are you sure you want to decline the invitation to join ${invitation.teamName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Decline',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await respondToInvite(
+              invitation.tournamentId,
+              invitation.teamId,
+              false
+            );
+            if (success) {
+              fetchMyInvitations(); // Refresh the list
+            } else {
+              Alert.alert('Error', 'Failed to decline invitation. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderTournament = ({ item }: { item: TournamentDto }) => (
@@ -171,6 +264,26 @@ export default function TournamentsScreen() {
             colors={[colors.primary.teal]}
             progressBackgroundColor={colors.bg.dark}
           />
+        }
+        ListHeaderComponent={
+          isAuthenticated && myInvitations.length > 0 ? (
+            <View style={styles.invitationsSection}>
+              <View style={styles.invitationsSectionHeader}>
+                <SectionHeader
+                  title={`MY INVITATIONS (${myInvitations.length})`}
+                />
+              </View>
+              {myInvitations.map((invitation) => (
+                <PendingInvitationCard
+                  key={`${invitation.tournamentId}-${invitation.teamId}`}
+                  invitation={invitation}
+                  onAccept={handleAcceptInvitation}
+                  onDecline={handleDeclineInvitation}
+                  isProcessing={isProcessing}
+                />
+              ))}
+            </View>
+          ) : null
         }
         ListEmptyComponent={
           <EmptyState
@@ -286,5 +399,11 @@ const styles = StyleSheet.create({
   },
   filterPillTextActive: {
     color: colors.bg.darkest,
+  },
+  invitationsSection: {
+    marginBottom: spacing.lg,
+  },
+  invitationsSectionHeader: {
+    marginBottom: spacing.md,
   },
 });

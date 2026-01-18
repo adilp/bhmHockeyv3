@@ -8,7 +8,7 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
-import { useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { useTournamentStore } from '../../../stores/tournamentStore';
 import { Badge, EmptyState } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
@@ -40,6 +40,7 @@ const formatGoalDiff = (diff: number): string => {
 
 export default function TeamsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [sortMode, setSortMode] = useState<SortMode>('seed');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -82,8 +83,17 @@ export default function TeamsScreen() {
     });
   }, [teams, sortMode]);
 
+  const handleTeamPress = (teamId: string) => {
+    if (!id) return;
+    router.push(`/tournaments/${id}/teams/${teamId}`);
+  };
+
   const renderTeam = ({ item, index }: { item: TournamentTeamDto; index: number }) => (
-    <View style={styles.teamRow}>
+    <TouchableOpacity
+      style={styles.teamRow}
+      onPress={() => handleTeamPress(item.id)}
+      activeOpacity={0.7}
+    >
       {/* Left section: Seed/Rank and Team Name */}
       <View style={styles.teamLeft}>
         {/* Seed or Rank */}
@@ -141,7 +151,7 @@ export default function TeamsScreen() {
           {formatGoalDiff(item.goalDifferential)}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const ListHeaderComponent = () => (

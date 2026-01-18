@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,8 @@ import { useTournamentStore } from '../../../stores/tournamentStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { TournamentStatusBadge, Badge, RegistrationStatusSheet } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
-import type { TournamentDto, TournamentFormat } from '@bhmhockey/shared';
+import type { TournamentDto, TournamentFormat, TournamentTeamDto } from '@bhmhockey/shared';
+import { tournamentService } from '@bhmhockey/api-client';
 
 type TabKey = 'info' | 'bracket' | 'teams';
 
@@ -73,9 +74,12 @@ interface InfoTabProps {
   onRefresh: () => void;
   myRegistration: any;
   onShowStatusSheet: () => void;
+  userTeam: TournamentTeamDto | null;
+  checkingTeams: boolean;
+  onNavigate: (path: string) => void;
 }
 
-function InfoTab({ tournament, isRefreshing, onRefresh, myRegistration, onShowStatusSheet }: InfoTabProps) {
+function InfoTab({ tournament, isRefreshing, onRefresh, myRegistration, onShowStatusSheet, userTeam, checkingTeams, onNavigate }: InfoTabProps) {
   // Map registration status to badge variant and display text
   const getRegistrationStatusConfig = (status: string, isWaitlisted: boolean): { variant: 'green' | 'warning' | 'error' | 'default'; label: string } => {
     if (isWaitlisted) {
@@ -258,6 +262,43 @@ function InfoTab({ tournament, isRefreshing, onRefresh, myRegistration, onShowSt
         </View>
       )}
 
+      {/* Pre-Formed Team Actions */}
+      {tournament.teamFormation === 'PreFormed' && !checkingTeams && (
+        <View style={styles.infoSection}>
+          {userTeam ? (
+            <>
+              <Text style={styles.sectionLabel}>YOUR TEAM</Text>
+              <TouchableOpacity
+                style={styles.teamActionButton}
+                onPress={() => onNavigate(`/tournaments/${tournament.id}/teams/${userTeam.id}`)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.teamActionContent}>
+                  <View>
+                    <Text style={styles.teamActionTitle}>{userTeam.name}</Text>
+                    <Text style={styles.teamActionSubtitle}>
+                      Tap to view team details
+                    </Text>
+                  </View>
+                  <Text style={styles.teamActionArrow}>→</Text>
+                </View>
+              </TouchableOpacity>
+            </>
+          ) : tournament.status === 'Open' && (
+            <>
+              <Text style={styles.sectionLabel}>TEAM MANAGEMENT</Text>
+              <TouchableOpacity
+                style={styles.createTeamButton}
+                onPress={() => onNavigate(`/tournaments/${tournament.id}/teams/create`)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.createTeamButtonText}>Create Team</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
       {/* Bottom spacing */}
       <View style={styles.bottomSpacer} />
     </ScrollView>
@@ -322,12 +363,15 @@ export default function TournamentDetailScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showStatusSheet, setShowStatusSheet] = useState(false);
+  const [userTeam, setUserTeam] = useState<TournamentTeamDto | null>(null);
+  const [checkingTeams, setCheckingTeams] = useState(false);
 
   const { isAuthenticated, user } = useAuthStore();
 
   const {
     currentTournament,
     myRegistration,
+    teams,
     isLoading,
     error,
     fetchTournamentById,
@@ -436,6 +480,54 @@ export default function TournamentDetailScreen() {
     return name.slice(0, 3).toUpperCase();
   };
 
+  // Check if user is on any team (captain or member)
+  useEffect(() => {
+    const checkUserTeam = async () => {
+      if (!user?.id || !teams || teams.length === 0 || !id) {
+        setUserTeam(null);
+        return;
+      }
+
+      setCheckingTeams(true);
+
+      try {
+        // First check if user is captain of any team
+        const captainTeam = teams.find(team => team.captainUserId === user.id);
+        if (captainTeam) {
+          setUserTeam(captainTeam);
+          setCheckingTeams(false);
+          return;
+        }
+
+        // Check if user is a member of any team
+        for (const team of teams) {
+          try {
+            const members = await tournamentService.getTeamMembers(id, team.id);
+            const isMember = members.some(member => member.userId === user.id);
+            if (isMember) {
+              setUserTeam(team);
+              setCheckingTeams(false);
+              return;
+            }
+          } catch (error) {
+            // Continue checking other teams
+            console.log('Error checking team members:', error);
+          }
+        }
+
+        // User is not on any team
+        setUserTeam(null);
+      } catch (error) {
+        console.error('Error checking user team:', error);
+        setUserTeam(null);
+      } finally {
+        setCheckingTeams(false);
+      }
+    };
+
+    checkUserTeam();
+  }, [user?.id, teams, id]);
+
   const renderContent = () => {
     if (!currentTournament) return null;
 
@@ -448,6 +540,9 @@ export default function TournamentDetailScreen() {
           onRefresh={handleRefresh}
           myRegistration={myRegistration}
           onShowStatusSheet={() => setShowStatusSheet(true)}
+          userTeam={userTeam}
+          checkingTeams={checkingTeams}
+          onNavigate={(path) => router.push(path)}
         />
       );
     }
@@ -799,5 +894,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text.primary,
     fontWeight: '500',
+  },
+
+  // Team Action Buttons
+  teamActionButton: {
+    backgroundColor: colors.bg.elevated,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  teamActionContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  teamActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  teamActionSubtitle: {
+    fontSize: 14,
+    color: colors.text.muted,
+  },
+  teamActionArrow: {
+    fontSize: 24,
+    color: colors.primary.teal,
+    fontWeight: '600',
+  },
+  createTeamButton: {
+    backgroundColor: colors.primary.teal,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  createTeamButtonText: {
+    color: colors.bg.darkest,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

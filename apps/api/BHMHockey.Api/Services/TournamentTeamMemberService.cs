@@ -373,6 +373,78 @@ public class TournamentTeamMemberService : ITournamentTeamMemberService
         };
     }
 
+    public async Task<List<PendingTeamInvitationDto>> GetUserPendingInvitationsAsync(Guid userId)
+    {
+        // Query TournamentTeamMembers for the user where Status = "Pending" and LeftAt = null
+        // Include Team, Tournament, and Captain (User) for the response
+        var pendingInvitations = await _context.TournamentTeamMembers
+            .Include(m => m.Team)
+                .ThenInclude(t => t.Tournament)
+            .Include(m => m.Team)
+                .ThenInclude(t => t.Captain)
+            .Where(m =>
+                m.UserId == userId &&
+                m.Status == "Pending" &&
+                m.LeftAt == null)
+            .OrderByDescending(m => m.JoinedAt) // Most recent invitations first
+            .ToListAsync();
+
+        // Map to PendingTeamInvitationDto
+        return pendingInvitations.Select(m => new PendingTeamInvitationDto
+        {
+            MemberId = m.Id,
+            TeamId = m.TeamId,
+            TeamName = m.Team.Name,
+            TournamentId = m.Team.TournamentId,
+            TournamentName = m.Team.Tournament.Name,
+            CaptainName = m.Team.Captain != null
+                ? $"{m.Team.Captain.FirstName} {m.Team.Captain.LastName}"
+                : "TBD",
+            InvitedAt = m.JoinedAt
+        }).ToList();
+    }
+
+    public async Task<List<UserSearchResultDto>> SearchUsersAsync(
+        Guid tournamentId,
+        Guid teamId,
+        string query,
+        Guid userId)
+    {
+        // 1. Verify the user is captain or admin
+        var canManage = await _teamService.CanUserManageTeamAsync(tournamentId, teamId, userId);
+        if (!canManage)
+        {
+            throw new UnauthorizedAccessException("You do not have permission to search users for this team");
+        }
+
+        // 2. Get user IDs already on this team (any status, LeftAt = null)
+        var existingMemberUserIds = await _context.TournamentTeamMembers
+            .Where(m => m.TeamId == teamId && m.LeftAt == null)
+            .Select(m => m.UserId)
+            .ToListAsync();
+
+        // 3. Search users by email or name (case-insensitive, partial match)
+        var queryLower = query.ToLower();
+        var users = await _context.Users
+            .Where(u =>
+                (u.Email.ToLower().Contains(queryLower) ||
+                 u.FirstName.ToLower().Contains(queryLower) ||
+                 u.LastName.ToLower().Contains(queryLower)) &&
+                !existingMemberUserIds.Contains(u.Id))
+            .OrderBy(u => u.Email)
+            .Take(20)
+            .Select(u => new UserSearchResultDto
+            {
+                Id = u.Id,
+                FirstName = u.FirstName,
+                LastName = u.LastName,
+                Email = u.Email
+            })
+            .ToListAsync();
+
+        return users;
+    }
+
     #region Helper Methods
 
     /// <summary>

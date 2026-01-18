@@ -789,6 +789,48 @@ public class TournamentsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Search for users to add to a team. Requires authentication and captain or admin role.
+    /// </summary>
+    /// <remarks>
+    /// Allows team captains and tournament admins to search for users by email or name.
+    /// Results exclude users already on the team and are limited to 20 users.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="teamId">Team ID</param>
+    /// <param name="query">Search query (email or name, partial match)</param>
+    /// <response code="200">Returns list of matching users</response>
+    /// <response code="400">Invalid query (too short)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to search users for this team</response>
+    [HttpPost("{id:guid}/teams/{teamId:guid}/search-users")]
+    [Authorize]
+    [ProducesResponseType(typeof(List<UserSearchResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<List<UserSearchResultDto>>> SearchUsers(
+        Guid id,
+        Guid teamId,
+        [FromQuery] string query)
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+        {
+            return BadRequest(new { message = "Search query must be at least 2 characters" });
+        }
+
+        try
+        {
+            var userId = GetCurrentUserId();
+            var results = await _teamMemberService.SearchUsersAsync(id, teamId, query, userId);
+            return Ok(results);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
     #endregion
 
     #region Match Endpoints

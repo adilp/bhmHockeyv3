@@ -20,6 +20,11 @@ import {
   handleNotificationData,
   handleForegroundNotification,
 } from '../utils/notifications';
+import {
+  getInitialDeepLink,
+  addDeepLinkListener,
+  handleDeepLink,
+} from '../utils/deepLinks';
 import { useOtaUpdates } from '../hooks';
 
 // Disable font scaling globally to prevent text overflow on devices with large font settings
@@ -46,6 +51,8 @@ function RootLayoutContent() {
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
   const lastHandledNotificationId = useRef<string | null>(null);
+  const deepLinkListener = useRef<ReturnType<typeof addDeepLinkListener> | null>(null);
+  const lastHandledDeepLink = useRef<string | null>(null);
 
   useEffect(() => {
     // Initialize API client on app startup
@@ -61,6 +68,47 @@ function RootLayoutContent() {
         });
       },
     });
+  }, []);
+
+  // Handle deep links (cold start and while app is running)
+  useEffect(() => {
+    // Handle cold start: app launched via deep link while killed
+    getInitialDeepLink().then((url) => {
+      if (!url) {
+        return;
+      }
+
+      console.log('🔗 Initial deep link detected:', url);
+
+      // Prevent duplicate handling
+      if (lastHandledDeepLink.current === url) {
+        return;
+      }
+
+      lastHandledDeepLink.current = url;
+
+      // Delay navigation to ensure app is fully mounted
+      setTimeout(() => {
+        handleDeepLink(url);
+      }, 500);
+    });
+
+    // Handle deep links while app is running (foreground or background)
+    deepLinkListener.current = addDeepLinkListener((url) => {
+      console.log('🔗 Deep link received while app running:', url);
+
+      // Prevent duplicate handling
+      if (lastHandledDeepLink.current === url) {
+        return;
+      }
+
+      lastHandledDeepLink.current = url;
+      handleDeepLink(url);
+    });
+
+    return () => {
+      deepLinkListener.current?.remove();
+    };
   }, []);
 
   // Set up push notifications when authenticated
