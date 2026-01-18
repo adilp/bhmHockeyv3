@@ -18,6 +18,7 @@ public class TournamentsController : ControllerBase
     private readonly ITournamentRegistrationService _registrationService;
     private readonly ITournamentTeamAssignmentService _teamAssignmentService;
     private readonly ITournamentTeamMemberService _teamMemberService;
+    private readonly IStandingsService _standingsService;
 
     public TournamentsController(
         ITournamentService tournamentService,
@@ -27,7 +28,8 @@ public class TournamentsController : ControllerBase
         IBracketGenerationService bracketGenerationService,
         ITournamentRegistrationService registrationService,
         ITournamentTeamAssignmentService teamAssignmentService,
-        ITournamentTeamMemberService teamMemberService)
+        ITournamentTeamMemberService teamMemberService,
+        IStandingsService standingsService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
@@ -37,6 +39,7 @@ public class TournamentsController : ControllerBase
         _registrationService = registrationService;
         _teamAssignmentService = teamAssignmentService;
         _teamMemberService = teamMemberService;
+        _standingsService = standingsService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -1002,6 +1005,36 @@ public class TournamentsController : ControllerBase
         {
             return BadRequest(ex.Message);
         }
+    }
+
+    #endregion
+
+    #region Standings
+
+    /// <summary>
+    /// Get standings for a tournament. Works for all tournament formats.
+    /// </summary>
+    /// <remarks>
+    /// Returns sorted team standings with W/L/T/PTS/GF/GA/GD/GP.
+    /// Teams are sorted by points, then tiebreakers (head-to-head, goal differential, goals scored).
+    /// For unresolvable ties (3+ teams), returns tiedGroups array for manual resolution.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Returns standings</response>
+    /// <response code="404">Tournament not found</response>
+    [HttpGet("{id:guid}/standings")]
+    [ProducesResponseType(typeof(StandingsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<StandingsDto>> GetStandings(Guid id)
+    {
+        var standings = await _standingsService.GetStandingsAsync(id);
+
+        if (standings == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(standings);
     }
 
     #endregion

@@ -54,7 +54,7 @@ public class ScoreEntryServiceTests : IDisposable
         return user;
     }
 
-    private async Task<Tournament> CreateTestTournament(Guid creatorId, string status = "InProgress", string format = "SingleElimination")
+    private async Task<Tournament> CreateTestTournament(Guid creatorId, string status = "InProgress", string format = "SingleElimination", int pointsWin = 3, int pointsTie = 1, int pointsLoss = 0)
     {
         var tournament = new Tournament
         {
@@ -68,6 +68,9 @@ public class ScoreEntryServiceTests : IDisposable
             EndDate = DateTime.UtcNow.AddDays(32),
             RegistrationDeadline = DateTime.UtcNow.AddDays(25),
             MaxTeams = 8,
+            PointsWin = pointsWin,
+            PointsTie = pointsTie,
+            PointsLoss = pointsLoss,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -1118,6 +1121,196 @@ public class ScoreEntryServiceTests : IDisposable
         // Assert
         var updatedTeamA = await _context.TournamentTeams.FindAsync(teamA.Id);
         updatedTeamA!.Status.Should().Be("Winner");
+    }
+
+    #endregion
+
+    #region Points Calculation Tests
+
+    [Fact]
+    public async Task EnterScoreAsync_WinningTeam_UpdatesPointsCorrectly()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateTestTournament(user.Id); // Default: PointsWin=3
+        await AddTournamentAdmin(tournament.Id, user.Id);
+
+        var teamA = await CreateTestTeam(tournament.Id, "Team A");
+        var teamB = await CreateTestTeam(tournament.Id, "Team B");
+        var match = await CreateTestMatch(tournament.Id, teamA.Id, teamB.Id);
+
+        var request = new EnterScoreRequest
+        {
+            HomeScore = 5,
+            AwayScore = 2
+        };
+
+        // Act
+        await _sut.EnterScoreAsync(tournament.Id, match.Id, request, user.Id);
+
+        // Assert
+        var updatedTeamA = await _context.TournamentTeams.FindAsync(teamA.Id);
+        updatedTeamA.Should().NotBeNull();
+        updatedTeamA!.Points.Should().Be(3, "winning team should receive PointsWin (default 3)");
+    }
+
+    [Fact]
+    public async Task EnterScoreAsync_LosingTeam_UpdatesPointsCorrectly()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateTestTournament(user.Id); // Default: PointsLoss=0
+        await AddTournamentAdmin(tournament.Id, user.Id);
+
+        var teamA = await CreateTestTeam(tournament.Id, "Team A");
+        var teamB = await CreateTestTeam(tournament.Id, "Team B");
+        var match = await CreateTestMatch(tournament.Id, teamA.Id, teamB.Id);
+
+        var request = new EnterScoreRequest
+        {
+            HomeScore = 5,
+            AwayScore = 2
+        };
+
+        // Act
+        await _sut.EnterScoreAsync(tournament.Id, match.Id, request, user.Id);
+
+        // Assert
+        var updatedTeamB = await _context.TournamentTeams.FindAsync(teamB.Id);
+        updatedTeamB.Should().NotBeNull();
+        updatedTeamB!.Points.Should().Be(0, "losing team should receive PointsLoss (default 0)");
+    }
+
+    [Fact]
+    public async Task EnterScoreAsync_TiedGame_RoundRobin_UpdatesPointsForBothTeams()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateTestTournament(user.Id, format: "RoundRobin"); // Default: PointsTie=1
+        await AddTournamentAdmin(tournament.Id, user.Id);
+
+        var teamA = await CreateTestTeam(tournament.Id, "Team A");
+        var teamB = await CreateTestTeam(tournament.Id, "Team B");
+        var match = await CreateTestMatch(tournament.Id, teamA.Id, teamB.Id);
+
+        var request = new EnterScoreRequest
+        {
+            HomeScore = 4,
+            AwayScore = 4
+        };
+
+        // Act
+        await _sut.EnterScoreAsync(tournament.Id, match.Id, request, user.Id);
+
+        // Assert
+        var updatedTeamA = await _context.TournamentTeams.FindAsync(teamA.Id);
+        updatedTeamA.Should().NotBeNull();
+        updatedTeamA!.Points.Should().Be(1, "tied team should receive PointsTie (default 1)");
+
+        var updatedTeamB = await _context.TournamentTeams.FindAsync(teamB.Id);
+        updatedTeamB.Should().NotBeNull();
+        updatedTeamB!.Points.Should().Be(1, "tied team should receive PointsTie (default 1)");
+    }
+
+    [Fact]
+    public async Task EnterScoreAsync_CustomPointValues_UsesTournamentSettings()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        // Custom points: Win=2, Tie=1, Loss=0
+        var tournament = await CreateTestTournament(user.Id, pointsWin: 2, pointsTie: 1, pointsLoss: 0);
+        await AddTournamentAdmin(tournament.Id, user.Id);
+
+        var teamA = await CreateTestTeam(tournament.Id, "Team A");
+        var teamB = await CreateTestTeam(tournament.Id, "Team B");
+        var match = await CreateTestMatch(tournament.Id, teamA.Id, teamB.Id);
+
+        var request = new EnterScoreRequest
+        {
+            HomeScore = 3,
+            AwayScore = 1
+        };
+
+        // Act
+        await _sut.EnterScoreAsync(tournament.Id, match.Id, request, user.Id);
+
+        // Assert
+        var updatedTeamA = await _context.TournamentTeams.FindAsync(teamA.Id);
+        updatedTeamA.Should().NotBeNull();
+        updatedTeamA!.Points.Should().Be(2, "winning team should receive custom PointsWin (2)");
+
+        var updatedTeamB = await _context.TournamentTeams.FindAsync(teamB.Id);
+        updatedTeamB.Should().NotBeNull();
+        updatedTeamB!.Points.Should().Be(0, "losing team should receive custom PointsLoss (0)");
+    }
+
+    [Fact]
+    public async Task EnterScoreAsync_EditScore_RecalculatesPointsCorrectly()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateTestTournament(user.Id); // Default: PointsWin=3, PointsLoss=0
+        await AddTournamentAdmin(tournament.Id, user.Id);
+
+        var teamA = await CreateTestTeam(tournament.Id, "Team A");
+        var teamB = await CreateTestTeam(tournament.Id, "Team B");
+        var match = await CreateTestMatch(tournament.Id, teamA.Id, teamB.Id);
+
+        // Enter initial score: Team A wins 5-2
+        var initialRequest = new EnterScoreRequest
+        {
+            HomeScore = 5,
+            AwayScore = 2
+        };
+        await _sut.EnterScoreAsync(tournament.Id, match.Id, initialRequest, user.Id);
+
+        // Edit score: Team B now wins 2-6
+        var editRequest = new EnterScoreRequest
+        {
+            HomeScore = 2,
+            AwayScore = 6
+        };
+
+        // Act
+        await _sut.EnterScoreAsync(tournament.Id, match.Id, editRequest, user.Id);
+
+        // Assert - Team A should have points reversed from 3 to 0
+        var updatedTeamA = await _context.TournamentTeams.FindAsync(teamA.Id);
+        updatedTeamA.Should().NotBeNull();
+        updatedTeamA!.Points.Should().Be(0, "team A should have old win points (3) reversed and new loss points (0) applied");
+
+        // Assert - Team B should have points reversed from 0 to 3
+        var updatedTeamB = await _context.TournamentTeams.FindAsync(teamB.Id);
+        updatedTeamB.Should().NotBeNull();
+        updatedTeamB!.Points.Should().Be(3, "team B should have old loss points (0) reversed and new win points (3) applied");
+    }
+
+    [Fact]
+    public async Task EnterScoreAsync_MultipleGames_AccumulatesPoints()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateTestTournament(user.Id, format: "RoundRobin"); // Default: PointsWin=3
+        await AddTournamentAdmin(tournament.Id, user.Id);
+
+        var teamA = await CreateTestTeam(tournament.Id, "Team A");
+        var teamB = await CreateTestTeam(tournament.Id, "Team B");
+        var teamC = await CreateTestTeam(tournament.Id, "Team C");
+
+        // Match 1: Team A beats Team B
+        var match1 = await CreateTestMatch(tournament.Id, teamA.Id, teamB.Id, matchNumber: 1);
+        await _sut.EnterScoreAsync(tournament.Id, match1.Id, new EnterScoreRequest { HomeScore = 5, AwayScore = 2 }, user.Id);
+
+        // Match 2: Team A beats Team C
+        var match2 = await CreateTestMatch(tournament.Id, teamA.Id, teamC.Id, matchNumber: 2);
+        await _sut.EnterScoreAsync(tournament.Id, match2.Id, new EnterScoreRequest { HomeScore = 4, AwayScore = 1 }, user.Id);
+
+        // Act - Verify Team A's accumulated points
+        var updatedTeamA = await _context.TournamentTeams.FindAsync(teamA.Id);
+
+        // Assert
+        updatedTeamA.Should().NotBeNull();
+        updatedTeamA!.Points.Should().Be(6, "team A should have 2 wins * 3 points = 6 total points");
     }
 
     #endregion

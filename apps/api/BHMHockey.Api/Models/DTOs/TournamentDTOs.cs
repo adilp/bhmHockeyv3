@@ -197,3 +197,41 @@ public record TournamentAdminDto
     public Guid? AddedByUserId { get; init; }
     public string? AddedByName { get; init; }
 }
+
+/// <summary>
+/// DTO for a single team's standing in the tournament
+/// </summary>
+public record TeamStandingDto
+{
+    public required Guid TeamId { get; init; }
+    public required string TeamName { get; init; }
+    public required int Rank { get; init; }
+    public required int Wins { get; init; }
+    public required int Losses { get; init; }
+    public required int Ties { get; init; }
+    public required int Points { get; init; }
+    public required int GoalsFor { get; init; }
+    public required int GoalsAgainst { get; init; }
+    public required int GoalDifferential { get; init; }
+    public required int GamesPlayed { get; init; }
+    public required bool IsPlayoffBound { get; init; }
+}
+
+/// <summary>
+/// DTO for a group of teams that are tied and cannot be automatically resolved
+/// </summary>
+public record TiedGroupDto
+{
+    public required List<Guid> TeamIds { get; init; }
+    public required string Reason { get; init; }
+}
+
+/// <summary>
+/// DTO for the complete standings of a tournament
+/// </summary>
+public record StandingsDto
+{
+    public required List<TeamStandingDto> Standings { get; init; }
+    public int? PlayoffCutoff { get; init; }
+    public List<TiedGroupDto>? TiedGroups { get; init; }
+}

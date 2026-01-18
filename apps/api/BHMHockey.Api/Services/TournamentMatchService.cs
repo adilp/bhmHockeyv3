@@ -183,6 +183,14 @@ public class TournamentMatchService : ITournamentMatchService
             awayTeamEntity.Ties++;
         }
 
+        // Recalculate points for both teams
+        homeTeamEntity.Points = (homeTeamEntity.Wins * match.Tournament.PointsWin)
+            + (homeTeamEntity.Ties * match.Tournament.PointsTie)
+            + (homeTeamEntity.Losses * match.Tournament.PointsLoss);
+        awayTeamEntity.Points = (awayTeamEntity.Wins * match.Tournament.PointsWin)
+            + (awayTeamEntity.Ties * match.Tournament.PointsTie)
+            + (awayTeamEntity.Losses * match.Tournament.PointsLoss);
+
         // 8. Update Team Status (Elimination formats only)
         if (isElimination && loserId.HasValue)
         {
@@ -282,6 +290,14 @@ public class TournamentMatchService : ITournamentMatchService
 
         winnerTeam!.Wins++;
         loserTeam!.Losses++;
+
+        // Recalculate points for both teams
+        winnerTeam.Points = (winnerTeam.Wins * match.Tournament.PointsWin)
+            + (winnerTeam.Ties * match.Tournament.PointsTie)
+            + (winnerTeam.Losses * match.Tournament.PointsLoss);
+        loserTeam.Points = (loserTeam.Wins * match.Tournament.PointsWin)
+            + (loserTeam.Ties * match.Tournament.PointsTie)
+            + (loserTeam.Losses * match.Tournament.PointsLoss);
 
         // 7. Update Team Status (Elimination formats only)
         var isElimination = match.Tournament.Format == "SingleElimination" || match.Tournament.Format == "DoubleElimination";
