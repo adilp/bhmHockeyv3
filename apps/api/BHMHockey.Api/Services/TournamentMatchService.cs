@@ -191,14 +191,29 @@ public class TournamentMatchService : ITournamentMatchService
             + (awayTeamEntity.Ties * match.Tournament.PointsTie)
             + (awayTeamEntity.Losses * match.Tournament.PointsLoss);
 
-        // 8. Update Team Status (Elimination formats only)
-        if (isElimination && loserId.HasValue)
+        // 8. Update Team Status (Double Elimination: only eliminate in losers bracket)
+        if (loserId.HasValue)
         {
             var loserTeam = loserId == match.HomeTeamId ? homeTeamEntity : awayTeamEntity;
-            loserTeam.Status = "Eliminated";
+
+            if (match.Tournament.Format == "SingleElimination")
+            {
+                // Single elimination: any loss = elimination
+                loserTeam.Status = "Eliminated";
+            }
+            else if (match.Tournament.Format == "DoubleElimination")
+            {
+                // Double elimination: only eliminated if losing in losers bracket or GF2
+                // BracketType = "Losers" or "GrandFinal" means elimination on loss
+                if (match.BracketType == "Losers" || match.BracketType == "GrandFinal")
+                {
+                    loserTeam.Status = "Eliminated";
+                }
+                // Winners bracket losers drop to losers bracket (handled by LoserNextMatchId)
+            }
         }
 
-        // 9. Bracket Advancement
+        // 9. Winner Bracket Advancement
         if (match.NextMatchId.HasValue && winnerId.HasValue)
         {
             var nextMatch = await _context.TournamentMatches.FindAsync(match.NextMatchId);
@@ -217,11 +232,61 @@ public class TournamentMatchService : ITournamentMatchService
             }
         }
 
-        // 10. Final Match - Set Winner Status
-        if (!match.NextMatchId.HasValue && winnerId.HasValue)
+        // 9b. Loser Bracket Advancement (Double Elimination)
+        if (match.LoserNextMatchId.HasValue && loserId.HasValue)
+        {
+            var loserNextMatch = await _context.TournamentMatches.FindAsync(match.LoserNextMatchId);
+            if (loserNextMatch != null)
+            {
+                // Determine slot based on BracketPosition pattern
+                // W-R1-M1/M2 losers go to L-R1-M1 (home/away)
+                // W-R1-M3/M4 losers go to L-R1-M2 (home/away)
+                // W-SF losers go to L-R2 (away slot - facing L-R1 winner)
+                // W-Final loser goes to L-Final (away slot - facing L-SF winner)
+
+                if (match.BracketPosition != null && match.BracketPosition.StartsWith("W-R1-"))
+                {
+                    // Winners R1 losers: odd match number -> home, even -> away
+                    if (match.MatchNumber % 2 == 1)
+                    {
+                        loserNextMatch.HomeTeamId = loserId;
+                    }
+                    else
+                    {
+                        loserNextMatch.AwayTeamId = loserId;
+                    }
+                }
+                else
+                {
+                    // Winners SF and Final losers go to away slot (facing losers bracket winner)
+                    loserNextMatch.AwayTeamId = loserId;
+                }
+                loserNextMatch.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        // 10. Final Match Logic - Set winner/eliminated status for true finals
+        if (winnerId.HasValue && !match.NextMatchId.HasValue)
         {
             var winnerTeam = winnerId == match.HomeTeamId ? homeTeamEntity : awayTeamEntity;
-            winnerTeam.Status = "Winner";
+            var loserTeam = loserId == match.HomeTeamId ? homeTeamEntity : awayTeamEntity;
+
+            // Determine if this is a true final (no more matches after this)
+            // GF1 has NextMatchId to GF2, so winner advances normally - organizer handles GF2 setup
+            // GF2 or single elim final = tournament over
+            bool isTournamentFinal = match.BracketPosition == "GF2"
+                || (match.Tournament.Format == "SingleElimination" && match.BracketPosition == "Final");
+
+            if (isTournamentFinal)
+            {
+                winnerTeam.Status = "Winner";
+                if (loserTeam != null)
+                {
+                    loserTeam.Status = "Eliminated";
+                }
+            }
+            // For W-Final, L-Final, GF1 without NextMatchId: no auto status change
+            // Organizer manages tournament completion manually
         }
 
         // 11. Save and Return
@@ -299,14 +364,24 @@ public class TournamentMatchService : ITournamentMatchService
             + (loserTeam.Ties * match.Tournament.PointsTie)
             + (loserTeam.Losses * match.Tournament.PointsLoss);
 
-        // 7. Update Team Status (Elimination formats only)
-        var isElimination = match.Tournament.Format == "SingleElimination" || match.Tournament.Format == "DoubleElimination";
-        if (isElimination)
+        // 7. Update Team Status (Double Elimination: only eliminate in losers bracket)
+        if (match.Tournament.Format == "SingleElimination")
         {
+            // Single elimination: any loss = elimination
             loserTeam.Status = "Eliminated";
         }
+        else if (match.Tournament.Format == "DoubleElimination")
+        {
+            // Double elimination: only eliminated if losing in losers bracket or GF2
+            // BracketType = "Losers" or "GrandFinal" means elimination on loss
+            if (match.BracketType == "Losers" || match.BracketType == "GrandFinal")
+            {
+                loserTeam.Status = "Eliminated";
+            }
+            // Winners bracket losers drop to losers bracket (handled by LoserNextMatchId)
+        }
 
-        // 8. Bracket Advancement
+        // 8. Winner Bracket Advancement
         if (match.NextMatchId.HasValue)
         {
             var nextMatch = await _context.TournamentMatches.FindAsync(match.NextMatchId);
@@ -325,10 +400,53 @@ public class TournamentMatchService : ITournamentMatchService
             }
         }
 
-        // 9. Final Match - Set Winner Status
+        // 8b. Loser Bracket Advancement (Double Elimination)
+        if (match.LoserNextMatchId.HasValue)
+        {
+            var loserNextMatch = await _context.TournamentMatches.FindAsync(match.LoserNextMatchId);
+            if (loserNextMatch != null)
+            {
+                // Determine slot based on BracketPosition pattern
+                // W-R1-M1/M2 losers go to L-R1-M1 (home/away)
+                // W-R1-M3/M4 losers go to L-R1-M2 (home/away)
+                // W-SF losers go to L-R2 (away slot - facing L-R1 winner)
+                // W-Final loser goes to L-Final (away slot - facing L-SF winner)
+
+                if (match.BracketPosition != null && match.BracketPosition.StartsWith("W-R1-"))
+                {
+                    // Winners R1 losers: odd match number -> home, even -> away
+                    if (match.MatchNumber % 2 == 1)
+                    {
+                        loserNextMatch.HomeTeamId = loserId;
+                    }
+                    else
+                    {
+                        loserNextMatch.AwayTeamId = loserId;
+                    }
+                }
+                else
+                {
+                    // Winners SF and Final losers go to away slot (facing losers bracket winner)
+                    loserNextMatch.AwayTeamId = loserId;
+                }
+                loserNextMatch.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        // 9. Final Match Logic - Set winner/eliminated status for true finals
         if (!match.NextMatchId.HasValue)
         {
-            winnerTeam.Status = "Winner";
+            // Determine if this is a true final (no more matches after this)
+            // GF2 or single elim final = tournament over
+            bool isTournamentFinal = match.BracketPosition == "GF2"
+                || (match.Tournament.Format == "SingleElimination" && match.BracketPosition == "Final");
+
+            if (isTournamentFinal)
+            {
+                winnerTeam.Status = "Winner";
+            }
+            // For W-Final, L-Final, GF1 without NextMatchId: no auto status change
+            // Organizer manages tournament completion manually
         }
 
         // 10. Save and Return
@@ -357,6 +475,7 @@ public class TournamentMatchService : ITournamentMatchService
             Round = match.Round,
             MatchNumber = match.MatchNumber,
             BracketPosition = match.BracketPosition,
+            BracketType = match.BracketType,
             IsBye = match.IsBye,
             ScheduledTime = match.ScheduledTime,
             Venue = match.Venue,

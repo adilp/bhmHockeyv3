@@ -75,6 +75,7 @@ public record TournamentMatchDto
     public required int Round { get; init; }
     public required int MatchNumber { get; init; }
     public string? BracketPosition { get; init; }
+    public string? BracketType { get; init; }
 
     // Schedule & Venue
     public required bool IsBye { get; init; }

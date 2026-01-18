@@ -1056,6 +1056,44 @@ public class BracketGenerationServiceTests : IDisposable
         return tournament;
     }
 
+    /// <summary>
+    /// Creates a tournament with DoubleElimination format for Double Elimination tests.
+    /// </summary>
+    private async Task<Tournament> CreateDoubleEliminationTournament(Guid creatorId, string status = "Draft")
+    {
+        var tournament = new Tournament
+        {
+            Id = Guid.NewGuid(),
+            CreatorId = creatorId,
+            Name = "Double Elimination Tournament",
+            Format = "DoubleElimination",
+            TeamFormation = "OrganizerAssigned",
+            Status = status,
+            StartDate = DateTime.UtcNow.AddDays(30),
+            EndDate = DateTime.UtcNow.AddDays(32),
+            RegistrationDeadline = DateTime.UtcNow.AddDays(25),
+            MaxTeams = 8,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.Tournaments.Add(tournament);
+
+        // Add creator as tournament admin (Owner)
+        var admin = new TournamentAdmin
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            UserId = creatorId,
+            Role = "Owner",
+            AddedAt = DateTime.UtcNow
+        };
+        _context.TournamentAdmins.Add(admin);
+
+        await _context.SaveChangesAsync();
+        return tournament;
+    }
+
     #endregion
 
     #region GenerateRoundRobinScheduleAsync - Match Count Tests
@@ -1689,6 +1727,671 @@ public class BracketGenerationServiceTests : IDisposable
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id));
+    }
+
+    #endregion
+
+    #region GenerateDoubleEliminationBracketAsync Tests
+
+    /// <summary>
+    /// Test Case 1: 8 teams should create 15 total matches.
+    /// Winners Bracket: 7 matches (R1: 4, SF: 2, Final: 1)
+    /// Losers Bracket: 6 matches (R1: 2, R2: 2, SF: 1, Final: 1)
+    /// Grand Finals: 2 matches (GF1 + GF2)
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_With8Teams_Creates15Matches()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(15, "8 teams in double elimination should create 15 matches total");
+    }
+
+    /// <summary>
+    /// Test Case 2: 8 teams should create exactly 7 winners bracket matches.
+    /// Winners Bracket: QF (4) + SF (2) + Final (1) = 7 matches
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_With8Teams_Creates7WinnersMatches()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var winnersMatches = result.Where(m => m.BracketPosition.StartsWith("W-")).ToList();
+        winnersMatches.Should().HaveCount(7, "Winners bracket should have 7 matches");
+
+        winnersMatches.Count(m => m.BracketPosition.StartsWith("W-R1-")).Should().Be(4, "Round 1: 4 matches");
+        winnersMatches.Count(m => m.BracketPosition.StartsWith("W-SF")).Should().Be(2, "Semifinals: 2 matches");
+        winnersMatches.Count(m => m.BracketPosition == "W-Final").Should().Be(1, "Final: 1 match");
+    }
+
+    /// <summary>
+    /// Test Case 3: 8 teams should create exactly 6 losers bracket matches.
+    /// Losers Bracket: R1 (2) + R2 (2) + SF (1) + Final (1) = 6 matches
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_With8Teams_Creates6LosersMatches()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var losersMatches = result.Where(m => m.BracketPosition.StartsWith("L-")).ToList();
+        losersMatches.Should().HaveCount(6, "Losers bracket should have 6 matches");
+
+        losersMatches.Count(m => m.BracketPosition.StartsWith("L-R1-")).Should().Be(2, "Losers R1: 2 matches");
+        losersMatches.Count(m => m.BracketPosition.StartsWith("L-R2-")).Should().Be(2, "Losers R2: 2 matches");
+        losersMatches.Count(m => m.BracketPosition == "L-SF").Should().Be(1, "Losers SF: 1 match");
+        losersMatches.Count(m => m.BracketPosition == "L-Final").Should().Be(1, "Losers Final: 1 match");
+    }
+
+    /// <summary>
+    /// Test Case 4: Should create exactly 2 Grand Finals matches.
+    /// GF1 and GF2 are pre-created to handle bracket reset scenario.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_With8Teams_Creates2GrandFinalsMatches()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var grandFinalsMatches = result.Where(m => m.BracketPosition.StartsWith("GF")).ToList();
+        grandFinalsMatches.Should().HaveCount(2, "Should have 2 Grand Finals matches (GF1 and GF2)");
+
+        grandFinalsMatches.Should().Contain(m => m.BracketPosition == "GF1");
+        grandFinalsMatches.Should().Contain(m => m.BracketPosition == "GF2");
+    }
+
+    /// <summary>
+    /// Test Case 5: Winners R1 matches should have LoserNextMatchId set.
+    /// Losers from Winners R1 drop to Losers R1.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_WinnersR1_HasLoserNextMatchIdSet()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var winnersR1 = result.Where(m => m.BracketPosition.StartsWith("W-R1-")).ToList();
+        var losersR1 = result.Where(m => m.BracketPosition.StartsWith("L-R1-")).ToList();
+
+        winnersR1.Should().HaveCount(4);
+        winnersR1.Should().AllSatisfy(m =>
+        {
+            m.LoserNextMatchId.Should().NotBeNull("Winners R1 losers should drop to Losers R1");
+            losersR1.Select(l => l.Id).Should().Contain(m.LoserNextMatchId!.Value);
+        });
+    }
+
+    /// <summary>
+    /// Test Case 6: Winners SF losers should drop to Losers R2.
+    /// Losers from Winners SF face winners from Losers R1.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_WinnersSF_LosersDropToLosersR2()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var winnersSF = result.Where(m => m.BracketPosition.StartsWith("W-SF")).ToList();
+        var losersR2 = result.Where(m => m.BracketPosition.StartsWith("L-R2-")).ToList();
+
+        winnersSF.Should().HaveCount(2);
+        winnersSF.Should().AllSatisfy(m =>
+        {
+            m.LoserNextMatchId.Should().NotBeNull("Winners SF losers should drop to Losers R2");
+            losersR2.Select(l => l.Id).Should().Contain(m.LoserNextMatchId!.Value);
+        });
+    }
+
+    /// <summary>
+    /// Test Case 7: Winners Final loser should drop to Losers Final.
+    /// The loser of Winners Final faces the winner of Losers SF.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_WinnersFinal_LoserDropsToLosersFinal()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var winnersFinal = result.Single(m => m.BracketPosition == "W-Final");
+        var losersFinal = result.Single(m => m.BracketPosition == "L-Final");
+
+        winnersFinal.LoserNextMatchId.Should().NotBeNull();
+        winnersFinal.LoserNextMatchId.Should().Be(losersFinal.Id, "Winners Final loser drops to Losers Final");
+    }
+
+    /// <summary>
+    /// Test Case 8: Losers R1 should receive Winners R1 losers correctly.
+    /// 4 losers from Winners R1 create 2 matches in Losers R1.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_LosersR1_ReceivesWinnersR1Losers()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var winnersR1 = result.Where(m => m.BracketPosition.StartsWith("W-R1-")).ToList();
+        var losersR1 = result.Where(m => m.BracketPosition.StartsWith("L-R1-")).ToList();
+
+        losersR1.Should().HaveCount(2, "4 Winners R1 losers create 2 Losers R1 matches");
+
+        // Each Losers R1 match should be the LoserNextMatchId for exactly 2 Winners R1 matches
+        foreach (var losersMatch in losersR1)
+        {
+            var feedingMatches = winnersR1.Where(w => w.LoserNextMatchId == losersMatch.Id).ToList();
+            feedingMatches.Should().HaveCount(2, $"Each Losers R1 match should receive losers from 2 Winners R1 matches");
+        }
+    }
+
+    /// <summary>
+    /// Test Case 9: Grand Finals structure should be correct.
+    /// GF1 NextMatchId should point to GF2 (bracket reset scenario).
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_GrandFinals_StructureCorrect()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var gf1 = result.Single(m => m.BracketPosition == "GF1");
+        var gf2 = result.Single(m => m.BracketPosition == "GF2");
+        var winnersFinal = result.Single(m => m.BracketPosition == "W-Final");
+        var losersFinal = result.Single(m => m.BracketPosition == "L-Final");
+
+        // GF1 NextMatchId should point to GF2 for bracket reset
+        gf1.NextMatchId.Should().Be(gf2.Id, "GF1 should link to GF2 for bracket reset");
+
+        // GF2 should have no NextMatchId (end of tournament)
+        gf2.NextMatchId.Should().BeNull("GF2 is the final match");
+
+        // Winners Final and Losers Final should both feed GF1
+        winnersFinal.NextMatchId.Should().Be(gf1.Id, "Winners Final winner advances to GF1");
+        losersFinal.NextMatchId.Should().Be(gf1.Id, "Losers Final winner advances to GF1");
+    }
+
+    /// <summary>
+    /// Test Case 10: BracketPosition naming should follow convention.
+    /// Winners: W-R1-M1, W-SF1, W-Final
+    /// Losers: L-R1-M1, L-R2-M1, L-SF, L-Final
+    /// Grand Finals: GF1, GF2
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_BracketPositions_UseCorrectNaming()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert - Winners bracket naming
+        result.Where(m => m.BracketPosition.StartsWith("W-R1-")).Should().HaveCount(4);
+        result.Should().Contain(m => m.BracketPosition == "W-R1-M1");
+        result.Should().Contain(m => m.BracketPosition == "W-R1-M2");
+        result.Should().Contain(m => m.BracketPosition == "W-R1-M3");
+        result.Should().Contain(m => m.BracketPosition == "W-R1-M4");
+
+        result.Should().Contain(m => m.BracketPosition == "W-SF1");
+        result.Should().Contain(m => m.BracketPosition == "W-SF2");
+        result.Should().Contain(m => m.BracketPosition == "W-Final");
+
+        // Assert - Losers bracket naming
+        result.Should().Contain(m => m.BracketPosition == "L-R1-M1");
+        result.Should().Contain(m => m.BracketPosition == "L-R1-M2");
+        result.Should().Contain(m => m.BracketPosition == "L-R2-M1");
+        result.Should().Contain(m => m.BracketPosition == "L-R2-M2");
+        result.Should().Contain(m => m.BracketPosition == "L-SF");
+        result.Should().Contain(m => m.BracketPosition == "L-Final");
+
+        // Assert - Grand Finals naming
+        result.Should().Contain(m => m.BracketPosition == "GF1");
+        result.Should().Contain(m => m.BracketPosition == "GF2");
+    }
+
+    /// <summary>
+    /// Test Case 11: 4 teams should create 7 matches total.
+    /// Winners: 3 matches (SF: 2, Final: 1)
+    /// Losers: 2 matches (R1: 1, Final: 1)
+    /// Grand Finals: 2 matches (GF1, GF2)
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_With4Teams_Creates7Matches()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(7, "4 teams should create 7 matches total");
+
+        var winnersMatches = result.Where(m => m.BracketPosition.StartsWith("W-")).ToList();
+        winnersMatches.Should().HaveCount(3, "Winners bracket: SF (2) + Final (1) = 3");
+
+        var losersMatches = result.Where(m => m.BracketPosition.StartsWith("L-")).ToList();
+        losersMatches.Should().HaveCount(2, "Losers bracket: R1 (1) + Final (1) = 2");
+
+        var grandFinalsMatches = result.Where(m => m.BracketPosition.StartsWith("GF")).ToList();
+        grandFinalsMatches.Should().HaveCount(2, "Grand Finals: GF1 + GF2 = 2");
+    }
+
+    /// <summary>
+    /// Test Case 12: Non-admin should not be able to generate double elimination bracket.
+    /// Only tournament admins can generate brackets.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_ByNonAdmin_ThrowsUnauthorized()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var nonAdmin = await CreateTestUser("nonadmin@example.com");
+        var tournament = await CreateDoubleEliminationTournament(creator.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, nonAdmin.Id));
+    }
+
+    /// <summary>
+    /// Test Case 13: Losers bracket matches should not have LoserNextMatchId.
+    /// Once you're in losers bracket, losing eliminates you.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_LosersBracket_NoLoserNextMatchId()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var losersMatches = result.Where(m => m.BracketPosition.StartsWith("L-")).ToList();
+        losersMatches.Should().AllSatisfy(m =>
+            m.LoserNextMatchId.Should().BeNull("Losers bracket matches should not have LoserNextMatchId"));
+    }
+
+    /// <summary>
+    /// Test Case 14: Grand Finals matches should not have LoserNextMatchId.
+    /// Losing in Grand Finals ends the tournament.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_GrandFinals_NoLoserNextMatchId()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var grandFinalsMatches = result.Where(m => m.BracketPosition.StartsWith("GF")).ToList();
+        grandFinalsMatches.Should().AllSatisfy(m =>
+            m.LoserNextMatchId.Should().BeNull("Grand Finals matches should not have LoserNextMatchId"));
+    }
+
+    /// <summary>
+    /// Test Case 15: All matches should have Scheduled status initially.
+    /// Unlike single elimination, double elimination doesn't use bye matches.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_AllMatches_HaveScheduledStatus()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().AllSatisfy(m =>
+            m.Status.Should().Be("Scheduled", "All double elimination matches should have Scheduled status"));
+    }
+
+    /// <summary>
+    /// Test Case 16: Winners R1 matches should use standard seeding.
+    /// Same as single elimination: 1v8, 4v5, 3v6, 2v7
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_With8Teams_UsesCorrectSeeding()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        var teams = new List<TournamentTeam>();
+        for (int i = 1; i <= 8; i++)
+        {
+            teams.Add(await CreateTestTeam(tournament.Id, $"Team {i}", i));
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert - Winners R1 should use standard seeding
+        var winnersR1 = result.Where(m => m.BracketPosition.StartsWith("W-R1-"))
+            .OrderBy(m => m.MatchNumber)
+            .ToList();
+
+        winnersR1.Should().HaveCount(4);
+
+        // Match 1: Seed 1 vs Seed 8
+        var match1Teams = new[] { winnersR1[0].HomeTeamId, winnersR1[0].AwayTeamId };
+        match1Teams.Should().Contain(teams[0].Id).And.Contain(teams[7].Id);
+
+        // Match 2: Seed 4 vs Seed 5
+        var match2Teams = new[] { winnersR1[1].HomeTeamId, winnersR1[1].AwayTeamId };
+        match2Teams.Should().Contain(teams[3].Id).And.Contain(teams[4].Id);
+
+        // Match 3: Seed 3 vs Seed 6
+        var match3Teams = new[] { winnersR1[2].HomeTeamId, winnersR1[2].AwayTeamId };
+        match3Teams.Should().Contain(teams[2].Id).And.Contain(teams[5].Id);
+
+        // Match 4: Seed 2 vs Seed 7
+        var match4Teams = new[] { winnersR1[3].HomeTeamId, winnersR1[3].AwayTeamId };
+        match4Teams.Should().Contain(teams[1].Id).And.Contain(teams[6].Id);
+    }
+
+    /// <summary>
+    /// Test Case 17: Should throw when fewer than 2 teams.
+    /// Need at least 2 teams for a bracket.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_WithFewerThan2Teams_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        await CreateTestTeam(tournament.Id, "Team 1", 1);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id));
+    }
+
+    /// <summary>
+    /// Test Case 18: Should throw when bracket already exists.
+    /// Must clear bracket first before regenerating.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_WhenBracketExists_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        await CreateTestTeam(tournament.Id, "Team 1", 1);
+        await CreateTestTeam(tournament.Id, "Team 2", 2);
+
+        // Create an existing match
+        var existingMatch = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Round = 1,
+            MatchNumber = 1,
+            Status = "Scheduled",
+            IsBye = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _context.TournamentMatches.Add(existingMatch);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id));
+    }
+
+    /// <summary>
+    /// Test Case 19: Losers R1 matches should not have teams assigned initially.
+    /// Teams come from Winners R1 losers, so initially HomeTeamId and AwayTeamId should be null.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_LosersR1_TeamsNotAssignedInitially()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        var losersR1 = result.Where(m => m.BracketPosition.StartsWith("L-R1-")).ToList();
+        losersR1.Should().AllSatisfy(m =>
+        {
+            m.HomeTeamId.Should().BeNull("Losers R1 teams come from Winners R1 losers");
+            m.AwayTeamId.Should().BeNull("Losers R1 teams come from Winners R1 losers");
+        });
+    }
+
+    /// <summary>
+    /// Test Case 20: Only Winners R1 matches should have teams assigned.
+    /// All other matches get teams through bracket progression.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDoubleElimination_OnlyWinnersR1_HasTeamsAssigned()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateDoubleEliminationBracketAsync(tournament.Id, user.Id);
+
+        // Assert - Winners R1 should have teams
+        var winnersR1 = result.Where(m => m.BracketPosition.StartsWith("W-R1-")).ToList();
+        winnersR1.Should().AllSatisfy(m =>
+        {
+            m.HomeTeamId.Should().NotBeNull("Winners R1 matches should have teams assigned");
+            m.AwayTeamId.Should().NotBeNull("Winners R1 matches should have teams assigned");
+        });
+
+        // Assert - All other matches should NOT have teams
+        var otherMatches = result.Where(m => !m.BracketPosition.StartsWith("W-R1-")).ToList();
+        otherMatches.Should().AllSatisfy(m =>
+        {
+            m.HomeTeamId.Should().BeNull("Only Winners R1 should have teams initially");
+            m.AwayTeamId.Should().BeNull("Only Winners R1 should have teams initially");
+        });
+    }
+
+    #endregion
+
+    #region GenerateBracketAsync - Format Dispatch Tests
+
+    /// <summary>
+    /// Test Case 21: GenerateBracketAsync should dispatch to single elimination.
+    /// When tournament format is SingleElimination, should call single elimination logic.
+    /// </summary>
+    [Fact]
+    public async Task GenerateBracket_WithSingleEliminationFormat_DispatchesCorrectly()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateTestTournament(user.Id, "Draft"); // Default is SingleElimination
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(3, "4 teams single elimination should create 3 matches");
+        result.Should().AllSatisfy(m =>
+            m.BracketPosition.Should().NotStartWith("W-").And.NotStartWith("L-").And.NotStartWith("GF"),
+            "Single elimination should not use double elimination bracket positions");
+    }
+
+    /// <summary>
+    /// Test Case 22: GenerateBracketAsync should dispatch to double elimination.
+    /// When tournament format is DoubleElimination, should call double elimination logic.
+    /// </summary>
+    [Fact]
+    public async Task GenerateBracket_WithDoubleEliminationFormat_DispatchesCorrectly()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateDoubleEliminationTournament(user.Id, "Draft");
+        for (int i = 1; i <= 8; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(15, "8 teams double elimination should create 15 matches");
+        result.Should().Contain(m => m.BracketPosition.StartsWith("W-"), "Should have winners bracket matches");
+        result.Should().Contain(m => m.BracketPosition.StartsWith("L-"), "Should have losers bracket matches");
+        result.Should().Contain(m => m.BracketPosition.StartsWith("GF"), "Should have grand finals matches");
+    }
+
+    /// <summary>
+    /// Test Case 23: GenerateBracketAsync should dispatch to round robin.
+    /// When tournament format is RoundRobin, should call round robin logic.
+    /// </summary>
+    [Fact]
+    public async Task GenerateBracket_WithRoundRobinFormat_DispatchesCorrectly()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateBracketAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(6, "4 teams round robin should create 6 matches");
+        result.Should().AllSatisfy(m =>
+            m.BracketPosition.Should().StartWith("RR-"),
+            "Round robin should use RR- bracket position prefix");
     }
 
     #endregion

@@ -22,6 +22,11 @@ public class TournamentMatch
     /// </summary>
     public string? BracketPosition { get; set; }
 
+    /// <summary>
+    /// Bracket type for double elimination tournaments: "Winners", "Losers", "GrandFinal", or null for round robin/single elimination
+    /// </summary>
+    public string? BracketType { get; set; }
+
     public bool IsBye { get; set; } = false;
 
     // Scheduling

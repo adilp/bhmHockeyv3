@@ -23,6 +23,11 @@ public interface IBracketGenerationService
     Task<List<TournamentMatchDto>> GenerateRoundRobinScheduleAsync(Guid tournamentId, Guid userId);
 
     /// <summary>
+    /// Generates a double elimination bracket with winners bracket, losers bracket, and grand finals.
+    /// </summary>
+    Task<List<TournamentMatchDto>> GenerateDoubleEliminationBracketAsync(Guid tournamentId, Guid userId);
+
+    /// <summary>
     /// Generates a bracket/schedule for the tournament based on its Format setting.
     /// Dispatches to the appropriate generation method (SingleElimination, DoubleElimination, RoundRobin).
     /// </summary>
