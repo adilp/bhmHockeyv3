@@ -9,14 +9,12 @@ public class OrganizationService : IOrganizationService
 {
     private readonly AppDbContext _context;
     private readonly IOrganizationAdminService _adminService;
-    private readonly IBadgeService _badgeService;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
-    public OrganizationService(AppDbContext context, IOrganizationAdminService adminService, IBadgeService badgeService)
+    public OrganizationService(AppDbContext context, IOrganizationAdminService adminService)
     {
         _context = context;
         _adminService = adminService;
-        _badgeService = badgeService;
     }
 
     private void ValidateSkillLevels(List<string>? skillLevels)
@@ -333,26 +331,48 @@ public class OrganizationService : IOrganizationService
             .ThenBy(s => s.User.FirstName)
             .ToListAsync();
 
-        // Build member DTOs with badges
-        var members = new List<OrganizationMemberDto>();
-        foreach (var s in subscriptions)
-        {
-            // Get top 3 badges for this user
-            var topBadges = await _badgeService.GetUserTopBadgesAsync(s.User.Id, 3);
-            var totalBadgeCount = await _context.UserBadges.CountAsync(ub => ub.UserId == s.User.Id);
+        // Get all member user IDs for batch queries
+        var memberUserIds = subscriptions.Select(s => s.User.Id).ToList();
 
-            members.Add(new OrganizationMemberDto(
-                s.User.Id,
-                s.User.FirstName,
-                s.User.LastName,
-                isAdmin ? s.User.Email : null, // Only admins see email
-                s.User.Positions,
-                s.SubscribedAt,
-                adminUserIds.Contains(s.User.Id),
-                topBadges,
-                totalBadgeCount
-            ));
-        }
+        // Batch query: Get all badges for all members in one query
+        var allUserBadges = await _context.UserBadges
+            .Include(ub => ub.BadgeType)
+            .Where(ub => memberUserIds.Contains(ub.UserId))
+            .OrderBy(ub => ub.DisplayOrder ?? int.MaxValue)
+            .ThenBy(ub => ub.BadgeType.SortPriority)
+            .ToListAsync();
+
+        // Group badges by user and take top 3
+        var badgesByUser = allUserBadges
+            .GroupBy(ub => ub.UserId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Take(3).Select(ub => new UserBadgeDto(
+                    ub.Id,
+                    new BadgeTypeDto(ub.BadgeType.Id, ub.BadgeType.Code, ub.BadgeType.Name, ub.BadgeType.Description, ub.BadgeType.IconName, ub.BadgeType.Category),
+                    ub.Context ?? new Dictionary<string, object>(),
+                    ub.EarnedAt,
+                    ub.DisplayOrder
+                )).ToList()
+            );
+
+        // Count badges per user
+        var badgeCountsByUser = allUserBadges
+            .GroupBy(ub => ub.UserId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Build member DTOs
+        var members = subscriptions.Select(s => new OrganizationMemberDto(
+            s.User.Id,
+            s.User.FirstName,
+            s.User.LastName,
+            isAdmin ? s.User.Email : null,
+            s.User.Positions,
+            s.SubscribedAt,
+            adminUserIds.Contains(s.User.Id),
+            badgesByUser.GetValueOrDefault(s.User.Id, new List<UserBadgeDto>()),
+            badgeCountsByUser.GetValueOrDefault(s.User.Id, 0)
+        )).ToList();
 
         return members;
     }
