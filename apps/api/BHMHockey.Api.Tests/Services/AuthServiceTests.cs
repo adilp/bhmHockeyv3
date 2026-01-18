@@ -20,6 +20,7 @@ public class AuthServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
     private readonly Mock<IConfiguration> _mockConfig;
+    private readonly Mock<INotificationService> _mockNotificationService;
     private readonly AuthService _sut; // System Under Test
 
     public AuthServiceTests()
@@ -37,7 +38,8 @@ public class AuthServiceTests : IDisposable
         _mockConfig.Setup(c => c["Jwt:Audience"]).Returns("test-audience");
         _mockConfig.Setup(c => c["Jwt:ExpiryMinutes"]).Returns("60");
 
-        _sut = new AuthService(_context, _mockConfig.Object);
+        _mockNotificationService = new Mock<INotificationService>();
+        _sut = new AuthService(_context, _mockConfig.Object, _mockNotificationService.Object);
     }
 
     public void Dispose()
@@ -256,7 +258,7 @@ public class AuthServiceTests : IDisposable
         // Arrange
         var mockConfigNoSecret = new Mock<IConfiguration>();
         mockConfigNoSecret.Setup(c => c["Jwt:Secret"]).Returns((string?)null);
-        var serviceNoSecret = new AuthService(_context, mockConfigNoSecret.Object);
+        var serviceNoSecret = new AuthService(_context, mockConfigNoSecret.Object, _mockNotificationService.Object);
         var request = new RegisterRequest("nosecret@example.com", "Password1!", "John", "Doe", null, null, null);
 
         // Add user to database first (registration will fail at token generation)

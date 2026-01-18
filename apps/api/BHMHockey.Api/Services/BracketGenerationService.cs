@@ -253,6 +253,151 @@ public class BracketGenerationService : IBracketGenerationService
         await _context.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Generates a round robin schedule for the tournament using the Circle Method algorithm.
+    /// Each team plays every other team exactly once.
+    /// </summary>
+    public async Task<List<TournamentMatchDto>> GenerateRoundRobinScheduleAsync(Guid tournamentId, Guid userId)
+    {
+        // 1. Validate tournament exists
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament == null)
+        {
+            throw new InvalidOperationException("Tournament not found");
+        }
+
+        // 2. Check authorization
+        var canManage = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        if (!canManage)
+        {
+            throw new UnauthorizedAccessException("You are not authorized to manage this tournament");
+        }
+
+        // 3. Check tournament status
+        if (!BracketGenerationStatuses.Contains(tournament.Status))
+        {
+            throw new InvalidOperationException(
+                $"Cannot generate bracket when tournament is in '{tournament.Status}' status. " +
+                $"Bracket generation is only allowed in: {string.Join(", ", BracketGenerationStatuses)}");
+        }
+
+        // 4. Check no existing matches
+        var existingMatchCount = await _context.TournamentMatches
+            .CountAsync(m => m.TournamentId == tournamentId);
+        if (existingMatchCount > 0)
+        {
+            throw new InvalidOperationException(
+                "Tournament already has matches. Use ClearBracket first to regenerate.");
+        }
+
+        // 5. Get teams ordered by seed
+        var teams = await _context.TournamentTeams
+            .Where(t => t.TournamentId == tournamentId)
+            .OrderBy(t => t.Seed)
+            .ToListAsync();
+
+        // 6. Validate minimum 2 teams
+        if (teams.Count < 2)
+        {
+            throw new InvalidOperationException("Tournament must have at least 2 teams to generate bracket");
+        }
+
+        // 7. Validate seeding
+        ValidateSeeding(teams);
+
+        // 8. Circle method algorithm
+        var teamList = teams.ToList();
+        bool isOdd = teamList.Count % 2 == 1;
+        if (isOdd)
+        {
+            teamList.Add(null!); // Phantom bye team
+        }
+
+        int n = teamList.Count;
+        int rounds = n - 1;
+        var matches = new List<TournamentMatch>();
+        int matchCounter = 0;
+
+        for (int round = 1; round <= rounds; round++)
+        {
+            int matchInRound = 0;
+            for (int i = 0; i < n / 2; i++)
+            {
+                var team1 = teamList[i];
+                var team2 = teamList[n - 1 - i];
+
+                // Skip if either is phantom (null)
+                if (team1 == null || team2 == null) continue;
+
+                matchInRound++;
+                matchCounter++;
+
+                // Alternate home/away based on seed and round for balanced distribution
+                // Lower seed is home on even rounds, higher seed on odd rounds
+                var lowerSeedTeam = team1.Seed < team2.Seed ? team1 : team2;
+                var higherSeedTeam = team1.Seed < team2.Seed ? team2 : team1;
+                var homeTeam = (round % 2 == 0) ? lowerSeedTeam : higherSeedTeam;
+                var awayTeam = (round % 2 == 0) ? higherSeedTeam : lowerSeedTeam;
+
+                matches.Add(new TournamentMatch
+                {
+                    Id = Guid.NewGuid(),
+                    TournamentId = tournamentId,
+                    Round = round,
+                    MatchNumber = matchInRound,
+                    BracketPosition = $"RR-R{round}-M{matchInRound}",
+                    HomeTeamId = homeTeam.Id,
+                    AwayTeamId = awayTeam.Id,
+                    Status = "Scheduled",
+                    ScheduledTime = null,
+                    IsBye = false,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+
+            // Rotate: keep position 0 fixed, rotate others
+            // Last element moves to position 1, all others shift right
+            var last = teamList[n - 1];
+            teamList.RemoveAt(n - 1);
+            teamList.Insert(1, last);
+        }
+
+        // 9. Save all matches
+        await _context.TournamentMatches.AddRangeAsync(matches);
+        await _context.SaveChangesAsync();
+
+        // 10. Return as DTOs
+        var matchDtos = matches
+            .OrderBy(m => m.Round)
+            .ThenBy(m => m.MatchNumber)
+            .Select(m => MapToDto(m, teams))
+            .ToList();
+
+        return matchDtos;
+    }
+
+    /// <summary>
+    /// Generates a bracket/schedule based on tournament format.
+    /// Dispatches to the appropriate generation method based on format.
+    /// </summary>
+    public async Task<List<TournamentMatchDto>> GenerateBracketAsync(Guid tournamentId, Guid userId)
+    {
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament == null)
+        {
+            throw new InvalidOperationException("Tournament not found");
+        }
+
+        return tournament.Format switch
+        {
+            "SingleElimination" => await GenerateSingleEliminationBracketAsync(tournamentId, userId),
+            "RoundRobin" => await GenerateRoundRobinScheduleAsync(tournamentId, userId),
+            "DoubleElimination" => throw new NotImplementedException("Double elimination not yet implemented"),
+            _ => throw new InvalidOperationException($"Unknown tournament format: {tournament.Format}")
+        };
+    }
+
     #region Private Helper Methods
 
     /// <summary>

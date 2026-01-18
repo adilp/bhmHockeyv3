@@ -956,7 +956,8 @@ public class TournamentsController : ControllerBase
     #region Bracket Generation
 
     /// <summary>
-    /// Generates a single elimination bracket for the tournament.
+    /// Generates a bracket or schedule for the tournament based on its Format setting.
+    /// Supports SingleElimination, DoubleElimination, and RoundRobin formats.
     /// Creates all matches with proper seeding and bye handling.
     /// </summary>
     [HttpPost("{id}/generate-bracket")]
@@ -966,7 +967,7 @@ public class TournamentsController : ControllerBase
         try
         {
             var userId = GetCurrentUserId();
-            var matches = await _bracketGenerationService.GenerateSingleEliminationBracketAsync(id, userId);
+            var matches = await _bracketGenerationService.GenerateBracketAsync(id, userId);
             return Ok(matches);
         }
         catch (UnauthorizedAccessException)

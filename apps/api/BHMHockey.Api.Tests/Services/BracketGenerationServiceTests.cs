@@ -1015,4 +1015,681 @@ public class BracketGenerationServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Helper Methods for Round Robin Tests
+
+    /// <summary>
+    /// Creates a tournament with RoundRobin format for Round Robin tests.
+    /// </summary>
+    private async Task<Tournament> CreateRoundRobinTournament(Guid creatorId, string status = "Draft")
+    {
+        var tournament = new Tournament
+        {
+            Id = Guid.NewGuid(),
+            CreatorId = creatorId,
+            Name = "Round Robin Tournament",
+            Format = "RoundRobin",
+            TeamFormation = "OrganizerAssigned",
+            Status = status,
+            StartDate = DateTime.UtcNow.AddDays(30),
+            EndDate = DateTime.UtcNow.AddDays(32),
+            RegistrationDeadline = DateTime.UtcNow.AddDays(25),
+            MaxTeams = 8,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.Tournaments.Add(tournament);
+
+        // Add creator as tournament admin (Owner)
+        var admin = new TournamentAdmin
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            UserId = creatorId,
+            Role = "Owner",
+            AddedAt = DateTime.UtcNow
+        };
+        _context.TournamentAdmins.Add(admin);
+
+        await _context.SaveChangesAsync();
+        return tournament;
+    }
+
+    #endregion
+
+    #region GenerateRoundRobinScheduleAsync - Match Count Tests
+
+    /// <summary>
+    /// Test Case 1: 4 teams should generate 6 matches in 3 rounds.
+    /// Formula: N*(N-1)/2 = 4*3/2 = 6 matches
+    /// Even teams: N-1 = 3 rounds, N/2 = 2 matches per round
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_With4Teams_Generates6MatchesIn3Rounds()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(6, "4 teams should generate 4*3/2 = 6 matches");
+
+        var maxRound = result.Max(m => m.Round);
+        maxRound.Should().Be(3, "4 teams (even) should have N-1 = 3 rounds");
+
+        // Each round should have N/2 = 2 matches
+        for (int round = 1; round <= 3; round++)
+        {
+            result.Count(m => m.Round == round).Should().Be(2, $"Round {round} should have 2 matches");
+        }
+    }
+
+    /// <summary>
+    /// Test Case 2: 5 teams (odd) should generate 10 matches in 5 rounds with byes.
+    /// Formula: N*(N-1)/2 = 5*4/2 = 10 matches
+    /// Odd teams: N rounds, some teams get byes each round
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_With5Teams_Generates10MatchesIn5Rounds()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 5; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(10, "5 teams should generate 5*4/2 = 10 matches");
+
+        var maxRound = result.Max(m => m.Round);
+        maxRound.Should().Be(5, "5 teams (odd) should have N = 5 rounds");
+
+        // Each round should have (N-1)/2 = 2 real matches (one team has bye)
+        for (int round = 1; round <= 5; round++)
+        {
+            result.Count(m => m.Round == round).Should().Be(2, $"Round {round} should have 2 matches");
+        }
+    }
+
+    /// <summary>
+    /// Test Case 3: 6 teams should generate 15 matches in 5 rounds.
+    /// Formula: N*(N-1)/2 = 6*5/2 = 15 matches
+    /// Even teams: N-1 = 5 rounds, N/2 = 3 matches per round
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_With6Teams_Generates15MatchesIn5Rounds()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 6; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(15, "6 teams should generate 6*5/2 = 15 matches");
+
+        var maxRound = result.Max(m => m.Round);
+        maxRound.Should().Be(5, "6 teams (even) should have N-1 = 5 rounds");
+
+        // Each round should have N/2 = 3 matches
+        for (int round = 1; round <= 5; round++)
+        {
+            result.Count(m => m.Round == round).Should().Be(3, $"Round {round} should have 3 matches");
+        }
+    }
+
+    #endregion
+
+    #region GenerateRoundRobinScheduleAsync - Schedule Validity Tests
+
+    /// <summary>
+    /// Test Case 4: Each team plays exactly N-1 games in round robin.
+    /// Every team must play against every other team exactly once.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_EachTeamPlaysNMinus1Games()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        var teams = new List<TournamentTeam>();
+        for (int i = 1; i <= 6; i++)
+        {
+            teams.Add(await CreateTestTeam(tournament.Id, $"Team {i}", i));
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert - Each team should appear in exactly N-1 = 5 matches
+        foreach (var team in teams)
+        {
+            var gamesForTeam = result.Count(m =>
+                m.HomeTeamId == team.Id || m.AwayTeamId == team.Id);
+
+            gamesForTeam.Should().Be(5, $"Team {team.Name} should play exactly N-1 = 5 games");
+        }
+    }
+
+    /// <summary>
+    /// Test Case 5: No team plays twice in the same round.
+    /// This is critical for scheduling - each team can only be in one match per round.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_NoTeamPlaysTwiceInSameRound()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        var teams = new List<TournamentTeam>();
+        for (int i = 1; i <= 6; i++)
+        {
+            teams.Add(await CreateTestTeam(tournament.Id, $"Team {i}", i));
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert - In each round, no team should appear more than once
+        var rounds = result.GroupBy(m => m.Round);
+        foreach (var round in rounds)
+        {
+            var teamsInRound = round
+                .SelectMany(m => new[] { m.HomeTeamId, m.AwayTeamId })
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .ToList();
+
+            teamsInRound.Should().OnlyHaveUniqueItems(
+                $"Round {round.Key} should not have any team playing twice");
+        }
+    }
+
+    /// <summary>
+    /// Test Case 6: Every team pair plays exactly once.
+    /// This is the fundamental property of round robin - all pairs meet once.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_EachPairPlaysExactlyOnce()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        var teams = new List<TournamentTeam>();
+        for (int i = 1; i <= 6; i++)
+        {
+            teams.Add(await CreateTestTeam(tournament.Id, $"Team {i}", i));
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert - Every pair of teams should have exactly one match
+        for (int i = 0; i < teams.Count; i++)
+        {
+            for (int j = i + 1; j < teams.Count; j++)
+            {
+                var teamA = teams[i];
+                var teamB = teams[j];
+
+                var matchesBetweenPair = result.Count(m =>
+                    (m.HomeTeamId == teamA.Id && m.AwayTeamId == teamB.Id) ||
+                    (m.HomeTeamId == teamB.Id && m.AwayTeamId == teamA.Id));
+
+                matchesBetweenPair.Should().Be(1,
+                    $"Teams {teamA.Name} and {teamB.Name} should play exactly once");
+            }
+        }
+    }
+
+    #endregion
+
+    #region GenerateRoundRobinScheduleAsync - Home/Away Balance Tests
+
+    /// <summary>
+    /// Test Case 7: Home/away should alternate by round for fairness.
+    /// Odd rounds swap home/away positions from even rounds.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_AlternatesHomeAwayByRound()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        var teams = new List<TournamentTeam>();
+        for (int i = 1; i <= 4; i++)
+        {
+            teams.Add(await CreateTestTeam(tournament.Id, $"Team {i}", i));
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert - Each team should have roughly balanced home/away games
+        foreach (var team in teams)
+        {
+            var homeGames = result.Count(m => m.HomeTeamId == team.Id);
+            var awayGames = result.Count(m => m.AwayTeamId == team.Id);
+
+            // With N-1 games, difference should be at most 1
+            var difference = Math.Abs(homeGames - awayGames);
+            difference.Should().BeLessOrEqualTo(1,
+                $"Team {team.Name} should have balanced home ({homeGames}) and away ({awayGames}) games");
+        }
+    }
+
+    #endregion
+
+    #region GenerateRoundRobinScheduleAsync - Bracket Position Tests
+
+    /// <summary>
+    /// Test Case 8: BracketPosition should use format "RR-R{round}-M{match}".
+    /// This distinguishes round robin matches from elimination matches.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_UseCorrectBracketPositionFormat()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert - All matches should have BracketPosition format "RR-R{round}-M{match}"
+        foreach (var match in result)
+        {
+            match.BracketPosition.Should().NotBeNullOrEmpty();
+            match.BracketPosition.Should().MatchRegex(@"^RR-R\d+-M\d+$",
+                $"Match in round {match.Round} should have format RR-R{{round}}-M{{match}}");
+
+            // Verify the round and match numbers are correct
+            var expectedPosition = $"RR-R{match.Round}-M{match.MatchNumber}";
+            match.BracketPosition.Should().Be(expectedPosition);
+        }
+    }
+
+    #endregion
+
+    #region GenerateRoundRobinScheduleAsync - Configuration Tests
+
+    /// <summary>
+    /// Test Case 9: All matches should have null ScheduledTime initially.
+    /// Times are set later by the tournament admin.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_MatchesHaveNullScheduledTime()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().AllSatisfy(m =>
+            m.ScheduledTime.Should().BeNull("matches should not have scheduled time initially"));
+    }
+
+    /// <summary>
+    /// Test Case 10: All matches should have "Scheduled" status.
+    /// Unlike elimination byes, round robin matches are all real games.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_MatchesHaveScheduledStatus()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().AllSatisfy(m =>
+            m.Status.Should().Be("Scheduled", "all round robin matches should have Scheduled status"));
+    }
+
+    #endregion
+
+    #region GenerateRoundRobinScheduleAsync - Validation Tests
+
+    /// <summary>
+    /// Test Case 11: Should throw exception with fewer than 2 teams.
+    /// Need at least 2 teams to have a match.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_WithFewerThan2Teams_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        await CreateTestTeam(tournament.Id, "Team 1", 1);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id));
+    }
+
+    /// <summary>
+    /// Test Case 12: Non-admin should not be able to generate schedule.
+    /// Only tournament admins can generate the schedule.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_ByNonAdmin_ThrowsUnauthorized()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var nonAdmin = await CreateTestUser("nonadmin@example.com");
+        var tournament = await CreateRoundRobinTournament(creator.Id, "Draft");
+        await CreateTestTeam(tournament.Id, "Team 1", 1);
+        await CreateTestTeam(tournament.Id, "Team 2", 2);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.GenerateRoundRobinScheduleAsync(tournament.Id, nonAdmin.Id));
+    }
+
+    /// <summary>
+    /// Test Case 13: Should throw exception when matches already exist.
+    /// Must clear bracket first before regenerating.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_WhenMatchesExist_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        await CreateTestTeam(tournament.Id, "Team 1", 1);
+        await CreateTestTeam(tournament.Id, "Team 2", 2);
+
+        // Create an existing match manually
+        var existingMatch = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Round = 1,
+            MatchNumber = 1,
+            Status = "Scheduled",
+            IsBye = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _context.TournamentMatches.Add(existingMatch);
+        await _context.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id));
+    }
+
+    #endregion
+
+    #region GenerateRoundRobinScheduleAsync - Additional Edge Cases
+
+    /// <summary>
+    /// All round robin matches should not be bye matches.
+    /// Round robin doesn't have byes in the same way single elimination does.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_AllMatchesAreNotByes()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 5; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert - No matches should be marked as byes
+        result.Should().AllSatisfy(m =>
+            m.IsBye.Should().BeFalse("round robin matches should not be bye matches"));
+    }
+
+    /// <summary>
+    /// All matches should have both home and away teams assigned.
+    /// Round robin matches always have two real teams.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_AllMatchesHaveBothTeams()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().AllSatisfy(m =>
+        {
+            m.HomeTeamId.Should().NotBeNull("all matches should have a home team");
+            m.AwayTeamId.Should().NotBeNull("all matches should have an away team");
+            m.HomeTeamId!.Value.Should().NotBe(m.AwayTeamId!.Value, "home and away teams should be different");
+        });
+    }
+
+    /// <summary>
+    /// Round robin matches should not have NextMatchId links.
+    /// Unlike elimination, there's no bracket progression.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_MatchesHaveNoNextMatchId()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert - Round robin matches don't progress to next matches
+        result.Should().AllSatisfy(m =>
+            m.NextMatchId.Should().BeNull("round robin matches don't have bracket progression"));
+    }
+
+    /// <summary>
+    /// Match numbers within each round should be sequential starting from 1.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_MatchNumbersAreSequentialWithinRounds()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 6; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        foreach (var round in result.GroupBy(m => m.Round))
+        {
+            var matchNumbers = round.OrderBy(m => m.MatchNumber)
+                .Select(m => m.MatchNumber)
+                .ToList();
+
+            matchNumbers.Should().BeInAscendingOrder();
+            matchNumbers.First().Should().Be(1, "match numbers should start at 1");
+            matchNumbers.Should().OnlyHaveUniqueItems("match numbers within a round should be unique");
+        }
+    }
+
+    /// <summary>
+    /// Each match should have unique ID.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_AssignsUniqueIds()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 4; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        var matchIds = result.Select(m => m.Id).ToList();
+        matchIds.Should().OnlyHaveUniqueItems("each match should have a unique ID");
+    }
+
+    /// <summary>
+    /// Matches should have proper timestamps set.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_SetsCreatedAndUpdatedTimestamps()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        await CreateTestTeam(tournament.Id, "Team 1", 1);
+        await CreateTestTeam(tournament.Id, "Team 2", 2);
+
+        var beforeGeneration = DateTime.UtcNow.AddSeconds(-1);
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().AllSatisfy(m =>
+        {
+            m.CreatedAt.Should().BeAfter(beforeGeneration);
+            m.UpdatedAt.Should().BeAfter(beforeGeneration);
+        });
+    }
+
+    /// <summary>
+    /// With 2 teams, should generate just 1 match.
+    /// Minimum viable round robin.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_With2Teams_Generates1Match()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        await CreateTestTeam(tournament.Id, "Team 1", 1);
+        await CreateTestTeam(tournament.Id, "Team 2", 2);
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(1, "2 teams should generate 2*1/2 = 1 match");
+        result[0].Round.Should().Be(1);
+        result[0].HomeTeamId.Should().NotBeNull();
+        result[0].AwayTeamId.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// With 3 teams (odd), should generate 3 matches in 3 rounds.
+    /// Each team plays 2 games, one team sits out each round.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_With3Teams_Generates3MatchesIn3Rounds()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+        for (int i = 1; i <= 3; i++)
+        {
+            await CreateTestTeam(tournament.Id, $"Team {i}", i);
+        }
+
+        // Act
+        var result = await _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id);
+
+        // Assert
+        result.Should().HaveCount(3, "3 teams should generate 3*2/2 = 3 matches");
+
+        var maxRound = result.Max(m => m.Round);
+        maxRound.Should().Be(3, "3 teams (odd) should have N = 3 rounds");
+
+        // Each round should have 1 match (one team has bye)
+        for (int round = 1; round <= 3; round++)
+        {
+            result.Count(m => m.Round == round).Should().Be(1, $"Round {round} should have 1 match");
+        }
+    }
+
+    /// <summary>
+    /// Non-existent tournament should throw exception.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_NonExistentTournament_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.GenerateRoundRobinScheduleAsync(Guid.NewGuid(), user.Id));
+    }
+
+    /// <summary>
+    /// Zero teams should throw exception.
+    /// </summary>
+    [Fact]
+    public async Task GenerateRoundRobin_WithZeroTeams_ThrowsException()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var tournament = await CreateRoundRobinTournament(user.Id, "Draft");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.GenerateRoundRobinScheduleAsync(tournament.Id, user.Id));
+    }
+
+    #endregion
 }
