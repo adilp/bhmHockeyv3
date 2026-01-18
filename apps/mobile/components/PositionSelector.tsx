@@ -46,7 +46,10 @@ export function PositionSelector({
             thumbColor={isGoalie ? colors.text.primary : colors.text.muted}
             disabled={disabled}
           />
-          <Text style={[styles.positionLabel, isGoalie && styles.positionLabelActive]}>
+          <Text
+            style={[styles.positionLabel, isGoalie && styles.positionLabelActive]}
+            allowFontScaling={false}
+          >
             Goalie
           </Text>
         </View>
@@ -83,7 +86,10 @@ export function PositionSelector({
             thumbColor={isSkater ? colors.text.primary : colors.text.muted}
             disabled={disabled}
           />
-          <Text style={[styles.positionLabel, isSkater && styles.positionLabelActive]}>
+          <Text
+            style={[styles.positionLabel, isSkater && styles.positionLabelActive]}
+            allowFontScaling={false}
+          >
             Skater
           </Text>
         </View>
@@ -153,6 +159,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   positionLabel: {
+    flex: 1,
     fontSize: 16,
     marginLeft: spacing.md,
     color: colors.text.muted,
@@ -167,10 +174,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border.default,
     borderRadius: radius.md,
     overflow: 'hidden',
-    marginLeft: 52,
+    marginLeft: Platform.OS === 'ios' ? 52 : 56,
+    marginRight: spacing.xs,
   },
   skillPicker: {
-    height: Platform.OS === 'ios' ? 120 : 50,
+    height: Platform.OS === 'ios' ? 120 : 56,
     width: '100%',
     color: colors.text.primary,
   },

@@ -10,8 +10,8 @@ interface FormSectionProps {
 export function FormSection({ title, hint, children }: FormSectionProps) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {hint && <Text style={styles.sectionHint}>{hint}</Text>}
+      <Text style={styles.sectionTitle} allowFontScaling={false}>{title}</Text>
+      {hint && <Text style={styles.sectionHint} allowFontScaling={false}>{hint}</Text>}
       {children}
     </View>
   );

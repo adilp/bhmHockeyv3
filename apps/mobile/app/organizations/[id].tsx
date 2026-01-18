@@ -7,15 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Modal,
-  Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { organizationService } from '@bhmhockey/api-client';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
-import { Badge, SkillLevelBadges } from '../../components';
+import { Badge, SkillLevelBadges, BadgeIconsRow, MemberDetailModal } from '../../components';
 import { colors, spacing, radius } from '../../theme';
 import { shareOrganizationInvite } from '../../utils/share';
 import type { Organization, OrganizationMember } from '@bhmhockey/shared';
@@ -34,7 +32,7 @@ export default function OrganizationDetailScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showMembers, setShowMembers] = useState(true);
   const [selectedMember, setSelectedMember] = useState<OrganizationMember | null>(null);
-  const [showMemberActions, setShowMemberActions] = useState(false);
+  const [showMemberDetail, setShowMemberDetail] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,7 +48,8 @@ export default function OrganizationDetailScreen() {
       const org = await organizationService.getById(id);
       setOrganization(org);
 
-      if (org.isAdmin) {
+      // Load members for all subscribers (not just admins)
+      if (org.isSubscribed || org.isAdmin) {
         loadMembers();
       }
     } catch (error) {
@@ -112,23 +111,21 @@ export default function OrganizationDetailScreen() {
   };
 
   const handleMemberPress = (member: OrganizationMember) => {
-    if (member.id === user?.id) return;
     setSelectedMember(member);
-    setShowMemberActions(true);
+    setShowMemberDetail(true);
   };
 
-  const handlePromoteToAdmin = async () => {
-    if (!id || !selectedMember) return;
+  const handlePromoteToAdmin = async (member: OrganizationMember) => {
+    if (!id) return;
 
-    setShowMemberActions(false);
     setIsProcessing(true);
 
     try {
-      await organizationService.addAdmin(id, { userId: selectedMember.id });
+      await organizationService.addAdmin(id, { userId: member.id });
       setMembers(members.map(m =>
-        m.id === selectedMember.id ? { ...m, isAdmin: true } : m
+        m.id === member.id ? { ...m, isAdmin: true } : m
       ));
-      Alert.alert('Success', `${selectedMember.firstName} is now an admin`);
+      Alert.alert('Success', `${member.firstName} is now an admin`);
     } catch (error) {
       Alert.alert('Error', 'Failed to promote member to admin');
     } finally {
@@ -137,18 +134,17 @@ export default function OrganizationDetailScreen() {
     }
   };
 
-  const handleRemoveAdmin = async () => {
-    if (!id || !selectedMember) return;
+  const handleRemoveAdmin = async (member: OrganizationMember) => {
+    if (!id) return;
 
-    setShowMemberActions(false);
     setIsProcessing(true);
 
     try {
-      await organizationService.removeAdmin(id, selectedMember.id);
+      await organizationService.removeAdmin(id, member.id);
       setMembers(members.map(m =>
-        m.id === selectedMember.id ? { ...m, isAdmin: false } : m
+        m.id === member.id ? { ...m, isAdmin: false } : m
       ));
-      Alert.alert('Success', `${selectedMember.firstName} is no longer an admin`);
+      Alert.alert('Success', `${member.firstName} is no longer an admin`);
     } catch (error: any) {
       const message = error?.response?.data?.message || 'Failed to remove admin';
       Alert.alert('Error', message);
@@ -158,31 +154,31 @@ export default function OrganizationDetailScreen() {
     }
   };
 
-  const handleRemoveMember = async () => {
-    if (!id || !selectedMember) return;
+  const handleRemoveMember = async (member: OrganizationMember) => {
+    if (!id) return;
 
     Alert.alert(
       'Remove Member',
-      `Are you sure you want to remove ${selectedMember.firstName} ${selectedMember.lastName} from this organization?`,
+      `Are you sure you want to remove ${member.firstName} ${member.lastName} from this organization?`,
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => setShowMemberActions(false) },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            setShowMemberActions(false);
+            setShowMemberDetail(false);
             setIsProcessing(true);
 
             try {
-              await organizationService.removeMember(id, selectedMember.id);
-              setMembers(members.filter(m => m.id !== selectedMember.id));
+              await organizationService.removeMember(id, member.id);
+              setMembers(members.filter(m => m.id !== member.id));
               if (organization) {
                 setOrganization({
                   ...organization,
                   subscriberCount: Math.max(0, organization.subscriberCount - 1),
                 });
               }
-              Alert.alert('Success', `${selectedMember.firstName} has been removed`);
+              Alert.alert('Success', `${member.firstName} has been removed`);
             } catch (error) {
               Alert.alert('Error', 'Failed to remove member');
             } finally {
@@ -283,9 +279,9 @@ export default function OrganizationDetailScreen() {
           </View>
         </View>
 
-        {/* Admin Section - Members List */}
-        {isAdmin && (
-          <View style={styles.adminSection}>
+        {/* Members List - Visible to all subscribers */}
+        {(organization.isSubscribed || isAdmin) && (
+          <View style={styles.membersSection}>
             <TouchableOpacity
               style={styles.membersHeader}
               onPress={() => setShowMembers(!showMembers)}
@@ -308,8 +304,7 @@ export default function OrganizationDetailScreen() {
                         key={member.id}
                         style={styles.memberCard}
                         onPress={() => handleMemberPress(member)}
-                        disabled={isCurrentUser}
-                        activeOpacity={isCurrentUser ? 1 : 0.7}
+                        activeOpacity={0.7}
                       >
                         <View style={styles.memberAvatar}>
                           <Text style={styles.memberAvatarText}>
@@ -324,7 +319,14 @@ export default function OrganizationDetailScreen() {
                             {member.isAdmin && <Badge variant="purple">Admin</Badge>}
                             {isCurrentUser && <Text style={styles.youLabel}>(You)</Text>}
                           </View>
-                          <Text style={styles.memberEmail}>{member.email}</Text>
+                          {/* Show email for admins, badges for everyone */}
+                          {isAdmin && member.email ? (
+                            <Text style={styles.memberEmail}>{member.email}</Text>
+                          ) : (
+                            member.badges && member.badges.length > 0 && (
+                              <BadgeIconsRow badges={member.badges} size={20} maxDisplay={3} />
+                            )
+                          )}
                         </View>
                       </TouchableOpacity>
                     );
@@ -401,65 +403,20 @@ export default function OrganizationDetailScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Member Actions Modal */}
-      <Modal
-        visible={showMemberActions}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          setShowMemberActions(false);
+      {/* Member Detail Modal */}
+      <MemberDetailModal
+        visible={showMemberDetail}
+        member={selectedMember}
+        isAdmin={isAdmin}
+        isCurrentUser={selectedMember?.id === user?.id}
+        onClose={() => {
+          setShowMemberDetail(false);
           setSelectedMember(null);
         }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            setShowMemberActions(false);
-            setSelectedMember(null);
-          }}
-        >
-          <View style={styles.actionSheet}>
-            <View style={styles.actionSheetHandle} />
-            <View style={styles.actionSheetHeader}>
-              <Text style={styles.actionSheetTitle}>
-                {selectedMember?.firstName} {selectedMember?.lastName}
-              </Text>
-              <Text style={styles.actionSheetSubtitle}>
-                {selectedMember?.email}
-              </Text>
-            </View>
-
-            {selectedMember && !selectedMember.isAdmin && (
-              <TouchableOpacity style={styles.actionButton} onPress={handlePromoteToAdmin}>
-                <Text style={styles.actionButtonText}>Promote to Admin</Text>
-              </TouchableOpacity>
-            )}
-
-            {selectedMember?.isAdmin && (
-              <TouchableOpacity style={styles.actionButton} onPress={handleRemoveAdmin}>
-                <Text style={styles.actionButtonText}>Remove Admin Role</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[styles.actionButton, styles.destructiveButton]}
-              onPress={handleRemoveMember}
-            >
-              <Text style={styles.destructiveButtonText}>Remove from Organization</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => {
-                setShowMemberActions(false);
-                setSelectedMember(null);
-              }}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
+        onPromoteToAdmin={isAdmin ? handlePromoteToAdmin : undefined}
+        onRemoveAdmin={isAdmin ? handleRemoveAdmin : undefined}
+        onRemoveMember={isAdmin ? handleRemoveMember : undefined}
+      />
         </>
       )}
     </>
@@ -547,7 +504,7 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     marginTop: spacing.xs,
   },
-  adminSection: {
+  membersSection: {
     backgroundColor: colors.bg.dark,
     marginTop: spacing.sm,
   },
@@ -697,74 +654,6 @@ const styles = StyleSheet.create({
   deleteOrgButtonText: {
     color: colors.status.error,
     fontSize: 16,
-    fontWeight: '600',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  actionSheet: {
-    backgroundColor: colors.bg.dark,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingBottom: 34,
-  },
-  actionSheetHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: colors.border.muted,
-    borderRadius: radius.round,
-    alignSelf: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  actionSheetHeader: {
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
-    alignItems: 'center',
-  },
-  actionSheetTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  actionSheetSubtitle: {
-    fontSize: 14,
-    color: colors.text.muted,
-    marginTop: spacing.xs,
-  },
-  actionButton: {
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
-  },
-  actionButtonText: {
-    fontSize: 16,
-    color: colors.primary.teal,
-    textAlign: 'center',
-  },
-  destructiveButton: {
-    borderBottomWidth: 0,
-  },
-  destructiveButtonText: {
-    fontSize: 16,
-    color: colors.status.error,
-    textAlign: 'center',
-  },
-  cancelButton: {
-    padding: spacing.md,
-    marginTop: spacing.sm,
-    backgroundColor: colors.bg.hover,
-    marginHorizontal: spacing.md,
-    borderRadius: radius.md,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: colors.text.muted,
-    textAlign: 'center',
     fontWeight: '600',
   },
   headerButton: {

@@ -153,8 +153,10 @@ export function handleNotificationData(data: NotificationData | null) {
 
     case 'waitlist_joined':
     case 'waitlist_promotion':
-      // Organizer notifications - navigate to registrations list
-      handleOrganizerWaitlistNotification(data);
+      // Organizer notifications - navigate to event detail (defaults to roster tab for organizers)
+      if (data.eventId) {
+        router.push(`/events/${data.eventId}`);
+      }
       break;
 
     case 'payment_reminder':
@@ -166,9 +168,9 @@ export function handleNotificationData(data: NotificationData | null) {
       break;
 
     case 'organizer_payment_reminder':
-      // Organizer payment reminder - navigate to registrations list
+      // Organizer payment reminder - navigate to event detail (defaults to roster tab for organizers)
       if (data.eventId) {
-        router.push(`/events/${data.eventId}/registrations`);
+        router.push(`/events/${data.eventId}`);
       }
       break;
 
@@ -237,18 +239,3 @@ function handlePromotedNotification(data: NotificationData) {
   );
 }
 
-/**
- * Handle organizer waitlist notifications (joined/promoted)
- * Navigates to event registrations list
- */
-function handleOrganizerWaitlistNotification(data: NotificationData) {
-  if (!data.eventId) return;
-
-  // Navigate to event registrations list
-  router.push(`/events/${data.eventId}/registrations`);
-
-  // Refresh event data after navigation completes
-  setTimeout(() => {
-    useEventStore.getState().fetchEventById(data.eventId!);
-  }, 500);
-}

@@ -20,15 +20,18 @@ public record OrganizationDto(
     string? DefaultVisibility
 );
 
-// Member/subscriber info for admin view
+// Member/subscriber info - visible to all subscribers
+// Email is only populated for admins viewing the list
 public record OrganizationMemberDto(
     Guid Id,
     string FirstName,
     string LastName,
-    string Email,
+    string? Email,  // Only populated for admin viewers
     Dictionary<string, string>? Positions,  // {"goalie": "Gold", "skater": "Silver"}
     DateTime SubscribedAt,
-    bool IsAdmin  // True if this member is an admin of the organization
+    bool IsAdmin,  // True if this member is an admin of the organization
+    List<UserBadgeDto>? Badges = null,  // Top 3 badges by displayOrder
+    int TotalBadgeCount = 0  // Total badges user has earned
 );
 
 public record CreateOrganizationRequest(

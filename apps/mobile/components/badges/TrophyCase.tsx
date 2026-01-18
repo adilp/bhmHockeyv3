@@ -108,11 +108,11 @@ function BadgeRow({
         style={styles.icon}
       />
       <View style={styles.badgeInfo}>
-        <Text style={styles.badgeName}>{badge.badgeType.name}</Text>
+        <Text style={styles.badgeName} allowFontScaling={false}>{badge.badgeType.name}</Text>
         {contextText && (
-          <Text style={styles.badgeContext}>{contextText}</Text>
+          <Text style={styles.badgeContext} allowFontScaling={false}>{contextText}</Text>
         )}
-        <Text style={styles.badgeDate}>{earnedText}</Text>
+        <Text style={styles.badgeDate} allowFontScaling={false}>{earnedText}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -156,11 +156,11 @@ function DragOverlay({
           style={styles.icon}
         />
         <View style={styles.badgeInfo}>
-          <Text style={styles.badgeName}>{badge.badgeType.name}</Text>
+          <Text style={styles.badgeName} allowFontScaling={false}>{badge.badgeType.name}</Text>
           {contextText && (
-            <Text style={styles.badgeContext}>{contextText}</Text>
+            <Text style={styles.badgeContext} allowFontScaling={false}>{contextText}</Text>
           )}
-          <Text style={styles.badgeDate}>{earnedText}</Text>
+          <Text style={styles.badgeDate} allowFontScaling={false}>{earnedText}</Text>
         </View>
       </View>
     </Animated.View>
@@ -287,7 +287,7 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange }: T
   if (!badges || badges.length === 0) {
     return (
       <View style={[styles.container, styles.emptyContainer, style]}>
-        <Text style={styles.emptyText}>No badges earned yet</Text>
+        <Text style={styles.emptyText} allowFontScaling={false}>No badges earned yet</Text>
       </View>
     );
   }
@@ -317,7 +317,7 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange }: T
         style={styles.editButton}
         onPress={handleToggleEditMode}
       >
-        <Text style={styles.editButtonText}>
+        <Text style={styles.editButtonText} allowFontScaling={false}>
           {isEditMode ? 'Done' : 'Edit'}
         </Text>
       </TouchableOpacity>
@@ -366,7 +366,7 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange }: T
 
       {/* Hint text in edit mode */}
       {isEditMode && (
-        <Text style={styles.hint}>Hold and drag to reorder</Text>
+        <Text style={styles.hint} allowFontScaling={false}>Hold and drag to reorder</Text>
       )}
     </View>
   );

@@ -38,6 +38,7 @@ export { NotificationItem } from './NotificationItem';
 export { DraggableRoster } from './DraggableRoster';
 export { DraggableWaitlist } from './DraggableWaitlist';
 export { PlayerDetailModal } from './PlayerDetailModal';
+export { MemberDetailModal } from './MemberDetailModal';
 
 // Badge components
 export { BadgeIcon, BadgeIconsRow, TrophyCase, Confetti, BadgeCelebrationModal } from './badges';

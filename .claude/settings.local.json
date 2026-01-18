@@ -12,7 +12,8 @@
       "Bash(git show:*)",
       "WebSearch",
       "Bash(dotnet test:*)",
-      "Bash(yarn tsc:*)"
+      "Bash(yarn tsc:*)",
+      "Bash(ls:*)"
     ]
   }
 }

@@ -9,13 +9,14 @@ interface FormInputProps extends TextInputProps {
 export function FormInput({ label, hint, style, ...props }: FormInputProps) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label} allowFontScaling={false}>{label}</Text>
       <TextInput
         style={[styles.input, style]}
         placeholderTextColor={colors.text.muted}
+        allowFontScaling={false}
         {...props}
       />
-      {hint && <Text style={styles.hint}>{hint}</Text>}
+      {hint && <Text style={styles.hint} allowFontScaling={false}>{hint}</Text>}
     </View>
   );
 }

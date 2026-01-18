@@ -9,12 +9,14 @@ public class OrganizationService : IOrganizationService
 {
     private readonly AppDbContext _context;
     private readonly IOrganizationAdminService _adminService;
+    private readonly IBadgeService _badgeService;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
-    public OrganizationService(AppDbContext context, IOrganizationAdminService adminService)
+    public OrganizationService(AppDbContext context, IOrganizationAdminService adminService, IBadgeService badgeService)
     {
         _context = context;
         _adminService = adminService;
+        _badgeService = badgeService;
     }
 
     private void ValidateSkillLevels(List<string>? skillLevels)
@@ -305,9 +307,15 @@ public class OrganizationService : IOrganizationService
 
     public async Task<List<OrganizationMemberDto>> GetMembersAsync(Guid organizationId, Guid requesterId)
     {
-        // Verify requester is an organization admin
+        // Check if requester is subscribed to the organization
+        var isSubscribed = await _context.OrganizationSubscriptions
+            .AnyAsync(s => s.OrganizationId == organizationId && s.UserId == requesterId);
+
+        // Check if requester is an admin
         var isAdmin = await _adminService.IsUserAdminAsync(organizationId, requesterId);
-        if (!isAdmin)
+
+        // Only subscribers or admins can see the members list
+        if (!isSubscribed && !isAdmin)
         {
             return new List<OrganizationMemberDto>();
         }
@@ -325,15 +333,28 @@ public class OrganizationService : IOrganizationService
             .ThenBy(s => s.User.FirstName)
             .ToListAsync();
 
-        return subscriptions.Select(s => new OrganizationMemberDto(
-            s.User.Id,
-            s.User.FirstName,
-            s.User.LastName,
-            s.User.Email,
-            s.User.Positions,
-            s.SubscribedAt,
-            adminUserIds.Contains(s.User.Id)
-        )).ToList();
+        // Build member DTOs with badges
+        var members = new List<OrganizationMemberDto>();
+        foreach (var s in subscriptions)
+        {
+            // Get top 3 badges for this user
+            var topBadges = await _badgeService.GetUserTopBadgesAsync(s.User.Id, 3);
+            var totalBadgeCount = await _context.UserBadges.CountAsync(ub => ub.UserId == s.User.Id);
+
+            members.Add(new OrganizationMemberDto(
+                s.User.Id,
+                s.User.FirstName,
+                s.User.LastName,
+                isAdmin ? s.User.Email : null, // Only admins see email
+                s.User.Positions,
+                s.SubscribedAt,
+                adminUserIds.Contains(s.User.Id),
+                topBadges,
+                totalBadgeCount
+            ));
+        }
+
+        return members;
     }
 
     public async Task<bool> RemoveMemberAsync(Guid organizationId, Guid memberUserId, Guid requesterId)

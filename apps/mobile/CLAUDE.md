@@ -115,6 +115,30 @@ Event registration/cancellation/payment use optimistic UI with rollback on failu
 - Show spinner only when `isLoading && items.length === 0`
 - Pull-to-refresh should NOT show loading spinner
 
+### Font Scaling (Android Large Text)
+Android users can increase system font size or display size, which can break layouts by causing text to overflow or be cut off.
+
+**Global defaults** are set in `_layout.tsx`:
+```typescript
+Text.defaultProps.allowFontScaling = false;
+TextInput.defaultProps.allowFontScaling = false;
+```
+
+**However**, these defaults can be unreliable, so we also use a belt-and-suspenders approach:
+
+1. **Explicit `allowFontScaling={false}`** on Text/TextInput in key components:
+   - `FormInput` - labels, inputs, hints
+   - `FormSection` - titles, hints
+   - `PositionSelector` - position labels
+   - `TrophyCase` - badge names, dates
+   - `DraggableRoster` - player names, skill levels, team headers
+
+2. **Flexible layouts** with `flex: 1` on text labels that share rows with other elements (e.g., Switch + label)
+
+3. **Native pickers** (`@react-native-picker/picker`) can't have font scaling disabled - they use native Android components. Mitigate by giving pickers adequate height (56px on Android vs 50px).
+
+**When adding new components**, always add `allowFontScaling={false}` explicitly to Text/TextInput that could break layouts on large font settings.
+
 ## Design System
 
 ### Colors (Sleeper-inspired dark theme)

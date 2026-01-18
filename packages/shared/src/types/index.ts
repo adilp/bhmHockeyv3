@@ -66,15 +66,18 @@ export interface AddAdminRequest {
   userId: string;
 }
 
-// Member/subscriber info for admin view
+// Member/subscriber info - visible to all subscribers
+// Email is only populated for admin viewers
 export interface OrganizationMember {
   id: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email: string | null;  // Only populated for admin viewers
   positions?: UserPositions;  // Multi-position support
   subscribedAt: string;
   isAdmin: boolean;  // True if this member is an admin of the organization
+  badges?: UserBadgeDto[];  // Top 3 badges by displayOrder
+  totalBadgeCount?: number;  // Total badges user has earned
 }
 
 export type SkillLevel = 'Gold' | 'Silver' | 'Bronze' | 'D-League';

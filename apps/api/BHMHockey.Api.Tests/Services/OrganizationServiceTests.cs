@@ -17,6 +17,7 @@ public class OrganizationServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
     private readonly OrganizationAdminService _adminService;
+    private readonly BadgeService _badgeService;
     private readonly OrganizationService _sut;
 
     public OrganizationServiceTests()
@@ -26,7 +27,8 @@ public class OrganizationServiceTests : IDisposable
             .Options;
         _context = new AppDbContext(options);
         _adminService = new OrganizationAdminService(_context);
-        _sut = new OrganizationService(_context, _adminService);
+        _badgeService = new BadgeService(_context);
+        _sut = new OrganizationService(_context, _adminService, _badgeService);
     }
 
     public void Dispose()
