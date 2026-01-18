@@ -25,6 +25,7 @@ import type {
   TransferCaptainResponse,
   UserSearchResultDto,
   PendingTeamInvitationDto,
+  StandingsDto,
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -264,6 +265,14 @@ export const tournamentService = {
    */
   async getMatchById(tournamentId: string, matchId: string): Promise<TournamentMatchDto> {
     const response = await apiClient.instance.get<TournamentMatchDto>(`/tournaments/${tournamentId}/matches/${matchId}`);
+    return response.data;
+  },
+
+  /**
+   * Get tournament standings
+   */
+  async getStandings(tournamentId: string): Promise<StandingsDto> {
+    const response = await apiClient.instance.get<StandingsDto>(`/tournaments/${tournamentId}/standings`);
     return response.data;
   },
 

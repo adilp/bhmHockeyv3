@@ -17,7 +17,7 @@ import { colors, spacing, radius } from '../../../theme';
 import type { TournamentDto, TournamentFormat, TournamentTeamDto } from '@bhmhockey/shared';
 import { tournamentService } from '@bhmhockey/api-client';
 
-type TabKey = 'info' | 'bracket' | 'teams';
+type TabKey = 'info' | 'bracket' | 'teams' | 'standings' | 'schedule';
 
 // Format display labels
 const formatLabels: Record<TournamentFormat, string> = {
@@ -337,6 +337,8 @@ function TournamentTabControl({ selectedTab, onTabChange }: TournamentTabControl
     { key: 'info', label: 'Info' },
     { key: 'bracket', label: 'Bracket' },
     { key: 'teams', label: 'Teams' },
+    { key: 'standings', label: 'Standings' },
+    { key: 'schedule', label: 'Schedule' },
   ];
 
   return (
@@ -462,6 +464,10 @@ export default function TournamentDetailScreen() {
       router.push(`/tournaments/${id}/bracket`);
     } else if (tab === 'teams') {
       router.push(`/tournaments/${id}/teams`);
+    } else if (tab === 'standings') {
+      router.push(`/tournaments/${id}/standings`);
+    } else if (tab === 'schedule') {
+      router.push(`/tournaments/${id}/schedule`);
     } else {
       setActiveTab(tab);
     }

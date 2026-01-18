@@ -11,6 +11,9 @@ import type {
   TournamentRegistrationResultDto,
   TeamAssignmentResultDto,
   BulkCreateTeamsResponse,
+  StandingsDto,
+  TeamStandingDto,
+  TiedGroupDto,
 } from '@bhmhockey/shared';
 
 interface TournamentState {
@@ -29,6 +32,11 @@ interface TournamentState {
   myRegistration: TournamentRegistrationDto | null;
   isRegistering: boolean;
   registrationError: string | null;
+
+  // Standings state
+  standings: TeamStandingDto[];
+  playoffCutoff: number | null;
+  tiedGroups: TiedGroupDto[] | null;
 
   // Actions
   fetchTournaments: () => Promise<void>;
@@ -53,6 +61,10 @@ interface TournamentState {
   autoAssignTeams: (tournamentId: string, balanceBySkillLevel?: boolean) => Promise<TeamAssignmentResultDto | null>;
   bulkCreateTeams: (tournamentId: string, count: number, namePrefix: string) => Promise<BulkCreateTeamsResponse | null>;
   clearRegistrations: () => void;
+
+  // Standings actions
+  fetchStandings: (tournamentId: string) => Promise<void>;
+  clearStandings: () => void;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -71,6 +83,11 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   myRegistration: null,
   isRegistering: false,
   registrationError: null,
+
+  // Standings state
+  standings: [],
+  playoffCutoff: null,
+  tiedGroups: null,
 
   // Fetch all tournaments
   fetchTournaments: async () => {
@@ -456,5 +473,29 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     registrations: [],
     myRegistration: null,
     registrationError: null,
+  }),
+
+  // Fetch standings for a tournament
+  fetchStandings: async (tournamentId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const data = await tournamentService.getStandings(tournamentId);
+      set({
+        standings: data.standings,
+        playoffCutoff: data.playoffCutoff ?? null,
+        tiedGroups: data.tiedGroups ?? null,
+        isLoading: false,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load standings';
+      set({ error: message, isLoading: false });
+    }
+  },
+
+  // Clear standings state
+  clearStandings: () => set({
+    standings: [],
+    playoffCutoff: null,
+    tiedGroups: null,
   }),
 }));

@@ -750,6 +750,39 @@ export interface ForfeitMatchRequest {
 }
 
 // ============================================
+// Tournament Standings Types (TRN-021/TRN-022)
+// ============================================
+
+// Individual team standing in a tournament
+export interface TeamStandingDto {
+  teamId: string;
+  teamName: string;
+  rank: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  points: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifferential: number;
+  gamesPlayed: number;
+  isPlayoffBound: boolean;
+}
+
+// Group of teams tied and cannot be automatically resolved
+export interface TiedGroupDto {
+  teamIds: string[];
+  reason: string;
+}
+
+// Complete standings response for a tournament
+export interface StandingsDto {
+  standings: TeamStandingDto[];
+  playoffCutoff?: number;
+  tiedGroups?: TiedGroupDto[];
+}
+
+// ============================================
 // Tournament Team Assignment Types (TRN-009)
 // ============================================
 
