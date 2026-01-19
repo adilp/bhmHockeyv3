@@ -43,4 +43,14 @@ public interface ITournamentService
     /// Checks if a user can manage the tournament (is a tournament admin).
     /// </summary>
     Task<bool> CanUserManageTournamentAsync(Guid tournamentId, Guid userId);
+
+    /// <summary>
+    /// Gets all tournaments a user has participated in, organized, or is currently active in.
+    /// When viewing own profile (userId == currentUserId), returns Active, Past, and Organizing sections.
+    /// When viewing another user's profile (public view), returns only Past section.
+    /// </summary>
+    /// <param name="userId">The user whose tournaments to retrieve</param>
+    /// <param name="currentUserId">The current authenticated user (null for public view)</param>
+    /// <param name="filter">Optional filter for "won" or by year</param>
+    Task<MyTournamentsResponseDto> GetUserTournamentsAsync(Guid userId, Guid? currentUserId, UserTournamentsFilterDto? filter);
 }

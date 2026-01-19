@@ -219,3 +219,45 @@ public record StandingsDto
     public int? PlayoffCutoff { get; init; }
     public List<TiedGroupDto>? TiedGroups { get; init; }
 }
+
+/// <summary>
+/// DTO for a single tournament in a user's history
+/// </summary>
+public record UserTournamentSummaryDto
+{
+    public required Guid Id { get; init; }
+    public required string Name { get; init; }
+    public required string Status { get; init; }
+    public required DateTime StartDate { get; init; }
+    public required DateTime EndDate { get; init; }
+    public DateTime? CompletedAt { get; init; }
+
+    // User's participation info
+    public string? TeamId { get; init; }
+    public string? TeamName { get; init; }
+    public int? FinalPlacement { get; init; }
+    public string? UserRole { get; init; }
+
+    // Organization context
+    public string? OrganizationId { get; init; }
+    public string? OrganizationName { get; init; }
+}
+
+/// <summary>
+/// Response DTO for GET /users/me/tournaments - returns user's tournament history grouped by status
+/// </summary>
+public record MyTournamentsResponseDto
+{
+    public required List<UserTournamentSummaryDto> Active { get; init; }
+    public required List<UserTournamentSummaryDto> Past { get; init; }
+    public required List<UserTournamentSummaryDto> Organizing { get; init; }
+}
+
+/// <summary>
+/// Query parameters for filtering user's tournament history
+/// </summary>
+public record UserTournamentsFilterDto
+{
+    public string? Filter { get; set; }
+    public int? Year { get; set; }
+}

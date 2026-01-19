@@ -282,6 +282,216 @@ public class TournamentService : ITournamentService
         return await _authService.IsScorekeeperAsync(tournamentId, userId);
     }
 
+    public async Task<MyTournamentsResponseDto> GetUserTournamentsAsync(Guid userId, Guid? currentUserId, UserTournamentsFilterDto? filter)
+    {
+        var isOwnProfile = currentUserId.HasValue && currentUserId.Value == userId;
+
+        // Query user's tournaments from three sources in parallel:
+        // 1. TournamentTeamMember - player on a team
+        // 2. TournamentRegistration - registered but maybe not assigned to team
+        // 3. TournamentAdmin - organizer/admin
+
+        // Run all three queries in parallel for better performance
+        var teamMemberTask = _context.TournamentTeamMembers
+            .Include(ttm => ttm.Team)
+                .ThenInclude(t => t.Tournament)
+                    .ThenInclude(tournament => tournament.Organization)
+            .Where(ttm => ttm.UserId == userId)
+            .Select(ttm => new
+            {
+                Tournament = ttm.Team.Tournament,
+                TeamId = (Guid?)ttm.Team.Id,
+                TeamName = ttm.Team.Name,
+                FinalPlacement = ttm.Team.FinalPlacement,
+                TeamMemberRole = ttm.Role,
+                AdminRole = (string?)null
+            })
+            .ToListAsync();
+
+        var registrationTask = _context.TournamentRegistrations
+            .Include(tr => tr.Tournament)
+                .ThenInclude(t => t.Organization)
+            .Include(tr => tr.AssignedTeam)
+            .Where(tr => tr.UserId == userId && tr.Status != "Cancelled")
+            .Select(tr => new
+            {
+                Tournament = tr.Tournament,
+                TeamId = tr.AssignedTeamId,
+                TeamName = tr.AssignedTeam != null ? tr.AssignedTeam.Name : null,
+                FinalPlacement = tr.AssignedTeam != null ? tr.AssignedTeam.FinalPlacement : null,
+                TeamMemberRole = (string?)null,
+                AdminRole = (string?)null
+            })
+            .ToListAsync();
+
+        var adminTask = _context.TournamentAdmins
+            .Include(ta => ta.Tournament)
+                .ThenInclude(t => t.Organization)
+            .Where(ta => ta.UserId == userId && ta.RemovedAt == null)
+            .Select(ta => new
+            {
+                Tournament = ta.Tournament,
+                TeamId = (Guid?)null,
+                TeamName = (string?)null,
+                FinalPlacement = (int?)null,
+                TeamMemberRole = (string?)null,
+                AdminRole = ta.Role
+            })
+            .ToListAsync();
+
+        // Wait for all queries to complete
+        await Task.WhenAll(teamMemberTask, registrationTask, adminTask);
+
+        var teamMemberTournaments = teamMemberTask.Result;
+        var registrationTournaments = registrationTask.Result;
+        var adminTournaments = adminTask.Result;
+
+        // Combine all sources
+        var allTournaments = teamMemberTournaments
+            .Concat(registrationTournaments)
+            .Concat(adminTournaments)
+            .ToList();
+
+        // Group by tournament to handle duplicates (user could be both player and admin)
+        var tournamentGroups = allTournaments
+            .GroupBy(t => t.Tournament.Id)
+            .Select(g =>
+            {
+                // If user is both admin and player, admin role takes priority
+                var hasAdminRole = g.Any(x => x.AdminRole != null);
+                var adminItem = g.FirstOrDefault(x => x.AdminRole != null);
+                var teamItem = g.FirstOrDefault(x => x.TeamId != null);
+
+                return new
+                {
+                    Tournament = g.First().Tournament,
+                    TeamId = teamItem?.TeamId,
+                    TeamName = teamItem?.TeamName,
+                    FinalPlacement = teamItem?.FinalPlacement,
+                    TeamMemberRole = teamItem?.TeamMemberRole,
+                    AdminRole = adminItem?.AdminRole,
+                    HasAdminRole = hasAdminRole
+                };
+            })
+            .ToList();
+
+        // Apply exclusions
+        tournamentGroups = tournamentGroups
+            .Where(t =>
+            {
+                // Exclude Draft tournaments unless user is admin
+                if (t.Tournament.Status == "Draft" && !t.HasAdminRole)
+                    return false;
+
+                // Exclude Cancelled tournaments
+                if (t.Tournament.Status == "Cancelled")
+                    return false;
+
+                // Exclude Postponed tournaments
+                if (t.Tournament.Status == "Postponed")
+                    return false;
+
+                return true;
+            })
+            .ToList();
+
+        // Apply filters
+        if (filter != null)
+        {
+            // Filter by won
+            if (filter.Filter == "won")
+            {
+                tournamentGroups = tournamentGroups
+                    .Where(t => t.FinalPlacement.HasValue && t.FinalPlacement.Value == 1)
+                    .ToList();
+            }
+
+            // Filter by year
+            if (filter.Year.HasValue)
+            {
+                tournamentGroups = tournamentGroups
+                    .Where(t => t.Tournament.StartDate.Year == filter.Year.Value)
+                    .ToList();
+            }
+        }
+
+        // Categorize tournaments
+        var active = new List<UserTournamentSummaryDto>();
+        var past = new List<UserTournamentSummaryDto>();
+        var organizing = new List<UserTournamentSummaryDto>();
+
+        foreach (var item in tournamentGroups)
+        {
+            var dto = new UserTournamentSummaryDto
+            {
+                Id = item.Tournament.Id,
+                Name = item.Tournament.Name,
+                Status = item.Tournament.Status,
+                StartDate = item.Tournament.StartDate,
+                EndDate = item.Tournament.EndDate,
+                CompletedAt = item.Tournament.CompletedAt,
+                TeamId = item.TeamId?.ToString(),
+                TeamName = item.TeamName,
+                FinalPlacement = item.FinalPlacement,
+                UserRole = DetermineUserRole(item.AdminRole, item.TeamMemberRole),
+                OrganizationId = item.Tournament.OrganizationId?.ToString(),
+                OrganizationName = item.Tournament.Organization?.Name
+            };
+
+            // Categorization logic
+            if (item.HasAdminRole)
+            {
+                // Admins go to Organizing section (any status except Cancelled)
+                organizing.Add(dto);
+            }
+            else if (item.Tournament.Status == "Open" || item.Tournament.Status == "InProgress")
+            {
+                // Active tournaments (player only)
+                active.Add(dto);
+            }
+            else if (item.Tournament.Status == "Completed")
+            {
+                // Past tournaments (player)
+                past.Add(dto);
+            }
+        }
+
+        // Apply ordering
+        active = active.OrderBy(t => t.StartDate).ToList();
+        past = past.OrderByDescending(t => t.EndDate).ToList();
+        organizing = organizing.OrderByDescending(t => t.StartDate).ToList();
+
+        // Privacy: if viewing another user's profile, only return Past section
+        if (!isOwnProfile)
+        {
+            return new MyTournamentsResponseDto
+            {
+                Active = new List<UserTournamentSummaryDto>(),
+                Past = past,
+                Organizing = new List<UserTournamentSummaryDto>()
+            };
+        }
+
+        return new MyTournamentsResponseDto
+        {
+            Active = active,
+            Past = past,
+            Organizing = organizing
+        };
+    }
+
+    private string DetermineUserRole(string? adminRole, string? teamMemberRole)
+    {
+        // Admin roles take priority: Owner > Admin > Scorekeeper > Captain > Player
+        if (adminRole != null)
+            return adminRole;
+
+        if (teamMemberRole != null)
+            return teamMemberRole;
+
+        return "Player";
+    }
+
     private async Task<TournamentDto> MapToDto(Tournament tournament, Guid? currentUserId)
     {
         var canManage = currentUserId.HasValue

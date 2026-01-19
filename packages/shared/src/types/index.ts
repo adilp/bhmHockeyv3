@@ -927,6 +927,43 @@ export interface VerifyTournamentPaymentRequest {
 }
 
 // ============================================
+// Tournament History Types
+// ============================================
+
+// User tournament summary for history/list views
+export interface UserTournamentSummaryDto {
+  id: string;
+  name: string;
+  status: TournamentStatus;
+  startDate: string;
+  endDate: string;
+  completedAt?: string;
+
+  // User's participation info
+  teamId?: string;
+  teamName?: string;
+  finalPlacement?: number;
+  userRole?: 'Player' | 'Captain' | 'Admin' | 'Owner' | 'Scorekeeper';
+
+  // Organization context
+  organizationId?: string;
+  organizationName?: string;
+}
+
+// My tournaments response with categorized tournaments
+export interface MyTournamentsResponseDto {
+  active: UserTournamentSummaryDto[];
+  past: UserTournamentSummaryDto[];
+  organizing: UserTournamentSummaryDto[];
+}
+
+// Filter options for user tournaments
+export interface UserTournamentsFilter {
+  filter?: 'all' | 'won';
+  year?: number;
+}
+
+// ============================================
 // Admin Types
 // ============================================
 

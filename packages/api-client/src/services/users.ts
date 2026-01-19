@@ -1,4 +1,4 @@
-import type { User, UpdateUserProfileRequest, UserBadgeDto, UpdateBadgeOrderRequest, UncelebratedBadgeDto } from '@bhmhockey/shared';
+import type { User, UpdateUserProfileRequest, UserBadgeDto, UpdateBadgeOrderRequest, UncelebratedBadgeDto, MyTournamentsResponseDto, UserTournamentsFilter } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
 /**
@@ -69,5 +69,37 @@ export const userService = {
    */
   async celebrateBadge(id: string): Promise<void> {
     await apiClient.instance.patch(`/users/me/badges/${id}/celebrate`);
+  },
+
+  /**
+   * Get current user's tournaments (active, past, organizing)
+   * Supports filtering by year and won tournaments
+   */
+  async getMyTournaments(filter?: UserTournamentsFilter): Promise<MyTournamentsResponseDto> {
+    const params = new URLSearchParams();
+    if (filter?.filter) params.append('filter', filter.filter);
+    if (filter?.year) params.append('year', filter.year.toString());
+
+    const queryString = params.toString();
+    const url = queryString ? `/users/me/tournaments?${queryString}` : '/users/me/tournaments';
+
+    const response = await apiClient.instance.get<MyTournamentsResponseDto>(url);
+    return response.data;
+  },
+
+  /**
+   * Get another user's tournament history (public - past tournaments only)
+   * Supports filtering by year and won tournaments
+   */
+  async getUserTournaments(userId: string, filter?: UserTournamentsFilter): Promise<MyTournamentsResponseDto> {
+    const params = new URLSearchParams();
+    if (filter?.filter) params.append('filter', filter.filter);
+    if (filter?.year) params.append('year', filter.year.toString());
+
+    const queryString = params.toString();
+    const url = queryString ? `/users/${userId}/tournaments?${queryString}` : `/users/${userId}/tournaments`;
+
+    const response = await apiClient.instance.get<MyTournamentsResponseDto>(url);
+    return response.data;
   },
 };

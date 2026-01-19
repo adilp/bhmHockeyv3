@@ -329,6 +329,9 @@ public class AppDbContext : DbContext
             // Unique constraint: user can only have one admin role per tournament
             entity.HasIndex(e => new { e.TournamentId, e.UserId }).IsUnique();
 
+            // Index for querying user's tournament history
+            entity.HasIndex(e => e.UserId);
+
             entity.HasOne(e => e.Tournament)
                 .WithMany(t => t.Admins)
                 .HasForeignKey(e => e.TournamentId)
@@ -462,6 +465,9 @@ public class AppDbContext : DbContext
             // Index for querying registrations by status
             entity.HasIndex(e => new { e.TournamentId, e.Status });
 
+            // Index for querying user's tournament history
+            entity.HasIndex(e => e.UserId);
+
             entity.HasOne(e => e.Tournament)
                 .WithMany()
                 .HasForeignKey(e => e.TournamentId)
@@ -501,6 +507,9 @@ public class AppDbContext : DbContext
 
             // Unique constraint: one user per team
             entity.HasIndex(e => new { e.TeamId, e.UserId }).IsUnique();
+
+            // Index for querying user's tournament history
+            entity.HasIndex(e => e.UserId);
         });
     }
 }

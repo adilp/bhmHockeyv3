@@ -16,19 +16,22 @@ public class UsersController : ControllerBase
     private readonly IEventService _eventService;
     private readonly IBadgeService _badgeService;
     private readonly ITournamentTeamMemberService _tournamentTeamMemberService;
+    private readonly ITournamentService _tournamentService;
 
     public UsersController(
         IUserService userService,
         IOrganizationService organizationService,
         IEventService eventService,
         IBadgeService badgeService,
-        ITournamentTeamMemberService tournamentTeamMemberService)
+        ITournamentTeamMemberService tournamentTeamMemberService,
+        ITournamentService tournamentService)
     {
         _userService = userService;
         _organizationService = organizationService;
         _eventService = eventService;
         _badgeService = badgeService;
         _tournamentTeamMemberService = tournamentTeamMemberService;
+        _tournamentService = tournamentService;
     }
 
     private Guid GetCurrentUserId()
@@ -273,5 +276,58 @@ public class UsersController : ControllerBase
         {
             return Unauthorized(new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Gets the current user's tournament history grouped by status (Active, Past, Organizing)
+    /// </summary>
+    /// <param name="filter">Optional filter: "won" or null for all tournaments</param>
+    /// <param name="year">Optional year filter to show tournaments from a specific year</param>
+    /// <returns>Tournament history grouped by Active, Past, and Organizing</returns>
+    [HttpGet("me/tournaments")]
+    public async Task<ActionResult<MyTournamentsResponseDto>> GetMyTournaments(
+        [FromQuery] string? filter,
+        [FromQuery] int? year)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var filterDto = new UserTournamentsFilterDto { Filter = filter, Year = year };
+            var result = await _tournamentService.GetUserTournamentsAsync(userId, userId, filterDto);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Gets another user's public tournament history grouped by status
+    /// </summary>
+    /// <param name="id">The user ID to get tournament history for</param>
+    /// <param name="filter">Optional filter: "won" or null for all tournaments</param>
+    /// <param name="year">Optional year filter to show tournaments from a specific year</param>
+    /// <returns>Tournament history grouped by Active, Past, and Organizing</returns>
+    [HttpGet("{id}/tournaments")]
+    public async Task<ActionResult<MyTournamentsResponseDto>> GetUserTournaments(
+        Guid id,
+        [FromQuery] string? filter,
+        [FromQuery] int? year)
+    {
+        // Get current user id if authenticated, otherwise null for public view
+        Guid? currentUserId = null;
+        try
+        {
+            currentUserId = GetCurrentUserId();
+        }
+        catch
+        {
+            // User not authenticated - that's okay for public view
+        }
+
+        var filterDto = new UserTournamentsFilterDto { Filter = filter, Year = year };
+        var result = await _tournamentService.GetUserTournamentsAsync(id, currentUserId, filterDto);
+        return Ok(result);
     }
 }
