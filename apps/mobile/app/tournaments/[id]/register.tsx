@@ -46,8 +46,10 @@ export default function TournamentRegisterScreen() {
   const { currentTournament, isRegistering, registerForTournament, fetchTournamentById } = useTournamentStore();
   const { user } = useAuthStore();
 
-  // Wizard state
-  const [step, setStep] = useState<1 | 2>(1);
+  // Wizard state - start at step 0 if eligibility requirements exist, otherwise step 1
+  const hasEligibilityRequirements = !!currentTournament?.eligibilityRequirements;
+  const [step, setStep] = useState<0 | 1 | 2>(hasEligibilityRequirements ? 0 : 1);
+  const [eligibilityAccepted, setEligibilityAccepted] = useState(false);
 
   // Step 1: Position & Custom Questions
   const [position, setPosition] = useState<string>('Skater');
@@ -235,7 +237,11 @@ export default function TournamentRegisterScreen() {
     <>
       <Stack.Screen
         options={{
-          title: step === 1 ? 'Register - Step 1 of 2' : 'Register - Step 2 of 2',
+          title: step === 0
+            ? 'Register - Eligibility'
+            : step === 1
+              ? `Register - Step ${hasEligibilityRequirements ? '1 of 3' : '1 of 2'}`
+              : `Register - Step ${hasEligibilityRequirements ? '2 of 3' : '2 of 2'}`,
           headerBackTitle: 'Cancel',
           headerStyle: { backgroundColor: colors.bg.darkest },
           headerTintColor: colors.primary.teal,
@@ -256,6 +262,14 @@ export default function TournamentRegisterScreen() {
         >
           {/* Step Indicator */}
           <View style={styles.stepIndicator}>
+            {hasEligibilityRequirements && (
+              <>
+                <View style={[styles.stepDot, step === 0 && styles.stepDotActive]}>
+                  <Text style={[styles.stepDotText, step === 0 && styles.stepDotTextActive]}>0</Text>
+                </View>
+                <View style={styles.stepLine} />
+              </>
+            )}
             <View style={[styles.stepDot, step === 1 && styles.stepDotActive]}>
               <Text style={[styles.stepDotText, step === 1 && styles.stepDotTextActive]}>1</Text>
             </View>
@@ -265,7 +279,42 @@ export default function TournamentRegisterScreen() {
             </View>
           </View>
 
-          {step === 1 ? (
+          {step === 0 ? (
+            // STEP 0: Eligibility Requirements
+            <>
+              <Text style={styles.stepTitle}>Eligibility Requirements</Text>
+
+              <View style={styles.eligibilityBox}>
+                <Text style={styles.eligibilityText}>
+                  {currentTournament?.eligibilityRequirements}
+                </Text>
+              </View>
+
+              <View style={styles.field}>
+                <View style={styles.waiverRow}>
+                  <Switch
+                    value={eligibilityAccepted}
+                    onValueChange={setEligibilityAccepted}
+                    trackColor={{ false: colors.border.muted, true: colors.primary.teal }}
+                    thumbColor={Platform.OS === 'ios' ? undefined : colors.bg.elevated}
+                  />
+                  <View style={styles.waiverTextContainer}>
+                    <Text style={styles.waiverText}>
+                      I have read and meet the eligibility requirements above
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.primaryButton, !eligibilityAccepted && styles.primaryButtonDisabled]}
+                onPress={() => setStep(1)}
+                disabled={!eligibilityAccepted}
+              >
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              </TouchableOpacity>
+            </>
+          ) : step === 1 ? (
             // STEP 1: Position & Custom Questions
             <>
               <Text style={styles.stepTitle}>Position & Questions</Text>
@@ -358,7 +407,7 @@ export default function TournamentRegisterScreen() {
                   ]}
                   onPress={handleRegister}
                   disabled={
-                    isRegistering || (currentTournament.waiverUrl && !waiverAccepted)
+                    isRegistering || !!(currentTournament.waiverUrl && !waiverAccepted)
                   }
                 >
                   {isRegistering ? (
@@ -575,6 +624,21 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 15,
     color: colors.text.primary,
+  },
+
+  // Eligibility Box
+  eligibilityBox: {
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    marginBottom: spacing.lg,
+  },
+  eligibilityText: {
+    fontSize: 15,
+    color: colors.text.primary,
+    lineHeight: 22,
   },
 
   // Info Box (Payment)

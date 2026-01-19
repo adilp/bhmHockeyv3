@@ -66,6 +66,9 @@ public class TournamentRegistrationService : ITournamentRegistrationService
             // 5. Allow re-registration if previous was cancelled
             if (existingRegistration.Status == "Cancelled")
             {
+                // Validate custom questions before reactivating
+                ValidateCustomQuestions(tournament.CustomQuestions, request.CustomResponses);
+
                 // Reactivate the cancelled registration
                 existingRegistration.Status = "Registered";
                 existingRegistration.Position = request.Position;
@@ -95,7 +98,10 @@ public class TournamentRegistrationService : ITournamentRegistrationService
             throw new InvalidOperationException("Already registered for this tournament");
         }
 
-        // 6 & 7. Create new registration
+        // 6. Validate custom questions
+        ValidateCustomQuestions(tournament.CustomQuestions, request.CustomResponses);
+
+        // 7. Create new registration
         var registration = new TournamentRegistration
         {
             TournamentId = tournamentId,
@@ -374,6 +380,81 @@ public class TournamentRegistrationService : ITournamentRegistrationService
         await _context.SaveChangesAsync();
 
         return MapToDto(registration);
+    }
+
+    /// <summary>
+    /// Validates that all required custom questions have non-empty answers.
+    /// </summary>
+    private void ValidateCustomQuestions(string? customQuestionsJson, string? customResponsesJson)
+    {
+        // If no custom questions defined, nothing to validate
+        if (string.IsNullOrEmpty(customQuestionsJson))
+        {
+            return;
+        }
+
+        // Parse questions
+        List<CustomQuestion>? questions;
+        try
+        {
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            questions = System.Text.Json.JsonSerializer.Deserialize<List<CustomQuestion>>(customQuestionsJson, options);
+        }
+        catch
+        {
+            // If questions JSON is malformed, skip validation (shouldn't happen)
+            return;
+        }
+
+        if (questions == null || questions.Count == 0)
+        {
+            return;
+        }
+
+        // Parse responses (empty object if null/empty)
+        Dictionary<string, System.Text.Json.JsonElement>? responses = null;
+        if (!string.IsNullOrEmpty(customResponsesJson))
+        {
+            try
+            {
+                responses = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(customResponsesJson);
+            }
+            catch
+            {
+                responses = null;
+            }
+        }
+        responses ??= new Dictionary<string, System.Text.Json.JsonElement>();
+
+        // Check each required question has a non-empty answer
+        foreach (var question in questions.Where(q => q.Required))
+        {
+            if (!responses.TryGetValue(question.Id, out var answer))
+            {
+                throw new InvalidOperationException($"Answer required for: {question.Label}");
+            }
+
+            // Check for empty string answers
+            if (answer.ValueKind == System.Text.Json.JsonValueKind.String && string.IsNullOrWhiteSpace(answer.GetString()))
+            {
+                throw new InvalidOperationException($"Answer required for: {question.Label}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Represents a custom question definition.
+    /// </summary>
+    private class CustomQuestion
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public string Label { get; set; } = string.Empty;
+        public bool Required { get; set; }
+        public List<string>? Options { get; set; }
     }
 
     /// <summary>

@@ -78,6 +78,8 @@ export default function CreateTournamentScreen() {
   const [maxTeams, setMaxTeams] = useState('8');
   const [entryFee, setEntryFee] = useState('0');
   const [venue, setVenue] = useState('');
+  const [waiverUrl, setWaiverUrl] = useState('');
+  const [eligibilityRequirements, setEligibilityRequirements] = useState('');
 
   // Date picker visibility states
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -217,6 +219,8 @@ export default function CreateTournamentScreen() {
       maxTeams: parseInt(maxTeams, 10),
       entryFee: parseFloat(entryFee) || 0,
       venue: venue.trim() || undefined,
+      waiverUrl: waiverUrl.trim() || undefined,
+      eligibilityRequirements: eligibilityRequirements.trim() || undefined,
     };
 
     const tournament = await createTournament(request);
@@ -435,6 +439,39 @@ export default function CreateTournamentScreen() {
               value={description}
               onChangeText={setDescription}
               placeholder="Tell teams what to expect..."
+              placeholderTextColor={colors.text.muted}
+              multiline
+              numberOfLines={4}
+              returnKeyType="done"
+              blurOnSubmit
+              inputAccessoryViewID={inputAccessoryViewID}
+            />
+          </View>
+
+          {/* Waiver URL */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Waiver URL (optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={waiverUrl}
+              onChangeText={setWaiverUrl}
+              placeholder="https://example.com/waiver.pdf"
+              placeholderTextColor={colors.text.muted}
+              keyboardType="url"
+              autoCapitalize="none"
+              returnKeyType="next"
+              inputAccessoryViewID={inputAccessoryViewID}
+            />
+          </View>
+
+          {/* Eligibility Requirements */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Eligibility Requirements (optional)</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={eligibilityRequirements}
+              onChangeText={setEligibilityRequirements}
+              placeholder="Players must be 18+ and have valid USA Hockey registration..."
               placeholderTextColor={colors.text.muted}
               multiline
               numberOfLines={4}

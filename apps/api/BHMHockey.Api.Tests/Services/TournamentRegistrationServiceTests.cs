@@ -1164,6 +1164,162 @@ public class TournamentRegistrationServiceTests : IDisposable
 
     #endregion
 
+    #region Custom Question Validation Tests
+
+    [Fact]
+    public async Task RegisterAsync_WithRequiredQuestions_AndMissingAnswers_ThrowsException()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+
+        var customQuestions = "[{\"id\":\"q1\",\"type\":\"text\",\"label\":\"Emergency Contact\",\"required\":true},{\"id\":\"q2\",\"type\":\"dropdown\",\"label\":\"Jersey Size\",\"required\":true,\"options\":[\"S\",\"M\",\"L\",\"XL\"]}]";
+        var tournament = await CreateTestTournament(
+            creator.Id,
+            status: "Open",
+            customQuestions: customQuestions);
+
+        // Missing answers for required questions
+        var request = new CreateTournamentRegistrationRequest
+        {
+            Position = "Skater",
+            CustomResponses = "{\"q1\":\"Jane Doe\"}" // q2 is missing
+        };
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.RegisterAsync(tournament.Id, request, user.Id));
+
+        exception.Message.Should().Contain("required");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithRequiredQuestions_AndEmptyStringAnswer_ThrowsException()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+
+        var customQuestions = "[{\"id\":\"q1\",\"type\":\"text\",\"label\":\"Emergency Contact\",\"required\":true}]";
+        var tournament = await CreateTestTournament(
+            creator.Id,
+            status: "Open",
+            customQuestions: customQuestions);
+
+        // Empty string answer for required question
+        var request = new CreateTournamentRegistrationRequest
+        {
+            Position = "Skater",
+            CustomResponses = "{\"q1\":\"\"}" // Empty string
+        };
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.RegisterAsync(tournament.Id, request, user.Id));
+
+        exception.Message.Should().Contain("required");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithRequiredQuestions_AndValidAnswers_Succeeds()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+
+        var customQuestions = "[{\"id\":\"q1\",\"type\":\"text\",\"label\":\"Emergency Contact\",\"required\":true},{\"id\":\"q2\",\"type\":\"dropdown\",\"label\":\"Jersey Size\",\"required\":true,\"options\":[\"S\",\"M\",\"L\",\"XL\"]},{\"id\":\"q3\",\"type\":\"yesno\",\"label\":\"Prior tournament experience?\",\"required\":true}]";
+        var tournament = await CreateTestTournament(
+            creator.Id,
+            status: "Open",
+            customQuestions: customQuestions);
+
+        // All required questions answered
+        var request = new CreateTournamentRegistrationRequest
+        {
+            Position = "Skater",
+            CustomResponses = "{\"q1\":\"Jane Doe 555-1234\",\"q2\":\"L\",\"q3\":true}"
+        };
+
+        // Act
+        var result = await _sut.RegisterAsync(tournament.Id, request, user.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Status.Should().Be("Registered");
+
+        // Verify in database
+        var registration = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.TournamentId == tournament.Id && r.UserId == user.Id);
+        registration.Should().NotBeNull();
+        registration!.CustomResponses.Should().Be("{\"q1\":\"Jane Doe 555-1234\",\"q2\":\"L\",\"q3\":true}");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithOptionalQuestions_AndMissingAnswers_Succeeds()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+
+        var customQuestions = "[{\"id\":\"q1\",\"type\":\"text\",\"label\":\"Dietary Restrictions\",\"required\":false},{\"id\":\"q2\",\"type\":\"yesno\",\"label\":\"Need parking?\",\"required\":false}]";
+        var tournament = await CreateTestTournament(
+            creator.Id,
+            status: "Open",
+            customQuestions: customQuestions);
+
+        // No answers provided for optional questions
+        var request = new CreateTournamentRegistrationRequest
+        {
+            Position = "Skater",
+            CustomResponses = null
+        };
+
+        // Act
+        var result = await _sut.RegisterAsync(tournament.Id, request, user.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Status.Should().Be("Registered");
+
+        // Verify in database
+        var registration = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.TournamentId == tournament.Id && r.UserId == user.Id);
+        registration.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithNoCustomQuestions_Succeeds()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var user = await CreateTestUser("user@example.com");
+
+        // Tournament has no custom questions (customQuestions is null)
+        var tournament = await CreateTestTournament(
+            creator.Id,
+            status: "Open",
+            customQuestions: null);
+
+        var request = new CreateTournamentRegistrationRequest
+        {
+            Position = "Skater"
+        };
+
+        // Act
+        var result = await _sut.RegisterAsync(tournament.Id, request, user.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Status.Should().Be("Registered");
+
+        // Verify in database
+        var registration = await _context.TournamentRegistrations
+            .FirstOrDefaultAsync(r => r.TournamentId == tournament.Id && r.UserId == user.Id);
+        registration.Should().NotBeNull();
+    }
+
+    #endregion
+
     #region Edge Case Tests
 
     [Fact]
