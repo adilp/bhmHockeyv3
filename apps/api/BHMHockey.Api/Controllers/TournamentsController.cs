@@ -1043,6 +1043,43 @@ public class TournamentsController : ControllerBase
         return Ok(standings);
     }
 
+    /// <summary>
+    /// Manually resolve tied standings by setting final placements. Requires tournament admin role.
+    /// </summary>
+    /// <remarks>
+    /// Used when automatic tiebreakers cannot resolve a tie (e.g., 3+ teams tied on all criteria).
+    /// Sets the FinalPlacement field for each team and creates an audit log entry.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="request">List of team ID to final placement assignments</param>
+    /// <response code="200">Ties resolved successfully</response>
+    /// <response code="400">Invalid request (duplicate teams/placements, teams not found)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized (not Admin+)</response>
+    [HttpPut("{id:guid}/standings/resolve")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ResolveTies(Guid id, [FromBody] ResolveTiesRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            await _standingsService.ResolveTiesAsync(id, request.Resolutions, userId);
+            return Ok(new { message = "Ties resolved successfully" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
     #endregion
 
     #region Registration Endpoints

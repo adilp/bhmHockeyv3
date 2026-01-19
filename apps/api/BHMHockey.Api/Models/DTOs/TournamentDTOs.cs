@@ -292,3 +292,20 @@ public record UpcomingTournamentMatchDto
     // Is the user's team home or away?
     public required bool IsHomeTeam { get; init; }
 }
+
+/// <summary>
+/// Request DTO for resolving tied standings manually
+/// </summary>
+public record ResolveTiesRequest
+{
+    public required List<TieResolutionItem> Resolutions { get; init; }
+}
+
+/// <summary>
+/// Single team tie resolution assignment
+/// </summary>
+public record TieResolutionItem
+{
+    public required Guid TeamId { get; init; }
+    public required int FinalPlacement { get; init; }
+}

@@ -12,10 +12,17 @@ namespace BHMHockey.Api.Services;
 public class StandingsService : IStandingsService
 {
     private readonly AppDbContext _context;
+    private readonly ITournamentAuthorizationService _authService;
+    private readonly ITournamentAuditService _auditService;
 
-    public StandingsService(AppDbContext context)
+    public StandingsService(
+        AppDbContext context,
+        ITournamentAuthorizationService authService,
+        ITournamentAuditService auditService)
     {
         _context = context;
+        _authService = authService;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -368,5 +375,86 @@ public class StandingsService : IStandingsService
             GamesPlayed = gamesPlayed,
             IsPlayoffBound = isPlayoffBound
         };
+    }
+
+    /// <summary>
+    /// Manually resolves tied standings by setting final placements for teams.
+    /// Requires tournament admin role. Creates audit log entry.
+    /// </summary>
+    public async Task<bool> ResolveTiesAsync(Guid tournamentId, List<TieResolutionItem> resolutions, Guid userId)
+    {
+        // 1. Verify user is Admin+
+        var isAdmin = await _authService.IsAdminAsync(tournamentId, userId);
+        if (!isAdmin)
+        {
+            throw new UnauthorizedAccessException("You do not have permission to resolve ties for this tournament");
+        }
+
+        // 2. Verify tournament exists
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament == null)
+        {
+            throw new InvalidOperationException("Tournament not found");
+        }
+
+        // 3. Validate resolutions
+        if (resolutions == null || resolutions.Count == 0)
+        {
+            throw new InvalidOperationException("At least one resolution is required");
+        }
+
+        // Check for duplicate TeamIds
+        var teamIds = resolutions.Select(r => r.TeamId).ToList();
+        if (teamIds.Count != teamIds.Distinct().Count())
+        {
+            throw new InvalidOperationException("Duplicate team IDs in resolutions");
+        }
+
+        // Check for duplicate FinalPlacement values
+        var placements = resolutions.Select(r => r.FinalPlacement).ToList();
+        if (placements.Count != placements.Distinct().Count())
+        {
+            throw new InvalidOperationException("Duplicate final placement values in resolutions");
+        }
+
+        // 4. Load all teams being resolved
+        var teams = await _context.TournamentTeams
+            .Where(t => t.TournamentId == tournamentId && teamIds.Contains(t.Id))
+            .ToListAsync();
+
+        // Verify all teams exist
+        if (teams.Count != resolutions.Count)
+        {
+            throw new InvalidOperationException("One or more teams not found");
+        }
+
+        // 5. Apply final placements
+        foreach (var resolution in resolutions)
+        {
+            var team = teams.First(t => t.Id == resolution.TeamId);
+            team.FinalPlacement = resolution.FinalPlacement;
+            team.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // 6. Create audit log entry
+        var details = JsonSerializer.Serialize(resolutions.Select(r => new
+        {
+            teamId = r.TeamId,
+            teamName = teams.First(t => t.Id == r.TeamId).Name,
+            finalPlacement = r.FinalPlacement
+        }));
+
+        await _auditService.LogAsync(
+            tournamentId: tournamentId,
+            userId: userId,
+            action: "ties_resolved",
+            entityType: "TournamentTeam",
+            entityId: null,
+            details: details);
+
+        // 7. Save changes
+        await _context.SaveChangesAsync();
+
+        return true;
     }
 }

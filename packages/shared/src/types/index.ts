@@ -1031,3 +1031,54 @@ export interface ForgotPasswordRequest {
 export interface ForgotPasswordResponse {
   message: string;
 }
+
+// ============================================
+// Tournament Audit Log Types (TRN-029)
+// ============================================
+
+// Audit log entry from the API
+export interface TournamentAuditLogDto {
+  id: string;
+  tournamentId: string;
+  userId: string;
+  userName: string;
+  action: string;
+  actionDescription: string;  // Human-readable description
+  fromStatus?: string;
+  toStatus?: string;
+  entityType?: string;
+  entityId?: string;
+  oldValue?: string;  // JSON string
+  newValue?: string;  // JSON string
+  details?: string;   // JSON string with additional info
+  timestamp: string;  // ISO date string
+}
+
+// Paginated response for audit log list
+export interface AuditLogListResponse {
+  auditLogs: TournamentAuditLogDto[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
+// Filter options for audit log queries
+export interface AuditLogFilter {
+  action?: string;
+  fromDate?: string;  // ISO date string
+  toDate?: string;    // ISO date string
+}
+
+// ============================================
+// Tournament Tie Resolution Types (TRN-031)
+// ============================================
+
+// Single team placement for tie resolution
+export interface TieResolutionItem {
+  teamId: string;
+  finalPlacement: number;
+}
+
+// Request to resolve ties manually
+export interface ResolveTiesRequest {
+  resolutions: TieResolutionItem[];
+}

@@ -15,6 +15,12 @@ import type {
   TeamStandingDto,
   TiedGroupDto,
   UpcomingTournamentMatchDto,
+  TournamentAdminDto,
+  AddTournamentAdminRequest,
+  UpdateTournamentAdminRoleRequest,
+  TournamentAuditLogDto,
+  AuditLogFilter,
+  ResolveTiesRequest,
 } from '@bhmhockey/shared';
 
 interface TournamentState {
@@ -42,6 +48,18 @@ interface TournamentState {
   // Upcoming matches state
   myUpcomingMatches: UpcomingTournamentMatchDto[];
   isFetchingUpcoming: boolean;
+
+  // Admin management state
+  admins: TournamentAdminDto[];
+  isLoadingAdmins: boolean;
+
+  // Audit log state
+  auditLogs: TournamentAuditLogDto[];
+  auditLogTotalCount: number;
+  auditLogHasMore: boolean;
+  isLoadingAuditLogs: boolean;
+  auditLogFilter: AuditLogFilter | null;
+  auditLogOffset: number;
 
   // Actions
   fetchTournaments: () => Promise<void>;
@@ -73,6 +91,22 @@ interface TournamentState {
 
   // Upcoming matches actions
   fetchMyUpcomingMatches: () => Promise<void>;
+
+  // Admin management actions
+  fetchAdmins: (tournamentId: string) => Promise<void>;
+  addAdmin: (tournamentId: string, userId: string, role: 'Admin' | 'Scorekeeper') => Promise<boolean>;
+  updateAdminRole: (tournamentId: string, userId: string, role: 'Admin' | 'Scorekeeper') => Promise<boolean>;
+  removeAdmin: (tournamentId: string, userId: string) => Promise<boolean>;
+  transferOwnership: (tournamentId: string, newOwnerUserId: string) => Promise<boolean>;
+  clearAdmins: () => void;
+
+  // Audit log actions
+  fetchAuditLogs: (tournamentId: string, reset?: boolean) => Promise<void>;
+  setAuditLogFilter: (filter: AuditLogFilter | null) => void;
+  clearAuditLogs: () => void;
+
+  // Tie resolution actions
+  resolveTies: (tournamentId: string, resolutions: { teamId: string; finalPlacement: number }[]) => Promise<boolean>;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -100,6 +134,18 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   // Upcoming matches state
   myUpcomingMatches: [],
   isFetchingUpcoming: false,
+
+  // Admin management state
+  admins: [],
+  isLoadingAdmins: false,
+
+  // Audit log state
+  auditLogs: [],
+  auditLogTotalCount: 0,
+  auditLogHasMore: false,
+  isLoadingAuditLogs: false,
+  auditLogFilter: null,
+  auditLogOffset: 0,
 
   // Fetch all tournaments
   fetchTournaments: async () => {
@@ -527,6 +573,164 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     } catch (error) {
       console.error('Failed to fetch upcoming matches:', error);
       set({ myUpcomingMatches: [], isFetchingUpcoming: false });
+    }
+  },
+
+  // ============================================
+  // Admin Management Actions
+  // ============================================
+
+  // Fetch admins for a tournament
+  fetchAdmins: async (tournamentId: string) => {
+    set({ isLoadingAdmins: true });
+    try {
+      const admins = await tournamentService.getAdmins(tournamentId);
+      // Sort by role: Owner first, then Admin, then Scorekeeper
+      const roleOrder = { Owner: 0, Admin: 1, Scorekeeper: 2 };
+      const sortedAdmins = admins.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+      set({ admins: sortedAdmins, isLoadingAdmins: false });
+    } catch (error) {
+      console.error('Failed to fetch admins:', error);
+      set({ admins: [], isLoadingAdmins: false });
+    }
+  },
+
+  // Add a new admin to the tournament
+  addAdmin: async (tournamentId: string, userId: string, role: 'Admin' | 'Scorekeeper') => {
+    try {
+      const newAdmin = await tournamentService.addAdmin(tournamentId, { userId, role });
+      const { admins } = get();
+      // Add to admins array and re-sort
+      const roleOrder = { Owner: 0, Admin: 1, Scorekeeper: 2 };
+      const updatedAdmins = [...admins, newAdmin].sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+      set({ admins: updatedAdmins });
+      return true;
+    } catch (error) {
+      console.error('Failed to add admin:', error);
+      return false;
+    }
+  },
+
+  // Update an admin's role
+  updateAdminRole: async (tournamentId: string, userId: string, role: 'Admin' | 'Scorekeeper') => {
+    try {
+      const updatedAdmin = await tournamentService.updateAdminRole(tournamentId, userId, { role });
+      const { admins } = get();
+      // Update the admin in the array and re-sort
+      const roleOrder = { Owner: 0, Admin: 1, Scorekeeper: 2 };
+      const updatedAdmins = admins.map(admin =>
+        admin.userId === userId ? updatedAdmin : admin
+      ).sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+      set({ admins: updatedAdmins });
+      return true;
+    } catch (error) {
+      console.error('Failed to update admin role:', error);
+      return false;
+    }
+  },
+
+  // Remove an admin from the tournament
+  removeAdmin: async (tournamentId: string, userId: string) => {
+    try {
+      await tournamentService.removeAdmin(tournamentId, userId);
+      const { admins } = get();
+      const updatedAdmins = admins.filter(admin => admin.userId !== userId);
+      set({ admins: updatedAdmins });
+      return true;
+    } catch (error) {
+      console.error('Failed to remove admin:', error);
+      return false;
+    }
+  },
+
+  // Transfer tournament ownership to another user
+  transferOwnership: async (tournamentId: string, newOwnerUserId: string) => {
+    try {
+      await tournamentService.transferOwnership(tournamentId, { newOwnerUserId });
+      // Refresh the admins list to get updated roles
+      await get().fetchAdmins(tournamentId);
+      return true;
+    } catch (error) {
+      console.error('Failed to transfer ownership:', error);
+      return false;
+    }
+  },
+
+  // Clear admins state
+  clearAdmins: () => set({
+    admins: [],
+    isLoadingAdmins: false,
+  }),
+
+  // ============================================
+  // Audit Log Actions
+  // ============================================
+
+  // Fetch audit logs for a tournament
+  fetchAuditLogs: async (tournamentId: string, reset: boolean = false) => {
+    const { auditLogOffset, auditLogFilter, auditLogs } = get();
+    const offset = reset ? 0 : auditLogOffset;
+    const limit = 20;
+
+    set({ isLoadingAuditLogs: true });
+    try {
+      const response = await tournamentService.getAuditLogs(
+        tournamentId,
+        offset,
+        limit,
+        auditLogFilter || undefined
+      );
+
+      // If reset, replace the entire array; otherwise append
+      const updatedLogs = reset ? response.auditLogs : [...auditLogs, ...response.auditLogs];
+
+      set({
+        auditLogs: updatedLogs,
+        auditLogTotalCount: response.totalCount,
+        auditLogHasMore: response.hasMore,
+        auditLogOffset: offset + response.auditLogs.length,
+        isLoadingAuditLogs: false,
+      });
+    } catch (error) {
+      console.error('Failed to fetch audit logs:', error);
+      set({ isLoadingAuditLogs: false });
+    }
+  },
+
+  // Set audit log filter (will trigger refetch in UI)
+  setAuditLogFilter: (filter: AuditLogFilter | null) => {
+    set({
+      auditLogFilter: filter,
+      auditLogs: [],
+      auditLogOffset: 0,
+      auditLogHasMore: false,
+    });
+  },
+
+  // Clear audit logs state
+  clearAuditLogs: () => set({
+    auditLogs: [],
+    auditLogTotalCount: 0,
+    auditLogHasMore: false,
+    isLoadingAuditLogs: false,
+    auditLogFilter: null,
+    auditLogOffset: 0,
+  }),
+
+  // ============================================
+  // Tie Resolution Actions
+  // ============================================
+
+  // Resolve ties in standings
+  resolveTies: async (tournamentId: string, resolutions: { teamId: string; finalPlacement: number }[]) => {
+    try {
+      await tournamentService.resolveTies(tournamentId, { resolutions });
+      // Refresh standings after resolving ties
+      await get().fetchStandings(tournamentId);
+      return true;
+    } catch (error) {
+      console.error('Failed to resolve ties:', error);
+      return false;
     }
   },
 }));

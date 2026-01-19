@@ -27,6 +27,14 @@ import type {
   PendingTeamInvitationDto,
   StandingsDto,
   UpcomingTournamentMatchDto,
+  TournamentAdminDto,
+  AddTournamentAdminRequest,
+  UpdateTournamentAdminRoleRequest,
+  TransferOwnershipRequest,
+  TournamentAuditLogDto,
+  AuditLogListResponse,
+  AuditLogFilter,
+  ResolveTiesRequest,
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -461,5 +469,110 @@ export const tournamentService = {
       '/users/me/upcoming-tournament-matches'
     );
     return response.data;
+  },
+
+  // ============================================
+  // Admin Management
+  // ============================================
+
+  /**
+   * Get all admins for a tournament
+   */
+  async getAdmins(tournamentId: string): Promise<TournamentAdminDto[]> {
+    const response = await apiClient.instance.get<TournamentAdminDto[]>(
+      `/tournaments/${tournamentId}/admins`
+    );
+    return response.data;
+  },
+
+  /**
+   * Add a new admin to a tournament (Owner only)
+   */
+  async addAdmin(
+    tournamentId: string,
+    request: AddTournamentAdminRequest
+  ): Promise<TournamentAdminDto> {
+    const response = await apiClient.instance.post<TournamentAdminDto>(
+      `/tournaments/${tournamentId}/admins`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Update an admin's role (Owner only)
+   */
+  async updateAdminRole(
+    tournamentId: string,
+    userId: string,
+    request: UpdateTournamentAdminRoleRequest
+  ): Promise<TournamentAdminDto> {
+    const response = await apiClient.instance.put<TournamentAdminDto>(
+      `/tournaments/${tournamentId}/admins/${userId}`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Remove an admin from a tournament (Owner only)
+   */
+  async removeAdmin(tournamentId: string, userId: string): Promise<void> {
+    await apiClient.instance.delete(`/tournaments/${tournamentId}/admins/${userId}`);
+  },
+
+  /**
+   * Transfer tournament ownership to another admin (Owner only)
+   */
+  async transferOwnership(
+    tournamentId: string,
+    request: TransferOwnershipRequest
+  ): Promise<void> {
+    await apiClient.instance.post(
+      `/tournaments/${tournamentId}/transfer-ownership`,
+      request
+    );
+  },
+
+  // ============================================
+  // Audit Log
+  // ============================================
+
+  /**
+   * Get audit log entries for a tournament (Scorekeeper+ access)
+   */
+  async getAuditLogs(
+    tournamentId: string,
+    offset: number = 0,
+    limit: number = 20,
+    filter?: AuditLogFilter
+  ): Promise<AuditLogListResponse> {
+    const params: Record<string, string | number> = { offset, limit };
+    if (filter?.action) params.action = filter.action;
+    if (filter?.fromDate) params.fromDate = filter.fromDate;
+    if (filter?.toDate) params.toDate = filter.toDate;
+
+    const response = await apiClient.instance.get<AuditLogListResponse>(
+      `/tournaments/${tournamentId}/audit-log`,
+      { params }
+    );
+    return response.data;
+  },
+
+  // ============================================
+  // Standings / Tie Resolution
+  // ============================================
+
+  /**
+   * Manually resolve ties in standings (Admin+ only)
+   */
+  async resolveTies(
+    tournamentId: string,
+    request: ResolveTiesRequest
+  ): Promise<void> {
+    await apiClient.instance.put(
+      `/tournaments/${tournamentId}/standings/resolve`,
+      request
+    );
   },
 };

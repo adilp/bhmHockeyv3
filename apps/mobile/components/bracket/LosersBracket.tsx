@@ -134,7 +134,7 @@ export function LosersBracket({
 
           // Check if this match involves the selected team
           const isHighlighted =
-            selectedTeamId &&
+            !!selectedTeamId &&
             (match.homeTeamId === selectedTeamId ||
               match.awayTeamId === selectedTeamId);
 
