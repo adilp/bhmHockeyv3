@@ -26,6 +26,7 @@ import type {
   UserSearchResultDto,
   PendingTeamInvitationDto,
   StandingsDto,
+  UpcomingTournamentMatchDto,
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -444,6 +445,20 @@ export const tournamentService = {
     const response = await apiClient.instance.post<BulkCreateTeamsResponse>(
       `/tournaments/${tournamentId}/create-teams`,
       request
+    );
+    return response.data;
+  },
+
+  // ============================================
+  // User Matches
+  // ============================================
+
+  /**
+   * Get current user's upcoming tournament matches across all tournaments
+   */
+  async getMyUpcomingMatches(): Promise<UpcomingTournamentMatchDto[]> {
+    const response = await apiClient.instance.get<UpcomingTournamentMatchDto[]>(
+      '/users/me/upcoming-tournament-matches'
     );
     return response.data;
   },

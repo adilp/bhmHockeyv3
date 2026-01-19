@@ -3,13 +3,22 @@ import { useState, useCallback, useMemo } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useEventStore } from '../../stores/eventStore';
 import { useAuthStore } from '../../stores/authStore';
-import { EventCard, SectionHeader, EmptyState } from '../../components';
+import { useTournamentStore } from '../../stores/tournamentStore';
+import { EventCard, SectionHeader, EmptyState, TournamentGameCard } from '../../components';
 import { colors, spacing } from '../../theme';
+import type { UpcomingTournamentMatchDto } from '@bhmhockey/shared';
 
 export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore(state => state.user);
   const { events, myRegistrations, isLoading, fetchEvents, fetchMyRegistrations } = useEventStore();
+  const { myUpcomingMatches, fetchMyUpcomingMatches, isFetchingUpcoming } = useTournamentStore(
+    state => ({
+      myUpcomingMatches: state.myUpcomingMatches,
+      fetchMyUpcomingMatches: state.fetchMyUpcomingMatches,
+      isFetchingUpcoming: state.isFetchingUpcoming,
+    })
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   // Refresh data when screen comes into focus
@@ -18,6 +27,7 @@ export default function HomeScreen() {
       if (user) {
         fetchEvents();
         fetchMyRegistrations();
+        fetchMyUpcomingMatches();
       }
     }, [user])
   );
@@ -25,9 +35,9 @@ export default function HomeScreen() {
   // Pull to refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchEvents(), fetchMyRegistrations()]);
+    await Promise.all([fetchEvents(), fetchMyRegistrations(), fetchMyUpcomingMatches()]);
     setRefreshing(false);
-  }, [fetchEvents, fetchMyRegistrations]);
+  }, [fetchEvents, fetchMyRegistrations, fetchMyUpcomingMatches]);
 
   // Helper to sort events by date (earliest first)
   const sortByDate = (a: typeof events[0], b: typeof events[0]) =>
@@ -74,6 +84,41 @@ export default function HomeScreen() {
   const handleEventPress = (eventId: string) => {
     router.push(`/events/${eventId}`);
   };
+
+  const handleTournamentGamePress = (match: UpcomingTournamentMatchDto) => {
+    router.push(`/tournaments/${match.tournamentId}/match/${match.id}`);
+  };
+
+  // Create a unified list of upcoming items (events + tournament matches)
+  type UpcomingItem =
+    | { type: 'event'; data: typeof events[0] }
+    | { type: 'tournament'; data: UpcomingTournamentMatchDto };
+
+  const allUpcomingItems = useMemo(() => {
+    const eventItems: UpcomingItem[] = myUpcomingGames.map(e => ({
+      type: 'event' as const,
+      data: e
+    }));
+
+    const tournamentItems: UpcomingItem[] = myUpcomingMatches.map(m => ({
+      type: 'tournament' as const,
+      data: m
+    }));
+
+    return [...eventItems, ...tournamentItems].sort((a, b) => {
+      const dateA = a.type === 'event'
+        ? new Date(a.data.eventDate).getTime()
+        : a.data.scheduledTime
+          ? new Date(a.data.scheduledTime).getTime()
+          : Number.MAX_SAFE_INTEGER;
+      const dateB = b.type === 'event'
+        ? new Date(b.data.eventDate).getTime()
+        : b.data.scheduledTime
+          ? new Date(b.data.scheduledTime).getTime()
+          : Number.MAX_SAFE_INTEGER;
+      return dateA - dateB;
+    });
+  }, [myUpcomingGames, myUpcomingMatches]);
 
   // Show loading on initial load
   if (isLoading && events.length === 0) {
@@ -138,19 +183,27 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Section 2: My Upcoming Games (registered + waitlisted) */}
+      {/* Section 2: My Upcoming Games (registered + waitlisted + tournament) */}
       <View style={styles.section}>
-        <SectionHeader title="My Upcoming Games" count={myUpcomingGames.length} />
-        {myUpcomingGames.length === 0 ? (
+        <SectionHeader title="My Upcoming Games" count={allUpcomingItems.length} />
+        {allUpcomingItems.length === 0 ? (
           <EmptyState message="You haven't registered for any games yet" />
         ) : (
-          myUpcomingGames.map(event => (
-            <EventCard
-              key={event.id}
-              event={event}
-              variant={getEventVariant(event)}
-              onPress={() => handleEventPress(event.id)}
-            />
+          allUpcomingItems.map((item, index) => (
+            item.type === 'event' ? (
+              <EventCard
+                key={`event-${item.data.id}`}
+                event={item.data}
+                variant={getEventVariant(item.data)}
+                onPress={() => handleEventPress(item.data.id)}
+              />
+            ) : (
+              <TournamentGameCard
+                key={`tournament-${item.data.id}`}
+                match={item.data}
+                onPress={() => handleTournamentGamePress(item.data)}
+              />
+            )
           ))
         )}
       </View>

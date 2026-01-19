@@ -657,4 +657,485 @@ public class TournamentServiceTests : IDisposable
     }
 
     #endregion
+
+    #region GetUpcomingMatchesForUserAsync Tests
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_NoTeams_ReturnsEmptyList()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_OnlyPendingMembership_ReturnsEmptyList()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var creator = await CreateTestUser("creator@example.com");
+        var request = CreateValidRequest();
+        var tournament = await _sut.CreateAsync(request, creator.Id);
+
+        var team = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Team A",
+            Status = "Active"
+        };
+        _context.TournamentTeams.Add(team);
+
+        var membership = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = team.Id,
+            UserId = user.Id,
+            Role = "Player",
+            Status = "Pending" // Not accepted yet
+        };
+        _context.TournamentTeamMembers.Add(membership);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_ScheduledHomeMatch_ReturnsMatch()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var creator = await CreateTestUser("creator@example.com");
+        var request = CreateValidRequest();
+        var tournament = await _sut.CreateAsync(request, creator.Id);
+
+        var homeTeam = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Home Team",
+            Status = "Active"
+        };
+        var awayTeam = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Away Team",
+            Status = "Active"
+        };
+        _context.TournamentTeams.AddRange(homeTeam, awayTeam);
+
+        var membership = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = homeTeam.Id,
+            UserId = user.Id,
+            Role = "Player",
+            Status = "Accepted"
+        };
+        _context.TournamentTeamMembers.Add(membership);
+
+        var match = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            HomeTeamId = homeTeam.Id,
+            AwayTeamId = awayTeam.Id,
+            Round = 1,
+            MatchNumber = 1,
+            BracketPosition = "R1-M1",
+            Status = "Scheduled",
+            ScheduledTime = DateTime.UtcNow.AddDays(1),
+            Venue = "Ice Rink A"
+        };
+        _context.TournamentMatches.Add(match);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().HaveCount(1);
+        var dto = result[0];
+        dto.Id.Should().Be(match.Id);
+        dto.TournamentId.Should().Be(tournament.Id);
+        dto.TournamentName.Should().Be(tournament.Name);
+        dto.UserTeamId.Should().Be(homeTeam.Id);
+        dto.UserTeamName.Should().Be("Home Team");
+        dto.OpponentTeamId.Should().Be(awayTeam.Id);
+        dto.OpponentTeamName.Should().Be("Away Team");
+        dto.Round.Should().Be(1);
+        dto.MatchNumber.Should().Be(1);
+        dto.BracketPosition.Should().Be("R1-M1");
+        dto.Status.Should().Be("Scheduled");
+        dto.ScheduledTime.Should().BeCloseTo(DateTime.UtcNow.AddDays(1), TimeSpan.FromSeconds(1));
+        dto.Venue.Should().Be("Ice Rink A");
+        dto.IsHomeTeam.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_ScheduledAwayMatch_ReturnsMatch()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var creator = await CreateTestUser("creator@example.com");
+        var request = CreateValidRequest();
+        var tournament = await _sut.CreateAsync(request, creator.Id);
+
+        var homeTeam = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Home Team",
+            Status = "Active"
+        };
+        var awayTeam = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Away Team",
+            Status = "Active"
+        };
+        _context.TournamentTeams.AddRange(homeTeam, awayTeam);
+
+        var membership = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = awayTeam.Id,
+            UserId = user.Id,
+            Role = "Player",
+            Status = "Accepted"
+        };
+        _context.TournamentTeamMembers.Add(membership);
+
+        var match = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            HomeTeamId = homeTeam.Id,
+            AwayTeamId = awayTeam.Id,
+            Round = 1,
+            MatchNumber = 2,
+            Status = "Scheduled"
+        };
+        _context.TournamentMatches.Add(match);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().HaveCount(1);
+        var dto = result[0];
+        dto.UserTeamId.Should().Be(awayTeam.Id);
+        dto.UserTeamName.Should().Be("Away Team");
+        dto.OpponentTeamId.Should().Be(homeTeam.Id);
+        dto.OpponentTeamName.Should().Be("Home Team");
+        dto.IsHomeTeam.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_InProgressMatch_ReturnsMatch()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var creator = await CreateTestUser("creator@example.com");
+        var request = CreateValidRequest();
+        var tournament = await _sut.CreateAsync(request, creator.Id);
+
+        var homeTeam = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Home Team",
+            Status = "Active"
+        };
+        _context.TournamentTeams.Add(homeTeam);
+
+        var membership = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = homeTeam.Id,
+            UserId = user.Id,
+            Role = "Player",
+            Status = "Accepted"
+        };
+        _context.TournamentTeamMembers.Add(membership);
+
+        var match = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            HomeTeamId = homeTeam.Id,
+            AwayTeamId = null, // TBD opponent
+            Round = 1,
+            MatchNumber = 1,
+            Status = "InProgress"
+        };
+        _context.TournamentMatches.Add(match);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].Status.Should().Be("InProgress");
+    }
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_CompletedMatch_NotReturned()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var creator = await CreateTestUser("creator@example.com");
+        var request = CreateValidRequest();
+        var tournament = await _sut.CreateAsync(request, creator.Id);
+
+        var homeTeam = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Home Team",
+            Status = "Active"
+        };
+        _context.TournamentTeams.Add(homeTeam);
+
+        var membership = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = homeTeam.Id,
+            UserId = user.Id,
+            Role = "Player",
+            Status = "Accepted"
+        };
+        _context.TournamentTeamMembers.Add(membership);
+
+        var match = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            HomeTeamId = homeTeam.Id,
+            Round = 1,
+            MatchNumber = 1,
+            Status = "Completed"
+        };
+        _context.TournamentMatches.Add(match);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_MultipleTeamsMultipleTournaments_ReturnsAllMatches()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var creator = await CreateTestUser("creator@example.com");
+
+        var request1 = CreateValidRequest();
+        request1.Name = "Tournament 1";
+        var tournament1 = await _sut.CreateAsync(request1, creator.Id);
+
+        var request2 = CreateValidRequest();
+        request2.Name = "Tournament 2";
+        var tournament2 = await _sut.CreateAsync(request2, creator.Id);
+
+        var team1 = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament1.Id,
+            Name = "Team A",
+            Status = "Active"
+        };
+        var team2 = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament2.Id,
+            Name = "Team B",
+            Status = "Active"
+        };
+        _context.TournamentTeams.AddRange(team1, team2);
+
+        var membership1 = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = team1.Id,
+            UserId = user.Id,
+            Status = "Accepted"
+        };
+        var membership2 = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = team2.Id,
+            UserId = user.Id,
+            Status = "Accepted"
+        };
+        _context.TournamentTeamMembers.AddRange(membership1, membership2);
+
+        var match1 = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament1.Id,
+            HomeTeamId = team1.Id,
+            Round = 1,
+            MatchNumber = 1,
+            Status = "Scheduled",
+            ScheduledTime = DateTime.UtcNow.AddDays(2)
+        };
+        var match2 = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament2.Id,
+            AwayTeamId = team2.Id,
+            Round = 1,
+            MatchNumber = 1,
+            Status = "Scheduled",
+            ScheduledTime = DateTime.UtcNow.AddDays(1)
+        };
+        _context.TournamentMatches.AddRange(match1, match2);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().HaveCount(2);
+        result[0].TournamentId.Should().Be(tournament2.Id); // Earlier match first
+        result[1].TournamentId.Should().Be(tournament1.Id);
+    }
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_TBDOpponent_ReturnsNullOpponent()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var creator = await CreateTestUser("creator@example.com");
+        var request = CreateValidRequest();
+        var tournament = await _sut.CreateAsync(request, creator.Id);
+
+        var homeTeam = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Home Team",
+            Status = "Active"
+        };
+        _context.TournamentTeams.Add(homeTeam);
+
+        var membership = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = homeTeam.Id,
+            UserId = user.Id,
+            Status = "Accepted"
+        };
+        _context.TournamentTeamMembers.Add(membership);
+
+        var match = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            HomeTeamId = homeTeam.Id,
+            AwayTeamId = null, // TBD
+            Round = 2,
+            MatchNumber = 1,
+            Status = "Scheduled"
+        };
+        _context.TournamentMatches.Add(match);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].OpponentTeamId.Should().BeNull();
+        result[0].OpponentTeamName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetUpcomingMatchesForUserAsync_SortsByScheduledTime_NullsLast()
+    {
+        // Arrange
+        var user = await CreateTestUser();
+        var creator = await CreateTestUser("creator@example.com");
+        var request = CreateValidRequest();
+        var tournament = await _sut.CreateAsync(request, creator.Id);
+
+        var team = new TournamentTeam
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Name = "Team A",
+            Status = "Active"
+        };
+        _context.TournamentTeams.Add(team);
+
+        var membership = new TournamentTeamMember
+        {
+            Id = Guid.NewGuid(),
+            TeamId = team.Id,
+            UserId = user.Id,
+            Status = "Accepted"
+        };
+        _context.TournamentTeamMembers.Add(membership);
+
+        var match1 = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            HomeTeamId = team.Id,
+            Round = 1,
+            MatchNumber = 1,
+            Status = "Scheduled",
+            ScheduledTime = null // No time set
+        };
+        var match2 = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            HomeTeamId = team.Id,
+            Round = 1,
+            MatchNumber = 2,
+            Status = "Scheduled",
+            ScheduledTime = DateTime.UtcNow.AddDays(2)
+        };
+        var match3 = new TournamentMatch
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            HomeTeamId = team.Id,
+            Round = 1,
+            MatchNumber = 3,
+            Status = "Scheduled",
+            ScheduledTime = DateTime.UtcNow.AddDays(1)
+        };
+        _context.TournamentMatches.AddRange(match1, match2, match3);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetUpcomingMatchesForUserAsync(user.Id);
+
+        // Assert
+        result.Should().HaveCount(3);
+        result[0].MatchNumber.Should().Be(3); // Earliest scheduled time
+        result[1].MatchNumber.Should().Be(2); // Later scheduled time
+        result[2].MatchNumber.Should().Be(1); // Null scheduled time (last)
+    }
+
+    #endregion
 }

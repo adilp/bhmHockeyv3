@@ -56,6 +56,7 @@ export type { TabKey } from './event-detail';
 // Tournament components
 export { TournamentStatusBadge } from './TournamentStatusBadge';
 export { TournamentCard } from './TournamentCard';
+export { TournamentGameCard } from './TournamentGameCard';
 export { BracketMatchBox } from './BracketMatchBox';
 export { RegistrationStatusSheet } from './RegistrationStatusSheet';
 export { CaptainBadge } from './tournaments/CaptainBadge';

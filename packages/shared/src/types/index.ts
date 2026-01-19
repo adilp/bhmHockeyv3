@@ -738,6 +738,38 @@ export interface ForfeitMatchRequest {
 }
 
 // ============================================
+// Upcoming Tournament Match (TRN-032)
+// ============================================
+
+// Upcoming tournament match for home screen display
+export interface UpcomingTournamentMatchDto {
+  id: string;
+  tournamentId: string;
+  tournamentName: string;
+
+  // User's team info
+  userTeamId: string;
+  userTeamName: string;
+
+  // Opponent team info (may be undefined if TBD)
+  opponentTeamId?: string;
+  opponentTeamName?: string;
+
+  // Match details
+  round: number;
+  matchNumber: number;
+  bracketPosition?: string;
+  status: 'Scheduled' | 'InProgress';
+
+  // Schedule
+  scheduledTime?: string;
+  venue?: string;
+
+  // Is the user's team home or away?
+  isHomeTeam: boolean;
+}
+
+// ============================================
 // Tournament Standings Types (TRN-021/TRN-022)
 // ============================================
 

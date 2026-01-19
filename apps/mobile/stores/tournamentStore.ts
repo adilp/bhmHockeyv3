@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { tournamentService } from '@bhmhockey/api-client';
+import { tournamentService, userService } from '@bhmhockey/api-client';
 import type {
   TournamentDto,
   CreateTournamentRequest,
@@ -14,6 +14,7 @@ import type {
   StandingsDto,
   TeamStandingDto,
   TiedGroupDto,
+  UpcomingTournamentMatchDto,
 } from '@bhmhockey/shared';
 
 interface TournamentState {
@@ -37,6 +38,10 @@ interface TournamentState {
   standings: TeamStandingDto[];
   playoffCutoff: number | null;
   tiedGroups: TiedGroupDto[] | null;
+
+  // Upcoming matches state
+  myUpcomingMatches: UpcomingTournamentMatchDto[];
+  isFetchingUpcoming: boolean;
 
   // Actions
   fetchTournaments: () => Promise<void>;
@@ -65,6 +70,9 @@ interface TournamentState {
   // Standings actions
   fetchStandings: (tournamentId: string) => Promise<void>;
   clearStandings: () => void;
+
+  // Upcoming matches actions
+  fetchMyUpcomingMatches: () => Promise<void>;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -88,6 +96,10 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   standings: [],
   playoffCutoff: null,
   tiedGroups: null,
+
+  // Upcoming matches state
+  myUpcomingMatches: [],
+  isFetchingUpcoming: false,
 
   // Fetch all tournaments
   fetchTournaments: async () => {
@@ -498,4 +510,23 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     playoffCutoff: null,
     tiedGroups: null,
   }),
+
+  // Fetch user's upcoming tournament matches
+  fetchMyUpcomingMatches: async () => {
+    set({ isFetchingUpcoming: true });
+    try {
+      const matches = await userService.getMyUpcomingTournamentMatches();
+      // Sort by scheduledTime (nulls last)
+      const sorted = matches.sort((a, b) => {
+        if (!a.scheduledTime && !b.scheduledTime) return 0;
+        if (!a.scheduledTime) return 1;
+        if (!b.scheduledTime) return -1;
+        return new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime();
+      });
+      set({ myUpcomingMatches: sorted, isFetchingUpcoming: false });
+    } catch (error) {
+      console.error('Failed to fetch upcoming matches:', error);
+      set({ myUpcomingMatches: [], isFetchingUpcoming: false });
+    }
+  },
 }));

@@ -53,4 +53,12 @@ public interface ITournamentService
     /// <param name="currentUserId">The current authenticated user (null for public view)</param>
     /// <param name="filter">Optional filter for "won" or by year</param>
     Task<MyTournamentsResponseDto> GetUserTournamentsAsync(Guid userId, Guid? currentUserId, UserTournamentsFilterDto? filter);
+
+    /// <summary>
+    /// Gets all upcoming tournament matches for a user.
+    /// Includes matches where the user's team is scheduled or in progress.
+    /// Returns matches sorted by scheduled time (nulls last).
+    /// </summary>
+    /// <param name="userId">The user whose upcoming matches to retrieve</param>
+    Task<List<UpcomingTournamentMatchDto>> GetUpcomingMatchesForUserAsync(Guid userId);
 }

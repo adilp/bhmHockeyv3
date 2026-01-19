@@ -480,6 +480,77 @@ public class TournamentService : ITournamentService
         };
     }
 
+    public async Task<List<UpcomingTournamentMatchDto>> GetUpcomingMatchesForUserAsync(Guid userId)
+    {
+        // Find all teams the user is a member of (with Accepted status)
+        var userTeamIds = await _context.TournamentTeamMembers
+            .Where(ttm => ttm.UserId == userId && ttm.Status == "Accepted")
+            .Select(ttm => ttm.TeamId)
+            .ToListAsync();
+
+        if (!userTeamIds.Any())
+        {
+            return new List<UpcomingTournamentMatchDto>();
+        }
+
+        // Find all upcoming matches for these teams
+        var matches = await _context.TournamentMatches
+            .Include(m => m.Tournament)
+            .Include(m => m.HomeTeam)
+            .Include(m => m.AwayTeam)
+            .Where(m =>
+                (m.HomeTeamId.HasValue && userTeamIds.Contains(m.HomeTeamId.Value) ||
+                 m.AwayTeamId.HasValue && userTeamIds.Contains(m.AwayTeamId.Value)) &&
+                (m.Status == "Scheduled" || m.Status == "InProgress"))
+            .OrderBy(m => m.ScheduledTime.HasValue ? m.ScheduledTime.Value : DateTime.MaxValue)
+            .ToListAsync();
+
+        var result = new List<UpcomingTournamentMatchDto>();
+
+        foreach (var match in matches)
+        {
+            // Determine if user's team is home or away
+            var isHomeTeam = match.HomeTeamId.HasValue && userTeamIds.Contains(match.HomeTeamId.Value);
+            var userTeamId = isHomeTeam ? match.HomeTeamId!.Value : match.AwayTeamId!.Value;
+            var userTeamName = isHomeTeam ? match.HomeTeam!.Name : match.AwayTeam!.Name;
+
+            // Get opponent team info (may be null if TBD)
+            Guid? opponentTeamId = null;
+            string? opponentTeamName = null;
+
+            if (isHomeTeam && match.AwayTeamId.HasValue)
+            {
+                opponentTeamId = match.AwayTeamId.Value;
+                opponentTeamName = match.AwayTeam?.Name;
+            }
+            else if (!isHomeTeam && match.HomeTeamId.HasValue)
+            {
+                opponentTeamId = match.HomeTeamId.Value;
+                opponentTeamName = match.HomeTeam?.Name;
+            }
+
+            result.Add(new UpcomingTournamentMatchDto
+            {
+                Id = match.Id,
+                TournamentId = match.TournamentId,
+                TournamentName = match.Tournament.Name,
+                UserTeamId = userTeamId,
+                UserTeamName = userTeamName,
+                OpponentTeamId = opponentTeamId,
+                OpponentTeamName = opponentTeamName,
+                Round = match.Round,
+                MatchNumber = match.MatchNumber,
+                BracketPosition = match.BracketPosition,
+                Status = match.Status,
+                ScheduledTime = match.ScheduledTime,
+                Venue = match.Venue,
+                IsHomeTeam = isHomeTeam
+            });
+        }
+
+        return result;
+    }
+
     private string DetermineUserRole(string? adminRole, string? teamMemberRole)
     {
         // Admin roles take priority: Owner > Admin > Scorekeeper > Captain > Player

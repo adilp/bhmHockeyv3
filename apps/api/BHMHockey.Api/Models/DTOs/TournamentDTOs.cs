@@ -261,3 +261,34 @@ public record UserTournamentsFilterDto
     public string? Filter { get; set; }
     public int? Year { get; set; }
 }
+
+/// <summary>
+/// DTO for a single upcoming tournament match for a user
+/// </summary>
+public record UpcomingTournamentMatchDto
+{
+    public required Guid Id { get; init; }
+    public required Guid TournamentId { get; init; }
+    public required string TournamentName { get; init; }
+
+    // User's team info
+    public required Guid UserTeamId { get; init; }
+    public required string UserTeamName { get; init; }
+
+    // Opponent team info (may be null if TBD)
+    public Guid? OpponentTeamId { get; init; }
+    public string? OpponentTeamName { get; init; }
+
+    // Match details
+    public required int Round { get; init; }
+    public required int MatchNumber { get; init; }
+    public string? BracketPosition { get; init; }
+    public required string Status { get; init; }  // Scheduled, InProgress
+
+    // Schedule
+    public DateTime? ScheduledTime { get; init; }
+    public string? Venue { get; init; }
+
+    // Is the user's team home or away?
+    public required bool IsHomeTeam { get; init; }
+}

@@ -330,4 +330,23 @@ public class UsersController : ControllerBase
         var result = await _tournamentService.GetUserTournamentsAsync(id, currentUserId, filterDto);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Gets all upcoming tournament matches for the current user
+    /// </summary>
+    /// <returns>List of upcoming matches across all tournaments where user's team is scheduled or playing</returns>
+    [HttpGet("me/upcoming-tournament-matches")]
+    public async Task<ActionResult<List<UpcomingTournamentMatchDto>>> GetMyUpcomingTournamentMatches()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var matches = await _tournamentService.GetUpcomingMatchesForUserAsync(userId);
+            return Ok(matches);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+    }
 }

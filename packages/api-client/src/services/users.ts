@@ -1,4 +1,4 @@
-import type { User, UpdateUserProfileRequest, UserBadgeDto, UpdateBadgeOrderRequest, UncelebratedBadgeDto, MyTournamentsResponseDto, UserTournamentsFilter } from '@bhmhockey/shared';
+import type { User, UpdateUserProfileRequest, UserBadgeDto, UpdateBadgeOrderRequest, UncelebratedBadgeDto, MyTournamentsResponseDto, UserTournamentsFilter, UpcomingTournamentMatchDto } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
 /**
@@ -100,6 +100,16 @@ export const userService = {
     const url = queryString ? `/users/${userId}/tournaments?${queryString}` : `/users/${userId}/tournaments`;
 
     const response = await apiClient.instance.get<MyTournamentsResponseDto>(url);
+    return response.data;
+  },
+
+  /**
+   * Get current user's upcoming tournament matches
+   */
+  async getMyUpcomingTournamentMatches(): Promise<UpcomingTournamentMatchDto[]> {
+    const response = await apiClient.instance.get<UpcomingTournamentMatchDto[]>(
+      '/users/me/upcoming-tournament-matches'
+    );
     return response.data;
   },
 };
