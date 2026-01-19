@@ -9,6 +9,7 @@ public class BracketGenerationService : IBracketGenerationService
 {
     private readonly AppDbContext _context;
     private readonly ITournamentService _tournamentService;
+    private readonly ITournamentAuthorizationService _authService;
 
     // Allowed statuses for bracket generation
     private static readonly HashSet<string> BracketGenerationStatuses = new()
@@ -16,10 +17,11 @@ public class BracketGenerationService : IBracketGenerationService
         "Draft", "Open", "RegistrationClosed"
     };
 
-    public BracketGenerationService(AppDbContext context, ITournamentService tournamentService)
+    public BracketGenerationService(AppDbContext context, ITournamentService tournamentService, ITournamentAuthorizationService authService)
     {
         _context = context;
         _tournamentService = tournamentService;
+        _authService = authService;
     }
 
     public async Task<List<TournamentMatchDto>> GenerateSingleEliminationBracketAsync(Guid tournamentId, Guid userId)
@@ -226,8 +228,8 @@ public class BracketGenerationService : IBracketGenerationService
 
     public async Task ClearBracketAsync(Guid tournamentId, Guid userId)
     {
-        // 1. Check authorization
-        var canManage = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        // 1. Check authorization (Admin+ can clear brackets)
+        var canManage = await _authService.IsAdminAsync(tournamentId, userId);
         if (!canManage)
         {
             throw new UnauthorizedAccessException("You are not authorized to manage this tournament");
@@ -266,8 +268,8 @@ public class BracketGenerationService : IBracketGenerationService
             throw new InvalidOperationException("Tournament not found");
         }
 
-        // 2. Check authorization
-        var canManage = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        // 2. Check authorization (Admin+ can generate schedules)
+        var canManage = await _authService.IsAdminAsync(tournamentId, userId);
         if (!canManage)
         {
             throw new UnauthorizedAccessException("You are not authorized to manage this tournament");
@@ -390,8 +392,8 @@ public class BracketGenerationService : IBracketGenerationService
             throw new InvalidOperationException("Tournament not found");
         }
 
-        // 2. Check authorization
-        var canManage = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        // 2. Check authorization (Admin+ can generate brackets)
+        var canManage = await _authService.IsAdminAsync(tournamentId, userId);
         if (!canManage)
         {
             throw new UnauthorizedAccessException("You are not authorized to manage this tournament");

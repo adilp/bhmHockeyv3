@@ -482,7 +482,8 @@ public class TournamentCaptainManagementTests : IDisposable
         var updateRequest = new UpdateTournamentTeamRequest { Name = "New Team Name" };
 
         // Note: This will require a new method or extending existing UpdateAsync to accept captain permission
-        var teamService = new TournamentTeamService(_context, _mockTournamentService.Object);
+        var authService = new TournamentAuthorizationService(_context);
+        var teamService = new TournamentTeamService(_context, _mockTournamentService.Object, authService);
 
         // Act
         var result = await teamService.UpdateAsync(tournament.Id, team.Id, updateRequest, captain.Id);
@@ -501,7 +502,8 @@ public class TournamentCaptainManagementTests : IDisposable
         _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, captain.Id))
             .ReturnsAsync(true);
 
-        var teamService = new TournamentTeamService(_context, _mockTournamentService.Object);
+        var authService = new TournamentAuthorizationService(_context);
+        var teamService = new TournamentTeamService(_context, _mockTournamentService.Object, authService);
 
         // Act
         var result = await teamService.DeleteAsync(tournament.Id, team.Id, captain.Id);

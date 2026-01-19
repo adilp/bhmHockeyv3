@@ -9,6 +9,7 @@ public class TournamentService : ITournamentService
 {
     private readonly AppDbContext _context;
     private readonly IOrganizationAdminService _orgAdminService;
+    private readonly ITournamentAuthorizationService _authService;
 
     // Valid enum values
     private static readonly HashSet<string> ValidFormats = new()
@@ -38,10 +39,11 @@ public class TournamentService : ITournamentService
         "Draft", "Open"
     };
 
-    public TournamentService(AppDbContext context, IOrganizationAdminService orgAdminService)
+    public TournamentService(AppDbContext context, IOrganizationAdminService orgAdminService, ITournamentAuthorizationService authService)
     {
         _context = context;
         _orgAdminService = orgAdminService;
+        _authService = authService;
     }
 
     public async Task<TournamentDto> CreateAsync(CreateTournamentRequest request, Guid creatorId)
@@ -174,8 +176,8 @@ public class TournamentService : ITournamentService
             return null;
         }
 
-        // Check authorization
-        var canManage = await CanUserManageTournamentAsync(id, userId);
+        // Check authorization (Admin or Owner can update)
+        var canManage = await _authService.IsAdminAsync(id, userId);
         if (!canManage)
         {
             throw new UnauthorizedAccessException("You are not authorized to update this tournament");
@@ -246,9 +248,9 @@ public class TournamentService : ITournamentService
             return false;
         }
 
-        // Check authorization
-        var canManage = await CanUserManageTournamentAsync(id, userId);
-        if (!canManage)
+        // Check authorization (Owner only can delete)
+        var canDelete = await _authService.CanDeleteTournamentAsync(id, userId);
+        if (!canDelete)
         {
             throw new UnauthorizedAccessException("You are not authorized to delete this tournament");
         }
@@ -276,8 +278,8 @@ public class TournamentService : ITournamentService
 
     public async Task<bool> CanUserManageTournamentAsync(Guid tournamentId, Guid userId)
     {
-        return await _context.TournamentAdmins
-            .AnyAsync(ta => ta.TournamentId == tournamentId && ta.UserId == userId && ta.RemovedAt == null);
+        // Delegate to authorization service - any role (Scorekeeper+) can manage
+        return await _authService.IsScorekeeperAsync(tournamentId, userId);
     }
 
     private async Task<TournamentDto> MapToDto(Tournament tournament, Guid? currentUserId)

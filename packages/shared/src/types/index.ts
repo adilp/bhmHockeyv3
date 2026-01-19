@@ -459,9 +459,6 @@ export type TournamentStatus =
 // Fee type options
 export type TournamentFeeType = 'PerPlayer' | 'PerTeam';
 
-// Tournament admin roles
-export type TournamentAdminRole = 'Owner' | 'Admin' | 'Scorekeeper';
-
 // Tournament DTO - full tournament details
 export interface TournamentDto {
   id: string;
@@ -619,18 +616,8 @@ export interface UpdateTournamentRequest {
   tiebreakerOrder?: string;
 }
 
-// Tournament admin DTO
-export interface TournamentAdminDto {
-  id: string;
-  userId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: TournamentAdminRole;
-  addedAt: string;
-  addedByUserId?: string;
-  addedByName?: string;
-}
+// Import tournament admin types from dedicated file
+export * from './tournamentAdmin';
 
 // ============================================
 // Tournament Team Types (TRN-003)

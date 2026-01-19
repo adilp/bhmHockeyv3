@@ -10,6 +10,7 @@ public class TournamentTeamService : ITournamentTeamService
 {
     private readonly AppDbContext _context;
     private readonly ITournamentService _tournamentService;
+    private readonly ITournamentAuthorizationService _authService;
 
     // Valid statuses for team creation and deletion (before tournament starts)
     private static readonly HashSet<string> TeamManagementStatuses = new()
@@ -17,10 +18,11 @@ public class TournamentTeamService : ITournamentTeamService
         "Draft", "Open", "RegistrationClosed"
     };
 
-    public TournamentTeamService(AppDbContext context, ITournamentService tournamentService)
+    public TournamentTeamService(AppDbContext context, ITournamentService tournamentService, ITournamentAuthorizationService authService)
     {
         _context = context;
         _tournamentService = tournamentService;
+        _authService = authService;
     }
 
     public async Task<TournamentTeamDto> CreateAsync(Guid tournamentId, CreateTournamentTeamRequest request, Guid userId)
@@ -32,8 +34,8 @@ public class TournamentTeamService : ITournamentTeamService
             throw new InvalidOperationException("Tournament not found");
         }
 
-        // Check user can manage tournament
-        var canManage = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        // Check user can manage teams (Admin+ can manage teams)
+        var canManage = await _authService.CanManageTeamsAsync(tournamentId, userId);
         if (!canManage)
         {
             throw new UnauthorizedAccessException("You are not authorized to manage teams for this tournament");
@@ -188,8 +190,8 @@ public class TournamentTeamService : ITournamentTeamService
 
     public async Task<bool> CanUserManageTeamAsync(Guid tournamentId, Guid teamId, Guid userId)
     {
-        // 1. Check if user is tournament admin first
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        // 1. Check if user is tournament admin first (Admin+ can manage teams)
+        var isAdmin = await _authService.CanManageTeamsAsync(tournamentId, userId);
         if (isAdmin) return true;
 
         // 2. Check if user is captain of this specific team

@@ -183,22 +183,6 @@ public record PostponeTournamentRequest
 }
 
 /// <summary>
-/// DTO for tournament admin information
-/// </summary>
-public record TournamentAdminDto
-{
-    public required Guid Id { get; init; }
-    public required Guid UserId { get; init; }
-    public required string FirstName { get; init; }
-    public required string LastName { get; init; }
-    public required string Email { get; init; }
-    public required string Role { get; init; }
-    public required DateTime AddedAt { get; init; }
-    public Guid? AddedByUserId { get; init; }
-    public string? AddedByName { get; init; }
-}
-
-/// <summary>
 /// DTO for a single team's standing in the tournament
 /// </summary>
 public record TeamStandingDto

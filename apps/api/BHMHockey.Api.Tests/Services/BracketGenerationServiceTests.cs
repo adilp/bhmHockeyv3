@@ -17,6 +17,7 @@ public class BracketGenerationServiceTests : IDisposable
     private readonly AppDbContext _context;
     private readonly BracketGenerationService _sut;
     private readonly ITournamentService _tournamentService;
+    private readonly TournamentAuthorizationService _authService;
 
     public BracketGenerationServiceTests()
     {
@@ -24,9 +25,10 @@ public class BracketGenerationServiceTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _context = new AppDbContext(options);
+        _authService = new TournamentAuthorizationService(_context);
         var orgAdminService = new OrganizationAdminService(_context);
-        _tournamentService = new TournamentService(_context, orgAdminService);
-        _sut = new BracketGenerationService(_context, _tournamentService);
+        _tournamentService = new TournamentService(_context, orgAdminService, _authService);
+        _sut = new BracketGenerationService(_context, _tournamentService, _authService);
     }
 
     public void Dispose()

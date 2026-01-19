@@ -12,10 +12,12 @@ namespace BHMHockey.Api.Services;
 public class TournamentMatchService : ITournamentMatchService
 {
     private readonly AppDbContext _context;
+    private readonly ITournamentAuthorizationService _authService;
 
-    public TournamentMatchService(AppDbContext context)
+    public TournamentMatchService(AppDbContext context, ITournamentAuthorizationService authService)
     {
         _context = context;
+        _authService = authService;
     }
 
     public async Task<List<TournamentMatchDto>> GetAllAsync(Guid tournamentId)
@@ -50,9 +52,9 @@ public class TournamentMatchService : ITournamentMatchService
 
     public async Task<TournamentMatchDto> EnterScoreAsync(Guid tournamentId, Guid matchId, EnterScoreRequest request, Guid userId)
     {
-        // 1. Authorization Check
-        var isAdmin = await _context.TournamentAdmins.AnyAsync(a => a.TournamentId == tournamentId && a.UserId == userId);
-        if (!isAdmin)
+        // 1. Authorization Check (Any role can enter scores)
+        var canEnterScores = await _authService.CanEnterScoresAsync(tournamentId, userId);
+        if (!canEnterScores)
         {
             throw new UnauthorizedAccessException("User is not a tournament admin");
         }
@@ -304,9 +306,9 @@ public class TournamentMatchService : ITournamentMatchService
 
     public async Task<TournamentMatchDto> ForfeitMatchAsync(Guid tournamentId, Guid matchId, ForfeitMatchRequest request, Guid userId)
     {
-        // 1. Authorization Check
-        var isAdmin = await _context.TournamentAdmins.AnyAsync(a => a.TournamentId == tournamentId && a.UserId == userId);
-        if (!isAdmin)
+        // 1. Authorization Check (Admin+ can manage matches)
+        var canManage = await _authService.IsAdminAsync(tournamentId, userId);
+        if (!canManage)
         {
             throw new UnauthorizedAccessException("User is not a tournament admin");
         }

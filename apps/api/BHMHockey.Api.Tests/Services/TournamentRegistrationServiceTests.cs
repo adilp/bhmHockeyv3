@@ -27,6 +27,7 @@ public class TournamentRegistrationServiceTests : IDisposable
     private readonly Mock<ITournamentService> _mockTournamentService;
     private readonly Mock<INotificationService> _mockNotificationService;
     private readonly TournamentRegistrationService _sut;
+    private readonly TournamentAuthorizationService _authService;
 
     public TournamentRegistrationServiceTests()
     {
@@ -35,13 +36,15 @@ public class TournamentRegistrationServiceTests : IDisposable
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         _context = new AppDbContext(options);
+        _authService = new TournamentAuthorizationService(_context);
         _mockTournamentService = new Mock<ITournamentService>();
         _mockNotificationService = new Mock<INotificationService>();
 
         _sut = new TournamentRegistrationService(
             _context,
             _mockTournamentService.Object,
-            _mockNotificationService.Object);
+            _mockNotificationService.Object,
+            _authService);
     }
 
     public void Dispose()

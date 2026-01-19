@@ -13,6 +13,7 @@ public class TournamentRegistrationService : ITournamentRegistrationService
     private readonly AppDbContext _context;
     private readonly ITournamentService _tournamentService;
     private readonly INotificationService _notificationService;
+    private readonly ITournamentAuthorizationService _authService;
 
     // Statuses that do not allow registration
     private static readonly HashSet<string> ClosedStatuses = new()
@@ -23,11 +24,13 @@ public class TournamentRegistrationService : ITournamentRegistrationService
     public TournamentRegistrationService(
         AppDbContext context,
         ITournamentService tournamentService,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        ITournamentAuthorizationService authService)
     {
         _context = context;
         _tournamentService = tournamentService;
         _notificationService = notificationService;
+        _authService = authService;
     }
 
     public async Task<TournamentRegistrationResultDto> RegisterAsync(
@@ -180,7 +183,7 @@ public class TournamentRegistrationService : ITournamentRegistrationService
 
         // 2. Check ownership OR admin access
         var isOwner = registration.UserId == userId;
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        var isAdmin = await _authService.CanManageRegistrationsAsync(tournamentId, userId);
 
         // 3. If not owner and not admin, throw UnauthorizedAccessException
         if (!isOwner && !isAdmin)
@@ -248,7 +251,7 @@ public class TournamentRegistrationService : ITournamentRegistrationService
 
         // 2. Check ownership OR admin access
         var isOwner = registration.UserId == userId;
-        var isAdmin = isAdminWithdraw && await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        var isAdmin = isAdminWithdraw && await _authService.CanManageRegistrationsAsync(tournamentId, userId);
 
         if (!isOwner && !isAdmin)
         {
@@ -268,7 +271,7 @@ public class TournamentRegistrationService : ITournamentRegistrationService
     public async Task<List<TournamentRegistrationDto>> GetAllAsync(Guid tournamentId, Guid userId)
     {
         // 1. Check user is tournament admin
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        var isAdmin = await _authService.CanManageRegistrationsAsync(tournamentId, userId);
 
         // 2. If not admin, throw UnauthorizedAccessException
         if (!isAdmin)
@@ -335,8 +338,8 @@ public class TournamentRegistrationService : ITournamentRegistrationService
 
     public async Task<TournamentRegistrationDto?> VerifyPaymentAsync(Guid tournamentId, Guid registrationId, bool verified, Guid adminUserId)
     {
-        // Check if user is admin using tournament service
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, adminUserId);
+        // Check if user is admin
+        var isAdmin = await _authService.CanManageRegistrationsAsync(tournamentId, adminUserId);
         if (!isAdmin)
         {
             throw new UnauthorizedAccessException("You do not have permission to verify payments for this tournament");

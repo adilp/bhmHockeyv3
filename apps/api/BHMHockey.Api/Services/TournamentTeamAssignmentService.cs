@@ -13,6 +13,7 @@ public class TournamentTeamAssignmentService : ITournamentTeamAssignmentService
 {
     private readonly AppDbContext _context;
     private readonly ITournamentService _tournamentService;
+    private readonly ITournamentAuthorizationService _authService;
 
     // Valid statuses for team assignment operations (before tournament starts)
     private static readonly HashSet<string> ValidAssignmentStatuses = new()
@@ -22,10 +23,12 @@ public class TournamentTeamAssignmentService : ITournamentTeamAssignmentService
 
     public TournamentTeamAssignmentService(
         AppDbContext context,
-        ITournamentService tournamentService)
+        ITournamentService tournamentService,
+        ITournamentAuthorizationService authService)
     {
         _context = context;
         _tournamentService = tournamentService;
+        _authService = authService;
     }
 
     public async Task<TournamentRegistrationDto?> AssignPlayerToTeamAsync(
@@ -35,7 +38,7 @@ public class TournamentTeamAssignmentService : ITournamentTeamAssignmentService
         Guid adminUserId)
     {
         // 1. Verify user is admin
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, adminUserId);
+        var isAdmin = await _authService.CanManageTeamsAsync(tournamentId, adminUserId);
         if (!isAdmin)
         {
             throw new UnauthorizedAccessException("You do not have permission to assign players for this tournament");
@@ -114,7 +117,7 @@ public class TournamentTeamAssignmentService : ITournamentTeamAssignmentService
         Guid adminUserId)
     {
         // 1. Verify user is admin
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, adminUserId);
+        var isAdmin = await _authService.CanManageTeamsAsync(tournamentId, adminUserId);
         if (!isAdmin)
         {
             throw new UnauthorizedAccessException("You do not have permission to auto-assign players for this tournament");
@@ -261,7 +264,7 @@ public class TournamentTeamAssignmentService : ITournamentTeamAssignmentService
         Guid adminUserId)
     {
         // 1. Verify user is admin
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, adminUserId);
+        var isAdmin = await _authService.CanManageTeamsAsync(tournamentId, adminUserId);
         if (!isAdmin)
         {
             throw new UnauthorizedAccessException("You do not have permission to create teams for this tournament");
@@ -352,7 +355,7 @@ public class TournamentTeamAssignmentService : ITournamentTeamAssignmentService
         Guid adminUserId)
     {
         // 1. Verify user is admin
-        var isAdmin = await _tournamentService.CanUserManageTournamentAsync(tournamentId, adminUserId);
+        var isAdmin = await _authService.CanManageTeamsAsync(tournamentId, adminUserId);
         if (!isAdmin)
         {
             throw new UnauthorizedAccessException("You do not have permission to remove players for this tournament");

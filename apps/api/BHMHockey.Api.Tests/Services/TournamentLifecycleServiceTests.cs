@@ -16,6 +16,7 @@ public class TournamentLifecycleServiceTests : IDisposable
     private readonly AppDbContext _context;
     private readonly TournamentService _tournamentService;
     private readonly TournamentLifecycleService _sut;
+    private readonly TournamentAuthorizationService _authService;
 
     public TournamentLifecycleServiceTests()
     {
@@ -23,9 +24,10 @@ public class TournamentLifecycleServiceTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _context = new AppDbContext(options);
+        _authService = new TournamentAuthorizationService(_context);
         var orgAdminService = new OrganizationAdminService(_context);
-        _tournamentService = new TournamentService(_context, orgAdminService);
-        _sut = new TournamentLifecycleService(_context, _tournamentService);
+        _tournamentService = new TournamentService(_context, orgAdminService, _authService);
+        _sut = new TournamentLifecycleService(_context, _tournamentService, _authService);
     }
 
     public void Dispose()

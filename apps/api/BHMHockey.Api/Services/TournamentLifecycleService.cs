@@ -13,11 +13,13 @@ public class TournamentLifecycleService : ITournamentLifecycleService
 {
     private readonly AppDbContext _context;
     private readonly ITournamentService _tournamentService;
+    private readonly ITournamentAuthorizationService _authService;
 
-    public TournamentLifecycleService(AppDbContext context, ITournamentService tournamentService)
+    public TournamentLifecycleService(AppDbContext context, ITournamentService tournamentService, ITournamentAuthorizationService authService)
     {
         _context = context;
         _tournamentService = tournamentService;
+        _authService = authService;
     }
 
     public async Task<TournamentDto> PublishAsync(Guid tournamentId, Guid userId)
@@ -108,8 +110,8 @@ public class TournamentLifecycleService : ITournamentLifecycleService
             throw new InvalidOperationException("Tournament not found");
         }
 
-        // Check authorization
-        var canManage = await _tournamentService.CanUserManageTournamentAsync(tournamentId, userId);
+        // Check authorization (Admin+ can manage lifecycle)
+        var canManage = await _authService.IsAdminAsync(tournamentId, userId);
         if (!canManage)
         {
             throw new UnauthorizedAccessException("You are not authorized to manage this tournament");

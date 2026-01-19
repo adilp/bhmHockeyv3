@@ -19,6 +19,7 @@ public class TournamentsController : ControllerBase
     private readonly ITournamentTeamAssignmentService _teamAssignmentService;
     private readonly ITournamentTeamMemberService _teamMemberService;
     private readonly IStandingsService _standingsService;
+    private readonly ITournamentAdminService _adminService;
 
     public TournamentsController(
         ITournamentService tournamentService,
@@ -29,7 +30,8 @@ public class TournamentsController : ControllerBase
         ITournamentRegistrationService registrationService,
         ITournamentTeamAssignmentService teamAssignmentService,
         ITournamentTeamMemberService teamMemberService,
-        IStandingsService standingsService)
+        IStandingsService standingsService,
+        ITournamentAdminService adminService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
@@ -40,6 +42,7 @@ public class TournamentsController : ControllerBase
         _teamAssignmentService = teamAssignmentService;
         _teamMemberService = teamMemberService;
         _standingsService = standingsService;
+        _adminService = adminService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -1363,6 +1366,176 @@ public class TournamentsController : ControllerBase
             var userId = GetCurrentUserId();
             var response = await _teamAssignmentService.BulkCreateTeamsAsync(id, request.Count, request.NamePrefix, userId);
             return StatusCode(StatusCodes.Status201Created, response);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Admin Management Endpoints
+
+    /// <summary>
+    /// Get all admins for a tournament.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <response code="200">Returns list of admins</response>
+    [HttpGet("{id:guid}/admins")]
+    [ProducesResponseType(typeof(List<TournamentAdminDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<TournamentAdminDto>>> GetAdmins(Guid id)
+    {
+        var admins = await _adminService.GetAdminsAsync(id);
+        return Ok(admins);
+    }
+
+    /// <summary>
+    /// Add a new admin to the tournament. Requires Owner role.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="request">Add admin request with userId and role</param>
+    /// <response code="201">Admin added successfully</response>
+    /// <response code="400">Invalid request (e.g., user already admin, invalid role)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized (not Owner)</response>
+    [HttpPost("{id:guid}/admins")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentAdminDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentAdminDto>> AddAdmin(Guid id, [FromBody] AddTournamentAdminRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var admin = await _adminService.AddAdminAsync(id, request.UserId, request.Role, userId);
+            return CreatedAtAction(nameof(GetAdmins), new { id }, admin);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Update an admin's role. Requires Owner role.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="userId">User ID of the admin to update</param>
+    /// <param name="request">Update role request</param>
+    /// <response code="200">Role updated successfully</response>
+    /// <response code="400">Invalid request (e.g., cannot change to/from Owner)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized (not Owner)</response>
+    /// <response code="404">Admin not found</response>
+    [HttpPut("{id:guid}/admins/{userId:guid}")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentAdminDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TournamentAdminDto>> UpdateAdminRole(Guid id, Guid userId, [FromBody] UpdateTournamentAdminRoleRequest request)
+    {
+        try
+        {
+            var requesterId = GetCurrentUserId();
+            var admin = await _adminService.UpdateRoleAsync(id, userId, request.Role, requesterId);
+
+            if (admin == null)
+            {
+                return NotFound(new { message = "Admin not found" });
+            }
+
+            return Ok(admin);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Remove an admin from the tournament. Requires Owner role.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="userId">User ID of the admin to remove</param>
+    /// <response code="204">Admin removed successfully</response>
+    /// <response code="400">Invalid request (e.g., cannot remove Owner or last admin)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized (not Owner)</response>
+    /// <response code="404">Admin not found</response>
+    [HttpDelete("{id:guid}/admins/{userId:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveAdmin(Guid id, Guid userId)
+    {
+        try
+        {
+            var requesterId = GetCurrentUserId();
+            var removed = await _adminService.RemoveAdminAsync(id, userId, requesterId);
+
+            if (!removed)
+            {
+                return NotFound(new { message = "Admin not found" });
+            }
+
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Transfer tournament ownership to another admin. Requires Owner role.
+    /// </summary>
+    /// <remarks>
+    /// The new owner must already be an admin of the tournament.
+    /// After transfer, the old owner becomes an Admin.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="request">Transfer request with new owner's user ID</param>
+    /// <response code="200">Ownership transferred successfully</response>
+    /// <response code="400">Invalid request (e.g., new owner not an admin)</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized (not Owner)</response>
+    [HttpPost("{id:guid}/transfer-ownership")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentAdminDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentAdminDto>> TransferOwnership(Guid id, [FromBody] TransferOwnershipRequest request)
+    {
+        try
+        {
+            var requesterId = GetCurrentUserId();
+            var newOwner = await _adminService.TransferOwnershipAsync(id, request.NewOwnerUserId, requesterId);
+            return Ok(newOwner);
         }
         catch (InvalidOperationException ex)
         {
