@@ -139,6 +139,7 @@ builder.Services.AddScoped<ITournamentTeamAssignmentService, TournamentTeamAssig
 builder.Services.AddScoped<ITournamentTeamMemberService, TournamentTeamMemberService>();
 builder.Services.AddScoped<ITournamentAuthorizationService, TournamentAuthorizationService>();
 builder.Services.AddScoped<ITournamentAdminService, TournamentAdminService>();
+builder.Services.AddScoped<ITournamentAuditService, TournamentAuditService>();
 builder.Services.AddScoped<IStandingsService, StandingsService>();
 
 // Background Services

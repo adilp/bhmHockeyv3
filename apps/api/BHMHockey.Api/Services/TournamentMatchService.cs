@@ -2,6 +2,7 @@ using BHMHockey.Api.Data;
 using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace BHMHockey.Api.Services;
 
@@ -13,11 +14,16 @@ public class TournamentMatchService : ITournamentMatchService
 {
     private readonly AppDbContext _context;
     private readonly ITournamentAuthorizationService _authService;
+    private readonly ITournamentAuditService _auditService;
 
-    public TournamentMatchService(AppDbContext context, ITournamentAuthorizationService authService)
+    public TournamentMatchService(
+        AppDbContext context,
+        ITournamentAuthorizationService authService,
+        ITournamentAuditService auditService)
     {
         _context = context;
         _authService = authService;
+        _auditService = auditService;
     }
 
     public async Task<List<TournamentMatchDto>> GetAllAsync(Guid tournamentId)
@@ -122,13 +128,18 @@ public class TournamentMatchService : ITournamentMatchService
         // For round robin ties, winnerId stays null
 
         // 5. Handle Score Edit (if match already has scores)
-        if (match.HomeScore.HasValue)
+        bool isEdit = match.HomeScore.HasValue;
+        int? oldHomeScore = match.HomeScore;
+        int? oldAwayScore = match.AwayScore;
+        Guid? oldWinnerId = match.WinnerTeamId;
+
+        if (isEdit)
         {
             var homeTeam = await _context.TournamentTeams.FindAsync(match.HomeTeamId);
             var awayTeam = await _context.TournamentTeams.FindAsync(match.AwayTeamId);
 
             // Reverse old goals
-            homeTeam!.GoalsFor -= match.HomeScore.Value;
+            homeTeam!.GoalsFor -= match.HomeScore!.Value;
             homeTeam.GoalsAgainst -= match.AwayScore!.Value;
             awayTeam!.GoalsFor -= match.AwayScore.Value;
             awayTeam.GoalsAgainst -= match.HomeScore.Value;
@@ -291,7 +302,18 @@ public class TournamentMatchService : ITournamentMatchService
             // Organizer manages tournament completion manually
         }
 
-        // 11. Save and Return
+        // 11. Audit Logging
+        await _auditService.LogAsync(
+            tournamentId: tournamentId,
+            userId: userId,
+            action: isEdit ? "score_edited" : "score_entered",
+            entityType: "Match",
+            entityId: matchId,
+            oldValue: isEdit ? JsonSerializer.Serialize(new { homeScore = oldHomeScore, awayScore = oldAwayScore, winnerId = oldWinnerId }) : null,
+            newValue: JsonSerializer.Serialize(new { homeScore = request.HomeScore, awayScore = request.AwayScore, winnerId = winnerId })
+        );
+
+        // 12. Save and Return
         await _context.SaveChangesAsync();
 
         // Reload with includes for proper DTO mapping
@@ -451,7 +473,18 @@ public class TournamentMatchService : ITournamentMatchService
             // Organizer manages tournament completion manually
         }
 
-        // 10. Save and Return
+        // 10. Audit Logging
+        await _auditService.LogAsync(
+            tournamentId: tournamentId,
+            userId: userId,
+            action: "match_forfeit",
+            entityType: "Match",
+            entityId: matchId,
+            oldValue: null,
+            newValue: JsonSerializer.Serialize(new { forfeitingTeamId = request.ForfeitingTeamId, winnerId = winnerId, reason = request.Reason })
+        );
+
+        // 11. Save and Return
         await _context.SaveChangesAsync();
 
         // Reload with includes for proper DTO mapping

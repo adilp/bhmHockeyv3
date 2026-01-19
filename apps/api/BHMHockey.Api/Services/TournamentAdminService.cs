@@ -2,6 +2,7 @@ using BHMHockey.Api.Data;
 using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace BHMHockey.Api.Services;
 
@@ -14,11 +15,13 @@ public class TournamentAdminService : ITournamentAdminService
 {
     private readonly AppDbContext _context;
     private readonly ITournamentAuthorizationService _authService;
+    private readonly ITournamentAuditService _auditService;
 
-    public TournamentAdminService(AppDbContext context, ITournamentAuthorizationService authService)
+    public TournamentAdminService(AppDbContext context, ITournamentAuthorizationService authService, ITournamentAuditService auditService)
     {
         _context = context;
         _authService = authService;
+        _auditService = auditService;
     }
 
     public async Task<List<TournamentAdminDto>> GetAdminsAsync(Guid tournamentId)
@@ -92,6 +95,17 @@ public class TournamentAdminService : ITournamentAdminService
         };
 
         _context.TournamentAdmins.Add(admin);
+
+        // Log audit entry
+        await _auditService.LogAsync(
+            tournamentId: tournamentId,
+            userId: requesterId,
+            action: "admin_added",
+            entityType: "Admin",
+            entityId: userIdToAdd,
+            newValue: JsonSerializer.Serialize(new { userId = userIdToAdd, role = role })
+        );
+
         await _context.SaveChangesAsync();
 
         // Load the user and addedBy user for the DTO
@@ -151,8 +165,23 @@ public class TournamentAdminService : ITournamentAdminService
             throw new InvalidOperationException("Role must be 'Admin' or 'Scorekeeper'.");
         }
 
+        // Store old role for audit log
+        var oldRole = admin.Role;
+
         // Update and save
         admin.Role = newRole;
+
+        // Log audit entry
+        await _auditService.LogAsync(
+            tournamentId: tournamentId,
+            userId: requesterId,
+            action: "admin_role_changed",
+            entityType: "Admin",
+            entityId: userId,
+            oldValue: JsonSerializer.Serialize(new { role = oldRole }),
+            newValue: JsonSerializer.Serialize(new { role = newRole })
+        );
+
         await _context.SaveChangesAsync();
 
         return new TournamentAdminDto(
@@ -204,6 +233,17 @@ public class TournamentAdminService : ITournamentAdminService
 
         // Remove (hard delete) the admin entry
         _context.TournamentAdmins.Remove(admin);
+
+        // Log audit entry
+        await _auditService.LogAsync(
+            tournamentId: tournamentId,
+            userId: requesterId,
+            action: "admin_removed",
+            entityType: "Admin",
+            entityId: userIdToRemove,
+            oldValue: JsonSerializer.Serialize(new { userId = userIdToRemove, role = admin.Role })
+        );
+
         await _context.SaveChangesAsync();
 
         return true;
@@ -247,6 +287,17 @@ public class TournamentAdminService : ITournamentAdminService
         // Atomically: old owner becomes "Admin", new owner becomes "Owner"
         currentOwner.Role = "Admin";
         newOwnerAdmin.Role = "Owner";
+
+        // Log audit entry
+        await _auditService.LogAsync(
+            tournamentId: tournamentId,
+            userId: requesterId,
+            action: "ownership_transferred",
+            entityType: "Admin",
+            entityId: newOwnerUserId,
+            oldValue: JsonSerializer.Serialize(new { ownerId = requesterId }),
+            newValue: JsonSerializer.Serialize(new { ownerId = newOwnerUserId })
+        );
 
         await _context.SaveChangesAsync();
 

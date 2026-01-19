@@ -4,6 +4,8 @@ using BHMHockey.Api.Models.Entities;
 using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Moq;
 using Xunit;
 
 namespace BHMHockey.Api.Tests.Services;
@@ -26,7 +28,9 @@ public class TournamentAdminServiceTests : IDisposable
             .Options;
         _context = new AppDbContext(options);
         _authService = new TournamentAuthorizationService(_context);
-        _sut = new TournamentAdminService(_context, _authService);
+        var auditLogger = new Mock<ILogger<TournamentAuditService>>();
+        var auditService = new TournamentAuditService(_context, _authService, auditLogger.Object);
+        _sut = new TournamentAdminService(_context, _authService, auditService);
     }
 
     public void Dispose()

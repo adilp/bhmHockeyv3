@@ -20,6 +20,7 @@ public class TournamentsController : ControllerBase
     private readonly ITournamentTeamMemberService _teamMemberService;
     private readonly IStandingsService _standingsService;
     private readonly ITournamentAdminService _adminService;
+    private readonly ITournamentAuditService _auditService;
 
     public TournamentsController(
         ITournamentService tournamentService,
@@ -31,7 +32,8 @@ public class TournamentsController : ControllerBase
         ITournamentTeamAssignmentService teamAssignmentService,
         ITournamentTeamMemberService teamMemberService,
         IStandingsService standingsService,
-        ITournamentAdminService adminService)
+        ITournamentAdminService adminService,
+        ITournamentAuditService auditService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
@@ -43,6 +45,7 @@ public class TournamentsController : ControllerBase
         _teamMemberService = teamMemberService;
         _standingsService = standingsService;
         _adminService = adminService;
+        _auditService = auditService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -1540,6 +1543,51 @@ public class TournamentsController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Audit Log Endpoints
+
+    /// <summary>
+    /// Get audit log for a tournament. Requires authentication and tournament admin role.
+    /// </summary>
+    /// <remarks>
+    /// Returns paginated audit log entries for the tournament, showing all admin actions.
+    /// Results can be filtered by action type and date range.
+    /// </remarks>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="offset">Number of entries to skip (default: 0)</param>
+    /// <param name="limit">Maximum number of entries to return (default: 20)</param>
+    /// <param name="action">Filter by action type (optional)</param>
+    /// <param name="fromDate">Filter by start date (optional, inclusive)</param>
+    /// <param name="toDate">Filter by end date (optional, inclusive)</param>
+    /// <response code="200">Returns audit log entries</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to view audit log for this tournament</response>
+    [HttpGet("{id:guid}/audit-log")]
+    [Authorize]
+    [ProducesResponseType(typeof(AuditLogListResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<AuditLogListResponse>> GetAuditLog(
+        Guid id,
+        [FromQuery] int offset = 0,
+        [FromQuery] int limit = 20,
+        [FromQuery] string? action = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await _auditService.GetAuditLogsAsync(id, userId, offset, limit, action, fromDate, toDate);
+            return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
