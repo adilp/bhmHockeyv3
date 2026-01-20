@@ -230,6 +230,25 @@ function RootLayoutContent() {
         <Stack.Screen name="organizations/create" options={{ title: 'Create Organization', presentation: 'modal' }} />
         <Stack.Screen name="organizations/[id]" options={{ title: 'Organization' }} />
         <Stack.Screen name="organizations/edit" options={{ title: 'Edit Organization' }} />
+        {/* Tournament screens */}
+        <Stack.Screen name="tournaments/create" options={{ title: 'Create Tournament' }} />
+        <Stack.Screen name="tournaments/[id]/index" options={{ title: 'Tournament' }} />
+        <Stack.Screen name="tournaments/[id]/bracket" options={{ title: 'Bracket' }} />
+        <Stack.Screen name="tournaments/[id]/schedule" options={{ title: 'Schedule' }} />
+        <Stack.Screen name="tournaments/[id]/standings" options={{ title: 'Standings' }} />
+        <Stack.Screen name="tournaments/[id]/register" options={{ title: 'Register' }} />
+        <Stack.Screen name="tournaments/[id]/teams" options={{ title: 'Teams' }} />
+        <Stack.Screen name="tournaments/[id]/teams/create" options={{ title: 'Create Team' }} />
+        <Stack.Screen name="tournaments/[id]/teams/[teamId]/index" options={{ title: 'Team' }} />
+        <Stack.Screen name="tournaments/[id]/match/[matchId]" options={{ title: 'Match Details' }} />
+        <Stack.Screen name="tournaments/[id]/manage/index" options={{ title: 'Manage Tournament' }} />
+        <Stack.Screen name="tournaments/[id]/manage/settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="tournaments/[id]/manage/questions" options={{ title: 'Custom Questions' }} />
+        <Stack.Screen name="tournaments/[id]/manage/registrations" options={{ title: 'Registrations' }} />
+        <Stack.Screen name="tournaments/[id]/manage/teams" options={{ title: 'Manage Teams' }} />
+        <Stack.Screen name="tournaments/[id]/manage/admins" options={{ title: 'Admins' }} />
+        <Stack.Screen name="tournaments/[id]/manage/standings" options={{ title: 'Manage Standings' }} />
+        <Stack.Screen name="tournaments/[id]/manage/audit" options={{ title: 'Audit Log' }} />
       </Stack>
     </View>
   );

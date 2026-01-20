@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useTournamentStore } from '../../../../stores/tournamentStore';
 import { colors, spacing, radius } from '../../../../theme';
@@ -69,13 +70,13 @@ export default function ScoreEntryScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   const { matches, enterScore, currentTournament, error, clearError } = useTournamentStore(
-    (state) => ({
+    useShallow((state) => ({
       matches: state.matches,
       enterScore: state.enterScore,
       currentTournament: state.currentTournament,
       error: state.error,
       clearError: state.clearError,
-    })
+    }))
   );
 
   // Find the match

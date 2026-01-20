@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useTournamentStore } from '../../../../stores/tournamentStore';
 import { colors, spacing, radius } from '../../../../theme';
@@ -28,13 +29,13 @@ export default function MatchDetailScreen() {
     fetchTournamentById,
     fetchMatches,
     isLoading,
-  } = useTournamentStore((state) => ({
+  } = useTournamentStore(useShallow((state) => ({
     currentTournament: state.currentTournament,
     matches: state.matches,
     fetchTournamentById: state.fetchTournamentById,
     fetchMatches: state.fetchMatches,
     isLoading: state.isLoading,
-  }));
+  })));
 
   // Find the specific match
   const match = matches.find((m) => m.id === matchId);

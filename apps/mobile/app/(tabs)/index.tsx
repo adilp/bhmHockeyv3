@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { useState, useCallback, useMemo } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useShallow } from 'zustand/react/shallow';
 import { useEventStore } from '../../stores/eventStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useTournamentStore } from '../../stores/tournamentStore';
@@ -13,11 +14,11 @@ export default function HomeScreen() {
   const user = useAuthStore(state => state.user);
   const { events, myRegistrations, isLoading, fetchEvents, fetchMyRegistrations } = useEventStore();
   const { myUpcomingMatches, fetchMyUpcomingMatches, isFetchingUpcoming } = useTournamentStore(
-    state => ({
+    useShallow(state => ({
       myUpcomingMatches: state.myUpcomingMatches,
       fetchMyUpcomingMatches: state.fetchMyUpcomingMatches,
       isFetchingUpcoming: state.isFetchingUpcoming,
-    })
+    }))
   );
   const [refreshing, setRefreshing] = useState(false);
 

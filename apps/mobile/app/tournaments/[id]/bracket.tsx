@@ -9,8 +9,9 @@ import {
   RefreshControl,
   ScrollView,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useTournamentStore } from '../../../stores/tournamentStore';
 import { BracketMatchBox, WinnersBracket, LosersBracket, GrandFinalSection } from '../../../components';
@@ -54,12 +55,12 @@ export default function BracketScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { matches, currentTournament, fetchMatches, isLoading } = useTournamentStore(
-    (state) => ({
+    useShallow((state) => ({
       matches: state.matches,
       currentTournament: state.currentTournament,
       fetchMatches: state.fetchMatches,
       isLoading: state.isLoading,
-    })
+    }))
   );
 
   // Fetch matches on focus
@@ -212,35 +213,18 @@ export default function BracketScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>
-            {isDoubleElimination ? 'Double Elimination Bracket' : 'Bracket'}
-          </Text>
-          {currentTournament && (
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {selectedTeamName ? `Following: ${selectedTeamName}` : currentTournament.name}
-            </Text>
-          )}
-        </View>
-        {selectedTeamId && (
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={() => setSelectedTeamId(null)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <Stack.Screen
+        options={{
+          title: isDoubleElimination ? 'Double Elimination' : 'Bracket',
+          headerRight: selectedTeamId
+            ? () => (
+                <TouchableOpacity onPress={() => setSelectedTeamId(null)}>
+                  <Text style={{ color: colors.primary.teal, fontSize: 15 }}>Clear</Text>
+                </TouchableOpacity>
+              )
+            : undefined,
+        }}
+      />
 
       {/* Round selector chips */}
       {rounds.length > 0 && (
@@ -351,51 +335,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg.darkest,
-  },
-
-  // Header styles
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl + spacing.md, // Account for status bar
-    paddingBottom: spacing.md,
-    backgroundColor: colors.bg.dark,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-  clearButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.subtle.teal,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.primary.teal,
-  },
-  clearButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary.teal,
   },
 
   // Chip styles

@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useTournamentStore } from '../../../stores/tournamentStore';
 import { useAuthStore } from '../../../stores/authStore';
@@ -190,13 +191,13 @@ export default function ScheduleScreen() {
     myRegistration,
     fetchMatches,
     isLoading,
-  } = useTournamentStore((state) => ({
+  } = useTournamentStore(useShallow((state) => ({
     matches: state.matches,
     currentTournament: state.currentTournament,
     myRegistration: state.myRegistration,
     fetchMatches: state.fetchMatches,
     isLoading: state.isLoading,
-  }));
+  })));
 
   // Fetch matches on focus
   useFocusEffect(
@@ -411,24 +412,7 @@ export default function ScheduleScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Schedule</Text>
-          {currentTournament && (
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {currentTournament.name}
-            </Text>
-          )}
-        </View>
-      </View>
+      <Stack.Screen options={{ title: 'Schedule' }} />
 
       {/* Content */}
       {showLoading ? (
@@ -469,38 +453,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg.darkest,
-  },
-
-  // Header styles
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl + spacing.md, // Account for status bar
-    paddingBottom: spacing.md,
-    backgroundColor: colors.bg.dark,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: colors.text.muted,
-    marginTop: 2,
   },
 
   // List header styles
