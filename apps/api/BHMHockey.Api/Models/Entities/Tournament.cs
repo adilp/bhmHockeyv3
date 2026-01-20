@@ -72,4 +72,5 @@ public class Tournament
 
     // Navigation properties
     public ICollection<TournamentAdmin> Admins { get; set; } = new List<TournamentAdmin>();
+    public ICollection<TournamentAnnouncement> Announcements { get; set; } = new List<TournamentAnnouncement>();
 }

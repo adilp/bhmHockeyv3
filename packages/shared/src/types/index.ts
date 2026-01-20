@@ -619,6 +619,9 @@ export interface UpdateTournamentRequest {
 // Import tournament admin types from dedicated file
 export * from './tournamentAdmin';
 
+// Import tournament announcement types from dedicated file
+export * from './tournamentAnnouncement';
+
 // ============================================
 // Tournament Team Types (TRN-003)
 // ============================================

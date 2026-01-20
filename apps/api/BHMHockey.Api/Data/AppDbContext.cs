@@ -29,6 +29,7 @@ public class AppDbContext : DbContext
     public DbSet<TournamentTeamMember> TournamentTeamMembers { get; set; }
     public DbSet<TournamentMatch> TournamentMatches { get; set; }
     public DbSet<TournamentRegistration> TournamentRegistrations { get; set; }
+    public DbSet<TournamentAnnouncement> TournamentAnnouncements { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -510,6 +511,37 @@ public class AppDbContext : DbContext
 
             // Index for querying user's tournament history
             entity.HasIndex(e => e.UserId);
+        });
+
+        // TournamentAnnouncement configuration
+        modelBuilder.Entity<TournamentAnnouncement>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Body).IsRequired();
+            entity.Property(e => e.Target).HasMaxLength(50);
+
+            // Index for querying announcements by tournament
+            entity.HasIndex(e => e.TournamentId);
+
+            // Index for ordering by CreatedAt
+            entity.HasIndex(e => new { e.TournamentId, e.CreatedAt });
+
+            entity.HasOne(e => e.Tournament)
+                .WithMany(t => t.Announcements)
+                .HasForeignKey(e => e.TournamentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // JSONB configuration for TargetTeamIds
+            if (!isInMemory)
+            {
+                entity.Property(e => e.TargetTeamIds).HasColumnType("jsonb");
+            }
         });
     }
 }

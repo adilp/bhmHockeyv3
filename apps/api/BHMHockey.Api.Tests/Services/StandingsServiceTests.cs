@@ -3,6 +3,8 @@ using BHMHockey.Api.Models.Entities;
 using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Moq;
 using System.Text.Json;
 using Xunit;
 
@@ -16,6 +18,8 @@ public class StandingsServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
     private readonly StandingsService _sut;
+    private readonly ITournamentAuthorizationService _authService;
+    private readonly ITournamentAuditService _auditService;
 
     public StandingsServiceTests()
     {
@@ -23,7 +27,10 @@ public class StandingsServiceTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _context = new AppDbContext(options);
-        _sut = new StandingsService(_context);
+        _authService = new TournamentAuthorizationService(_context);
+        var auditLogger = new Mock<ILogger<TournamentAuditService>>();
+        _auditService = new TournamentAuditService(_context, _authService, auditLogger.Object);
+        _sut = new StandingsService(_context, _authService, _auditService);
     }
 
     public void Dispose()

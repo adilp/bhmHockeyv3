@@ -21,6 +21,7 @@ public class TournamentsController : ControllerBase
     private readonly IStandingsService _standingsService;
     private readonly ITournamentAdminService _adminService;
     private readonly ITournamentAuditService _auditService;
+    private readonly ITournamentAnnouncementService _announcementService;
 
     public TournamentsController(
         ITournamentService tournamentService,
@@ -33,7 +34,8 @@ public class TournamentsController : ControllerBase
         ITournamentTeamMemberService teamMemberService,
         IStandingsService standingsService,
         ITournamentAdminService adminService,
-        ITournamentAuditService auditService)
+        ITournamentAuditService auditService,
+        ITournamentAnnouncementService announcementService)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
@@ -46,6 +48,7 @@ public class TournamentsController : ControllerBase
         _standingsService = standingsService;
         _adminService = adminService;
         _auditService = auditService;
+        _announcementService = announcementService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -1625,6 +1628,108 @@ public class TournamentsController : ControllerBase
             var userId = GetCurrentUserId();
             var result = await _auditService.GetAuditLogsAsync(id, userId, offset, limit, action, fromDate, toDate);
             return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Announcement Endpoints
+
+    /// <summary>
+    /// Get announcements for a tournament. Results are filtered by user's visibility.
+    /// </summary>
+    [HttpGet("{id:guid}/announcements")]
+    [ProducesResponseType(typeof(List<TournamentAnnouncementDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<TournamentAnnouncementDto>>> GetAnnouncements(Guid id)
+    {
+        var userId = GetCurrentUserIdOrNull();
+        var announcements = await _announcementService.GetAnnouncementsAsync(id, userId);
+        return Ok(announcements);
+    }
+
+    /// <summary>
+    /// Create a new announcement. Requires admin role.
+    /// </summary>
+    [HttpPost("{id:guid}/announcements")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentAnnouncementDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentAnnouncementDto>> CreateAnnouncement(Guid id, [FromBody] CreateTournamentAnnouncementRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var announcement = await _announcementService.CreateAnnouncementAsync(id, request, userId);
+            return CreatedAtAction(nameof(GetAnnouncements), new { id }, announcement);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Update an announcement. Requires admin role.
+    /// </summary>
+    [HttpPut("{id:guid}/announcements/{announcementId:guid}")]
+    [Authorize]
+    [ProducesResponseType(typeof(TournamentAnnouncementDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TournamentAnnouncementDto>> UpdateAnnouncement(Guid id, Guid announcementId, [FromBody] UpdateTournamentAnnouncementRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var announcement = await _announcementService.UpdateAnnouncementAsync(id, announcementId, request, userId);
+
+            if (announcement == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(announcement);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete (soft delete) an announcement. Requires admin role.
+    /// </summary>
+    [HttpDelete("{id:guid}/announcements/{announcementId:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> DeleteAnnouncement(Guid id, Guid announcementId)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var deleted = await _announcementService.DeleteAnnouncementAsync(id, announcementId, userId);
+
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
         }
         catch (UnauthorizedAccessException ex)
         {
