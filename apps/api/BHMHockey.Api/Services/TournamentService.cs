@@ -483,10 +483,19 @@ public class TournamentService : ITournamentService
     public async Task<List<UpcomingTournamentMatchDto>> GetUpcomingMatchesForUserAsync(Guid userId)
     {
         // Find all teams the user is a member of (with Accepted status)
-        var userTeamIds = await _context.TournamentTeamMembers
+        var memberTeamIds = await _context.TournamentTeamMembers
             .Where(ttm => ttm.UserId == userId && ttm.Status == "Accepted")
             .Select(ttm => ttm.TeamId)
             .ToListAsync();
+
+        // Also find teams where user is the captain
+        var captainTeamIds = await _context.TournamentTeams
+            .Where(t => t.CaptainUserId == userId)
+            .Select(t => t.Id)
+            .ToListAsync();
+
+        // Combine both lists (user could be captain AND a member)
+        var userTeamIds = memberTeamIds.Union(captainTeamIds).Distinct().ToList();
 
         if (!userTeamIds.Any())
         {
@@ -501,7 +510,7 @@ public class TournamentService : ITournamentService
             .Where(m =>
                 (m.HomeTeamId.HasValue && userTeamIds.Contains(m.HomeTeamId.Value) ||
                  m.AwayTeamId.HasValue && userTeamIds.Contains(m.AwayTeamId.Value)) &&
-                (m.Status == "Scheduled" || m.Status == "InProgress"))
+                (m.Status == "Pending" || m.Status == "Scheduled" || m.Status == "InProgress"))
             .OrderBy(m => m.ScheduledTime.HasValue ? m.ScheduledTime.Value : DateTime.MaxValue)
             .ToListAsync();
 

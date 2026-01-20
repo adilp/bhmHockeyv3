@@ -23,10 +23,9 @@ import type { TournamentMatchDto } from '@bhmhockey/shared';
 interface ScheduleGameCardProps {
   match: TournamentMatchDto;
   onPress?: () => void;
-  canEdit?: boolean;
 }
 
-function ScheduleGameCard({ match, onPress, canEdit = false }: ScheduleGameCardProps) {
+function ScheduleGameCard({ match, onPress }: ScheduleGameCardProps) {
   const isCompleted = match.status === 'Completed' || match.status === 'Forfeit';
   const homeIsWinner = isCompleted && match.winnerTeamId === match.homeTeamId;
   const awayIsWinner = isCompleted && match.winnerTeamId === match.awayTeamId;
@@ -144,7 +143,7 @@ function ScheduleGameCard({ match, onPress, canEdit = false }: ScheduleGameCardP
     </View>
   );
 
-  if (onPress && canEdit) {
+  if (onPress) {
     return (
       <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
         {content}
@@ -293,14 +292,12 @@ export default function ScheduleScreen() {
     setRefreshing(false);
   }, [id, fetchMatches]);
 
-  // Handle match press (for score entry)
+  // Handle match press - navigate to match details
   const handleMatchPress = useCallback(
     (match: TournamentMatchDto) => {
-      if (!currentTournament?.canManage) return;
-      // Navigate to score entry screen
       router.push(`/tournaments/${id}/match/${match.id}`);
     },
-    [currentTournament?.canManage, router, id]
+    [router, id]
   );
 
   // Render section header
@@ -323,11 +320,10 @@ export default function ScheduleScreen() {
         <ScheduleGameCard
           match={item}
           onPress={() => handleMatchPress(item)}
-          canEdit={currentTournament?.canManage ?? false}
         />
       </View>
     ),
-    [handleMatchPress, currentTournament?.canManage]
+    [handleMatchPress]
   );
 
   // Render list header with stats and filter

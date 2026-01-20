@@ -572,25 +572,6 @@ export default function TournamentDetailScreen() {
           headerStyle: { backgroundColor: colors.bg.dark },
           headerTintColor: colors.text.primary,
           headerBackTitle: 'Back',
-          headerRight: canManage
-            ? () => (
-                <TouchableOpacity
-                  onPress={() => router.push(`/tournaments/edit?id=${currentTournament?.id}`)}
-                  style={styles.headerButton}
-                >
-                  <Text style={styles.headerButtonText}>Edit</Text>
-                </TouchableOpacity>
-              )
-            : isRegistered
-            ? () => (
-                <TouchableOpacity
-                  onPress={() => setShowStatusSheet(true)}
-                  style={styles.headerButton}
-                >
-                  <Badge variant="green">Registered</Badge>
-                </TouchableOpacity>
-              )
-            : undefined,
         }}
       />
 

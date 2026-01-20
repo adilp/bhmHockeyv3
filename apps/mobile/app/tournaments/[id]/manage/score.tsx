@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -54,7 +54,7 @@ function ScoreRow({ teamName, score, onIncrement, onDecrement }: ScoreRowProps) 
 }
 
 /**
- * Score Entry Modal Screen
+ * Score Entry Screen
  * Allows entering/editing scores for tournament matches
  */
 export default function ScoreEntryScreen() {
@@ -127,17 +127,7 @@ export default function ScoreEntryScreen() {
   if (!match) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={handleClose}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close" size={28} color={colors.text.primary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Enter Score</Text>
-          <View style={styles.closeButton} />
-        </View>
+        <Stack.Screen options={{ title: 'Enter Score' }} />
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={48} color={colors.status.error} />
           <Text style={styles.errorText}>Match not found</Text>
@@ -151,18 +141,7 @@ export default function ScoreEntryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={handleClose}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="close" size={28} color={colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Enter Score</Text>
-        <View style={styles.closeButton} />
-      </View>
+      <Stack.Screen options={{ title: 'Enter Score' }} />
 
       {/* Match Info */}
       <View style={styles.matchInfo}>
@@ -240,30 +219,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg.darkest,
-  },
-
-  // Header styles
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl + spacing.md, // Account for status bar
-    paddingBottom: spacing.md,
-    backgroundColor: colors.bg.dark,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text.primary,
   },
 
   // Match info styles

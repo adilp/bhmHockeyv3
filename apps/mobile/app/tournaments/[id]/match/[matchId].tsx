@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -69,9 +69,8 @@ export default function MatchDetailScreen() {
 
   // Handle navigation to score entry (for admins)
   const handleEnterScore = () => {
-    // Future: Navigate to score entry screen or show modal
-    // For now, just navigate back to schedule where they can tap to enter score
-    handleViewSchedule();
+    if (!id || !matchId) return;
+    router.push(`/tournaments/${id}/manage/score?matchId=${matchId}`);
   };
 
   // Format scheduled time
@@ -124,20 +123,7 @@ export default function MatchDetailScreen() {
   if (isLoading && !match) {
     return (
       <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Match Details</Text>
-          </View>
-        </View>
-
+        <Stack.Screen options={{ title: 'Match Details' }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary.teal} />
         </View>
@@ -149,20 +135,7 @@ export default function MatchDetailScreen() {
   if (!match) {
     return (
       <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Match Details</Text>
-          </View>
-        </View>
-
+        <Stack.Screen options={{ title: 'Match Details' }} />
         <View style={styles.emptyContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.text.muted} />
           <Text style={styles.emptyTitle}>Match Not Found</Text>
@@ -179,24 +152,7 @@ export default function MatchDetailScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Match Details</Text>
-          {currentTournament && (
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {currentTournament.name}
-            </Text>
-          )}
-        </View>
-      </View>
+      <Stack.Screen options={{ title: 'Match Details' }} />
 
       {/* Content */}
       <ScrollView
@@ -395,38 +351,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg.darkest,
-  },
-
-  // Header styles
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl + spacing.md, // Account for status bar
-    paddingBottom: spacing.md,
-    backgroundColor: colors.bg.dark,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: colors.text.muted,
-    marginTop: 2,
   },
 
   // Scroll view
