@@ -35,6 +35,9 @@ import type {
   AuditLogListResponse,
   AuditLogFilter,
   ResolveTiesRequest,
+  TournamentAnnouncementDto,
+  CreateTournamentAnnouncementRequest,
+  UpdateTournamentAnnouncementRequest,
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -574,5 +577,55 @@ export const tournamentService = {
       `/tournaments/${tournamentId}/standings/resolve`,
       request
     );
+  },
+
+  // ============================================
+  // Announcements
+  // ============================================
+
+  /**
+   * Get announcements for a tournament (filtered by user visibility)
+   */
+  async getAnnouncements(tournamentId: string): Promise<TournamentAnnouncementDto[]> {
+    const response = await apiClient.instance.get<TournamentAnnouncementDto[]>(
+      `/tournaments/${tournamentId}/announcements`
+    );
+    return response.data;
+  },
+
+  /**
+   * Create a new announcement (Admin only)
+   */
+  async createAnnouncement(
+    tournamentId: string,
+    request: CreateTournamentAnnouncementRequest
+  ): Promise<TournamentAnnouncementDto> {
+    const response = await apiClient.instance.post<TournamentAnnouncementDto>(
+      `/tournaments/${tournamentId}/announcements`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Update an announcement (Admin only)
+   */
+  async updateAnnouncement(
+    tournamentId: string,
+    announcementId: string,
+    request: UpdateTournamentAnnouncementRequest
+  ): Promise<TournamentAnnouncementDto> {
+    const response = await apiClient.instance.put<TournamentAnnouncementDto>(
+      `/tournaments/${tournamentId}/announcements/${announcementId}`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete an announcement (Admin only)
+   */
+  async deleteAnnouncement(tournamentId: string, announcementId: string): Promise<void> {
+    await apiClient.instance.delete(`/tournaments/${tournamentId}/announcements/${announcementId}`);
   },
 };

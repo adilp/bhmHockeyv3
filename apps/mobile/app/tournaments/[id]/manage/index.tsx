@@ -98,6 +98,18 @@ export default function ManageTournamentScreen() {
           />
         </View>
 
+        {/* Communication Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Communication</Text>
+
+          <ManageOption
+            icon="megaphone-outline"
+            title="Announcements"
+            description="Send announcements to participants"
+            onPress={() => router.push(`/tournaments/${id}/manage/announcements`)}
+          />
+        </View>
+
         {/* Activity Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Activity</Text>

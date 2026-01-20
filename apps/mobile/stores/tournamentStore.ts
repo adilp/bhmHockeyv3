@@ -21,6 +21,9 @@ import type {
   TournamentAuditLogDto,
   AuditLogFilter,
   ResolveTiesRequest,
+  TournamentAnnouncementDto,
+  CreateTournamentAnnouncementRequest,
+  AnnouncementTarget,
 } from '@bhmhockey/shared';
 
 interface TournamentState {
@@ -60,6 +63,11 @@ interface TournamentState {
   isLoadingAuditLogs: boolean;
   auditLogFilter: AuditLogFilter | null;
   auditLogOffset: number;
+
+  // Announcement state
+  announcements: TournamentAnnouncementDto[];
+  isLoadingAnnouncements: boolean;
+  isSendingAnnouncement: boolean;
 
   // Actions
   fetchTournaments: () => Promise<void>;
@@ -107,6 +115,12 @@ interface TournamentState {
 
   // Tie resolution actions
   resolveTies: (tournamentId: string, resolutions: { teamId: string; finalPlacement: number }[]) => Promise<boolean>;
+
+  // Announcement actions
+  fetchAnnouncements: (tournamentId: string) => Promise<void>;
+  createAnnouncement: (tournamentId: string, title: string, body: string, target?: AnnouncementTarget | null, targetTeamIds?: string[] | null) => Promise<boolean>;
+  deleteAnnouncement: (tournamentId: string, announcementId: string) => Promise<boolean>;
+  clearAnnouncements: () => void;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -146,6 +160,11 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
   isLoadingAuditLogs: false,
   auditLogFilter: null,
   auditLogOffset: 0,
+
+  // Announcement state
+  announcements: [],
+  isLoadingAnnouncements: false,
+  isSendingAnnouncement: false,
 
   // Fetch all tournaments
   fetchTournaments: async () => {
@@ -733,4 +752,73 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       return false;
     }
   },
+
+  // ============================================
+  // Announcement Actions
+  // ============================================
+
+  // Fetch announcements for a tournament
+  fetchAnnouncements: async (tournamentId: string) => {
+    set({ isLoadingAnnouncements: true });
+    try {
+      const announcements = await tournamentService.getAnnouncements(tournamentId);
+      // Sort by createdAt descending (newest first)
+      const sorted = announcements.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      set({ announcements: sorted, isLoadingAnnouncements: false });
+    } catch (error) {
+      console.error('Failed to fetch announcements:', error);
+      set({ announcements: [], isLoadingAnnouncements: false });
+    }
+  },
+
+  // Create a new announcement
+  createAnnouncement: async (
+    tournamentId: string,
+    title: string,
+    body: string,
+    target?: AnnouncementTarget | null,
+    targetTeamIds?: string[] | null
+  ) => {
+    set({ isSendingAnnouncement: true });
+    try {
+      const request: CreateTournamentAnnouncementRequest = {
+        title,
+        body,
+        target: target ?? null,
+        targetTeamIds: targetTeamIds ?? null,
+      };
+      await tournamentService.createAnnouncement(tournamentId, request);
+      // Refresh announcements list
+      await get().fetchAnnouncements(tournamentId);
+      set({ isSendingAnnouncement: false });
+      return true;
+    } catch (error) {
+      console.error('Failed to create announcement:', error);
+      set({ isSendingAnnouncement: false });
+      return false;
+    }
+  },
+
+  // Delete an announcement
+  deleteAnnouncement: async (tournamentId: string, announcementId: string) => {
+    try {
+      await tournamentService.deleteAnnouncement(tournamentId, announcementId);
+      // Remove from local state
+      const { announcements } = get();
+      set({ announcements: announcements.filter(a => a.id !== announcementId) });
+      return true;
+    } catch (error) {
+      console.error('Failed to delete announcement:', error);
+      return false;
+    }
+  },
+
+  // Clear announcements state
+  clearAnnouncements: () => set({
+    announcements: [],
+    isLoadingAnnouncements: false,
+    isSendingAnnouncement: false,
+  }),
 }));
