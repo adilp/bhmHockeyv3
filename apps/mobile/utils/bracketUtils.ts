@@ -13,23 +13,27 @@ import { TournamentMatchDto } from '@bhmhockey/shared';
 
 /**
  * Width of a single match box in pixels
+ * Narrower to fit more rounds (QF, SF, Finals) on screen without horizontal scroll
  */
-export const MATCH_BOX_WIDTH = 180;
+export const MATCH_BOX_WIDTH = 105;
 
 /**
  * Height of a single match box in pixels
+ * Must account for: header (~18px) + 2 team rows (~28px each) + schedule info (~28px) = ~100px
  */
-export const MATCH_BOX_HEIGHT = 80;
+export const MATCH_BOX_HEIGHT = 100;
 
 /**
  * Horizontal spacing between rounds in pixels
+ * Reduced to fit 3 rounds (QF, SF, Finals) on screen without horizontal scroll
  */
-export const ROUND_SPACING = 120;
+export const ROUND_SPACING = 16;
 
 /**
- * Vertical spacing between matches in the same round in pixels
+ * Base vertical spacing between matches in round 1
+ * This doubles with each subsequent round to create bracket tree structure
  */
-export const MATCH_SPACING = 40;
+export const MATCH_SPACING = 12;
 
 // ============================================
 // TYPES
@@ -66,48 +70,47 @@ export interface GroupedMatches {
 
 /**
  * Calculates the (x, y) position for a match box in the bracket visualization.
+ * Creates a proper bracket tree structure where later rounds are centered
+ * between their feeder matches.
  *
  * @param round - Round number (1-based)
  * @param matchNumber - Match number within the round (1-based)
  * @param totalMatchesInRound - Total number of matches in this round
  * @param bracketType - Type of bracket ('Winners', 'Losers', or 'GrandFinal')
+ * @param maxMatchesFirstRound - Maximum matches in round 1 (for proper centering)
  * @returns {x, y} coordinates in pixels for positioning the match box
- *
- * @example
- * // Winners bracket, Round 1, Match 1 of 4
- * const pos = calculateMatchPosition(1, 1, 4, 'Winners');
- * // Returns: { x: 0, y: 0 }
  */
 export function calculateMatchPosition(
   round: number,
   matchNumber: number,
   totalMatchesInRound: number,
-  bracketType: 'Winners' | 'Losers' | 'GrandFinal' = 'Winners'
+  bracketType: 'Winners' | 'Losers' | 'GrandFinal' = 'Winners',
+  maxMatchesFirstRound: number = 4
 ): MatchPosition {
   // X position: increases with each round
   const x = (round - 1) * (MATCH_BOX_WIDTH + ROUND_SPACING);
 
-  // Y position: vertical distribution of matches in the round
-  // Calculate total height needed for all matches in this round
-  const totalRoundHeight = totalMatchesInRound * MATCH_BOX_HEIGHT + (totalMatchesInRound - 1) * MATCH_SPACING;
+  // Slot height is the vertical space each round 1 match occupies
+  const slotHeight = MATCH_BOX_HEIGHT + MATCH_SPACING;
 
-  // Center the matches vertically if there are fewer matches in later rounds
-  const verticalOffset = totalMatchesInRound > 1
-    ? ((matchNumber - 1) * (MATCH_BOX_HEIGHT + MATCH_SPACING))
-    : 0;
+  // Match index (0-based)
+  const matchIndex = matchNumber - 1;
 
-  // For later rounds with fewer matches, add spacing to center them
-  // This creates the classic "bracket tree" appearance
-  const centeringOffset = totalMatchesInRound < 4
-    ? (4 - totalMatchesInRound) * (MATCH_BOX_HEIGHT + MATCH_SPACING) / 2
-    : 0;
+  // Multiplier doubles with each round to create tree structure
+  // Round 1: 1x, Round 2: 2x, Round 3: 4x, etc.
+  const multiplier = Math.pow(2, round - 1);
 
-  const y = verticalOffset + centeringOffset;
+  // Offset centers matches between their feeder matches
+  // Round 1: 0, Round 2: slotHeight/2, Round 3: 1.5*slotHeight, etc.
+  const offset = (multiplier - 1) * slotHeight / 2;
 
-  // Grand Final positioning: typically centered and separate
+  // Calculate Y position
+  const y = matchIndex * multiplier * slotHeight + offset;
+
+  // Grand Final positioning: add extra spacing
   if (bracketType === 'GrandFinal') {
     return {
-      x: x + ROUND_SPACING, // Add extra spacing before grand final
+      x: x + ROUND_SPACING,
       y: y,
     };
   }
@@ -207,21 +210,23 @@ export function calculateBracketDimensions(
     return { width: 0, height: 0 };
   }
 
-  // Find the maximum round number
+  // Find the maximum and minimum round numbers
   const maxRound = Math.max(...matches.map(m => m.round));
+  const minRound = Math.min(...matches.map(m => m.round));
 
-  // Count matches per round to find the round with most matches
-  const matchesPerRound = new Map<number, number>();
-  matches.forEach(m => {
-    const count = matchesPerRound.get(m.round) || 0;
-    matchesPerRound.set(m.round, count + 1);
-  });
+  // Count matches in the first round (determines bracket height)
+  const firstRoundMatches = matches.filter(m => m.round === minRound).length;
 
-  const maxMatchesInRound = Math.max(...Array.from(matchesPerRound.values()));
+  // Slot height is the space each round 1 match occupies
+  const slotHeight = MATCH_BOX_HEIGHT + MATCH_SPACING;
 
   // Calculate dimensions
-  const width = maxRound * (MATCH_BOX_WIDTH + ROUND_SPACING) + MATCH_BOX_WIDTH;
-  const height = maxMatchesInRound * MATCH_BOX_HEIGHT + (maxMatchesInRound - 1) * MATCH_SPACING;
+  // Width: number of rounds * (box width + spacing)
+  const numRounds = maxRound - minRound + 1;
+  const width = numRounds * MATCH_BOX_WIDTH + (numRounds - 1) * ROUND_SPACING;
+
+  // Height: based on first round matches (they determine the full bracket height)
+  const height = firstRoundMatches * slotHeight - MATCH_SPACING;
 
   // Add extra spacing for Grand Final
   if (bracketType === 'GrandFinal') {

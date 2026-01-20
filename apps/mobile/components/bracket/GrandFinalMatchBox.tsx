@@ -86,7 +86,7 @@ export function GrandFinalMatchBox({
       {/* Grand Final Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Ionicons name="trophy" size={14} color="#FFD700" style={styles.trophyIcon} />
+          <Ionicons name="trophy" size={12} color="#FFD700" style={styles.trophyIcon} />
           <Text style={styles.matchNumber} allowFontScaling={false}>{headerText}</Text>
         </View>
         {match.status === 'Forfeit' && (
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFD700', // Gold border
     overflow: 'hidden',
-    minWidth: 180,
+    // No minWidth - let parent control width
   },
   highlightedContainer: {
     borderColor: '#FFD700',
@@ -187,15 +187,15 @@ const styles = StyleSheet.create({
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 6,
+    elevation: 6,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
     backgroundColor: colors.bg.elevated,
     borderBottomWidth: 1,
     borderBottomColor: '#FFD700',
@@ -205,29 +205,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   trophyIcon: {
-    marginRight: spacing.xs,
+    marginRight: 3,
   },
   matchNumber: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: '#FFD700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   forfeitLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
     color: colors.status.error,
     textTransform: 'uppercase',
   },
   liveIndicator: {
     backgroundColor: colors.status.errorSubtle,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
     borderRadius: radius.sm,
   },
   liveText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
     color: colors.status.error,
   },
@@ -235,18 +235,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
   },
   winnerRow: {
     backgroundColor: 'rgba(255, 215, 0, 0.2)', // Stronger gold tint for winner
   },
   teamName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     color: colors.text.secondary,
     flex: 1,
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
   },
   winnerText: {
     color: '#FFD700', // Gold for winner
@@ -261,10 +261,10 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   score: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text.secondary,
-    minWidth: 24,
+    minWidth: 20,
     textAlign: 'right',
   },
   divider: {
@@ -275,19 +275,19 @@ const styles = StyleSheet.create({
     // Same as regular container, just semantic wrapper
   },
   scheduleInfo: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
     backgroundColor: colors.bg.elevated,
     borderTopWidth: 1,
     borderTopColor: colors.border.default,
   },
   scheduleText: {
-    fontSize: 10,
+    fontSize: 9,
     color: colors.text.muted,
   },
   venueText: {
-    fontSize: 10,
+    fontSize: 9,
     color: colors.text.subtle,
-    marginTop: 2,
+    marginTop: 1,
   },
 });

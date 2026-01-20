@@ -8,6 +8,7 @@ interface BracketMatchBoxProps {
   onTeamPress?: (teamId: string) => void;  // For team selection/highlighting
   canEdit?: boolean;
   isHighlighted?: boolean;  // For highlighting team's path
+  userTeamId?: string;  // User's team ID - highlighted in teal
 }
 
 interface TeamRowProps {
@@ -17,10 +18,11 @@ interface TeamRowProps {
   score?: number;
   isWinner: boolean;
   isBye?: boolean;
+  isUserTeam?: boolean;  // Is this the user's team?
   onPress?: () => void;
 }
 
-function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, onPress }: TeamRowProps) {
+function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, isUserTeam, onPress }: TeamRowProps) {
   const displayName = isBye
     ? 'BYE'
     : teamName
@@ -32,11 +34,12 @@ function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, onPress }: Te
   const scoreDisplay = score !== undefined && score !== null ? String(score) : '-';
 
   const content = (
-    <View style={[styles.teamRow, isWinner && styles.winnerRow]}>
+    <View style={[styles.teamRow, isWinner && styles.winnerRow, isUserTeam && styles.userTeamRow]}>
       <Text
         style={[
           styles.teamName,
           isWinner && styles.winnerText,
+          isUserTeam && styles.userTeamText,
           isBye && styles.byeText,
           !teamName && !isBye && styles.tbdText,
         ]}
@@ -45,7 +48,7 @@ function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, onPress }: Te
       >
         {displayName}
       </Text>
-      <Text style={[styles.score, isWinner && styles.winnerText]} allowFontScaling={false}>
+      <Text style={[styles.score, isWinner && styles.winnerText, isUserTeam && styles.userTeamText]} allowFontScaling={false}>
         {isBye ? '-' : scoreDisplay}
       </Text>
     </View>
@@ -63,14 +66,14 @@ function TeamRow({ teamName, teamId, seed, score, isWinner, isBye, onPress }: Te
   return content;
 }
 
-export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, isHighlighted = false }: BracketMatchBoxProps) {
+export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, isHighlighted = false, userTeamId }: BracketMatchBoxProps) {
   const isCompleted = match.status === 'Completed' || match.status === 'Forfeit';
   const homeIsWinner = isCompleted && match.winnerTeamId === match.homeTeamId;
   const awayIsWinner = isCompleted && match.winnerTeamId === match.awayTeamId;
 
-  // Parse seed from bracketPosition if available (format: "R1M1" or similar)
-  // For now, we don't have seeds in the DTO directly, so we won't display them
-  // This can be enhanced when seed info is added to TournamentMatchDto
+  // Check if home/away team is the user's team
+  const homeIsUserTeam = userTeamId ? match.homeTeamId === userTeamId : false;
+  const awayIsUserTeam = userTeamId ? match.awayTeamId === userTeamId : false;
 
   const content = (
     <View style={[styles.container, isHighlighted && styles.highlighted]}>
@@ -95,6 +98,7 @@ export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, 
             teamId={match.homeTeamId}
             isWinner={false}
             isBye={false}
+            isUserTeam={homeIsUserTeam}
             onPress={match.homeTeamId && onTeamPress ? () => onTeamPress(match.homeTeamId!) : undefined}
           />
           <View style={styles.divider} />
@@ -112,6 +116,7 @@ export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, 
             teamId={match.homeTeamId}
             score={match.homeScore}
             isWinner={homeIsWinner}
+            isUserTeam={homeIsUserTeam}
             onPress={match.homeTeamId && onTeamPress ? () => onTeamPress(match.homeTeamId!) : undefined}
           />
 
@@ -123,6 +128,7 @@ export function BracketMatchBox({ match, onPress, onTeamPress, canEdit = false, 
             teamId={match.awayTeamId}
             score={match.awayScore}
             isWinner={awayIsWinner}
+            isUserTeam={awayIsUserTeam}
             onPress={match.awayTeamId && onTeamPress ? () => onTeamPress(match.awayTeamId!) : undefined}
           />
         </>
@@ -167,7 +173,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.default,
     overflow: 'hidden',
-    minWidth: 180,
+    // No minWidth - let parent control width for compact bracket layout
   },
   highlighted: {
     borderColor: colors.primary.teal,
@@ -178,33 +184,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
     backgroundColor: colors.bg.elevated,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
   },
   matchNumber: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     color: colors.text.muted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   forfeitLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
     color: colors.status.error,
     textTransform: 'uppercase',
   },
   liveIndicator: {
     backgroundColor: colors.status.errorSubtle,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
     borderRadius: radius.sm,
   },
   liveText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
     color: colors.status.error,
   },
@@ -212,21 +218,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 4,
   },
   winnerRow: {
     backgroundColor: colors.subtle.green,
   },
+  userTeamRow: {
+    backgroundColor: colors.subtle.teal,
+  },
   teamName: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '500',
     color: colors.text.secondary,
     flex: 1,
-    marginRight: spacing.sm,
+    marginRight: 2,
   },
   winnerText: {
     color: colors.primary.green,
+    fontWeight: '700',
+  },
+  userTeamText: {
+    color: colors.primary.teal,
     fontWeight: '700',
   },
   byeText: {
@@ -238,10 +251,10 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   score: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.text.secondary,
-    minWidth: 24,
+    minWidth: 16,
     textAlign: 'right',
   },
   divider: {
@@ -252,19 +265,19 @@ const styles = StyleSheet.create({
     // Same as regular container, just semantic wrapper
   },
   scheduleInfo: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
     backgroundColor: colors.bg.elevated,
     borderTopWidth: 1,
     borderTopColor: colors.border.default,
   },
   scheduleText: {
-    fontSize: 10,
+    fontSize: 9,
     color: colors.text.muted,
   },
   venueText: {
-    fontSize: 10,
+    fontSize: 9,
     color: colors.text.subtle,
-    marginTop: 2,
+    marginTop: 1,
   },
 });

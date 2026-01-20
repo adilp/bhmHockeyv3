@@ -172,14 +172,14 @@ const styles = StyleSheet.create({
     // Container for the entire losers bracket section
   },
   header: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     backgroundColor: colors.bg.elevated,
     borderBottomWidth: 2,
     borderBottomColor: colors.status.warning,
   },
   headerText: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.status.warning,
     textTransform: 'uppercase',
@@ -187,8 +187,9 @@ const styles = StyleSheet.create({
   },
   bracketContainer: {
     position: 'relative',
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
   },
   matchBox: {
     position: 'absolute',

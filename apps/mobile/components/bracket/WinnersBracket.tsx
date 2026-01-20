@@ -14,18 +14,26 @@ import {
 interface WinnersBracketProps {
   matches: TournamentMatchDto[]; // Filtered to only Winners bracket matches
   selectedTeamId?: string; // For highlighting team's path
+  userTeamId?: string; // Current user's team - always highlighted in teal
+  currentRound?: number | null; // Round with active matches - label shown in white
   onMatchPress?: (match: TournamentMatchDto) => void;
   onTeamPress?: (teamId: string) => void; // For team selection
   canEdit?: boolean;
+  showHeader?: boolean; // Whether to show "WINNERS BRACKET" header
 }
 
 export const WinnersBracket: React.FC<WinnersBracketProps> = ({
   matches,
   selectedTeamId,
+  userTeamId,
+  currentRound,
   onMatchPress,
   onTeamPress,
   canEdit = false,
+  showHeader = true,
 }) => {
+  // Use userTeamId as the effective highlighted team (user's team is always highlighted)
+  const effectiveSelectedTeamId = userTeamId || selectedTeamId;
   // Calculate positions for all matches
   const matchPositions = useMemo(
     () => generateMatchPositionsMap(matches, 'Winners'),
@@ -57,16 +65,21 @@ export const WinnersBracket: React.FC<WinnersBracketProps> = ({
     return `Round ${round}`;
   };
 
-  // Check if a match should be highlighted (contains selected team)
+  // Check if a match should be highlighted (contains user's team)
   const isMatchHighlighted = (match: TournamentMatchDto): boolean => {
-    if (!selectedTeamId) return false;
-    return match.homeTeamId === selectedTeamId || match.awayTeamId === selectedTeamId;
+    if (!effectiveSelectedTeamId) return false;
+    return match.homeTeamId === effectiveSelectedTeamId || match.awayTeamId === effectiveSelectedTeamId;
   };
 
   // Check if a connector should be highlighted (connects two highlighted matches)
   const isConnectorHighlighted = (fromMatch: TournamentMatchDto, toMatch: TournamentMatchDto): boolean => {
-    if (!selectedTeamId) return false;
+    if (!effectiveSelectedTeamId) return false;
     return isMatchHighlighted(fromMatch) && isMatchHighlighted(toMatch);
+  };
+
+  // Check if a round is the current active round
+  const isCurrentRound = (round: number): boolean => {
+    return currentRound !== null && currentRound !== undefined && round === currentRound;
   };
 
   if (matches.length === 0) {
@@ -78,27 +91,30 @@ export const WinnersBracket: React.FC<WinnersBracketProps> = ({
   }
 
   // Add padding to dimensions for header and spacing
-  const HEADER_HEIGHT = 40;
-  const PADDING = 20;
-  const containerWidth = width + PADDING * 2;
-  const containerHeight = height + HEADER_HEIGHT + PADDING * 2;
+  // Reduced padding to fit more rounds horizontally (QF, SF, Finals)
+  const HEADER_HEIGHT = showHeader ? 36 : 0;
+  const PADDING_H = 8;  // Horizontal padding - minimal to fit more rounds
+  const PADDING_V = 28; // Vertical padding - extra room for round labels at top
+  const ROUND_LABEL_HEIGHT = 20; // Space for round labels above matches
+  const containerWidth = width + PADDING_H * 2;
+  const containerHeight = height + HEADER_HEIGHT + PADDING_V * 2 + ROUND_LABEL_HEIGHT;
 
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerText} allowFontScaling={false}>WINNERS BRACKET</Text>
-      </View>
+      {showHeader && (
+        <View style={styles.header}>
+          <Text style={styles.headerText} allowFontScaling={false}>WINNERS BRACKET</Text>
+        </View>
+      )}
 
-      {/* Scrollable bracket area */}
+      {/* Scrollable bracket area - vertical scroll, content fits horizontally */}
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={true}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={[
           styles.scrollContent,
           {
-            width: containerWidth,
-            height: containerHeight,
+            minHeight: containerHeight,
           },
         ]}
       >
@@ -106,8 +122,7 @@ export const WinnersBracket: React.FC<WinnersBracketProps> = ({
           style={[
             styles.bracketContainer,
             {
-              width: containerWidth,
-              height: containerHeight,
+              minHeight: containerHeight,
             },
           ]}
         >
@@ -123,18 +138,27 @@ export const WinnersBracket: React.FC<WinnersBracketProps> = ({
               const position = matchPositions.get(firstMatch.id);
               if (!position) return null;
 
+              const isCurrent = isCurrentRound(round);
               return (
                 <View
                   key={`round-label-${round}`}
                   style={[
                     styles.roundLabel,
                     {
-                      left: PADDING + position.x,
-                      top: HEADER_HEIGHT,
+                      left: PADDING_H + position.x,
+                      top: HEADER_HEIGHT + PADDING_V,
                     },
                   ]}
                 >
-                  <Text style={styles.roundLabelText} allowFontScaling={false}>{getRoundLabel(round)}</Text>
+                  <Text
+                    style={[
+                      styles.roundLabelText,
+                      isCurrent && styles.roundLabelTextCurrent,
+                    ]}
+                    allowFontScaling={false}
+                  >
+                    {getRoundLabel(round)}
+                  </Text>
                 </View>
               );
             })}
@@ -150,8 +174,8 @@ export const WinnersBracket: React.FC<WinnersBracketProps> = ({
                 style={[
                   styles.matchBox,
                   {
-                    left: PADDING + position.x,
-                    top: HEADER_HEIGHT + PADDING + position.y,
+                    left: PADDING_H + position.x,
+                    top: HEADER_HEIGHT + PADDING_V + ROUND_LABEL_HEIGHT + position.y,
                     width: MATCH_BOX_WIDTH,
                     height: MATCH_BOX_HEIGHT,
                   },
@@ -163,6 +187,7 @@ export const WinnersBracket: React.FC<WinnersBracketProps> = ({
                   onTeamPress={onTeamPress}
                   canEdit={canEdit}
                   isHighlighted={isMatchHighlighted(match)}
+                  userTeamId={userTeamId}
                 />
               </View>
             );
@@ -180,10 +205,10 @@ export const WinnersBracket: React.FC<WinnersBracketProps> = ({
             if (!fromPos || !toPos) return null;
 
             // Calculate connector endpoints
-            const fromX = PADDING + fromPos.x + MATCH_BOX_WIDTH;
-            const fromY = HEADER_HEIGHT + PADDING + fromPos.y + MATCH_BOX_HEIGHT / 2;
-            const toX = PADDING + toPos.x;
-            const toY = HEADER_HEIGHT + PADDING + toPos.y + MATCH_BOX_HEIGHT / 2;
+            const fromX = PADDING_H + fromPos.x + MATCH_BOX_WIDTH;
+            const fromY = HEADER_HEIGHT + PADDING_V + ROUND_LABEL_HEIGHT + fromPos.y + MATCH_BOX_HEIGHT / 2;
+            const toX = PADDING_H + toPos.x;
+            const toY = HEADER_HEIGHT + PADDING_V + ROUND_LABEL_HEIGHT + toPos.y + MATCH_BOX_HEIGHT / 2;
 
             return (
               <BracketConnector
@@ -208,16 +233,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
     backgroundColor: colors.bg.elevated,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
   },
   headerText: {
     ...typography.sectionTitle,
-    fontSize: 12,
-    letterSpacing: 1,
+    fontSize: 11,
+    letterSpacing: 0.5,
   },
   scrollContent: {
     minWidth: '100%',
@@ -230,14 +255,18 @@ const styles = StyleSheet.create({
   },
   roundLabel: {
     position: 'absolute',
-    paddingVertical: spacing.xs,
+    paddingVertical: 2,
   },
   roundLabelText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: colors.text.muted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+  },
+  roundLabelTextCurrent: {
+    color: colors.text.primary,
+    fontWeight: '700',
   },
   emptyContainer: {
     flex: 1,

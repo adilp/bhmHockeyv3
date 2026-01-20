@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useTournamentStore } from '../../../stores/tournamentStore';
+import { useAuthStore } from '../../../stores/authStore';
 import { BracketMatchBox, WinnersBracket, LosersBracket, GrandFinalSection } from '../../../components';
 import { colors, spacing, radius } from '../../../theme';
 import { groupMatchesByBracketType } from '../../../utils/bracketUtils';
@@ -51,34 +52,54 @@ export default function BracketScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
-  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { matches, currentTournament, fetchMatches, isLoading } = useTournamentStore(
+  const user = useAuthStore((state) => state.user);
+
+  const { matches, currentTournament, myRegistration, fetchMatches, fetchTournamentById, fetchMyRegistration, isLoading } = useTournamentStore(
     useShallow((state) => ({
       matches: state.matches,
       currentTournament: state.currentTournament,
+      myRegistration: state.myRegistration,
       fetchMatches: state.fetchMatches,
+      fetchTournamentById: state.fetchTournamentById,
+      fetchMyRegistration: state.fetchMyRegistration,
       isLoading: state.isLoading,
     }))
   );
 
-  // Fetch matches on focus
+  // Get user's team ID from their registration
+  const userTeamId = useMemo(() => {
+    if (!user) return null;
+    return myRegistration?.assignedTeamId || null;
+  }, [user, myRegistration]);
+
+  // Fetch tournament and matches on focus
   useFocusEffect(
     useCallback(() => {
       if (id) {
+        // Always fetch tournament to ensure we have format for display check
+        fetchTournamentById(id);
         fetchMatches(id);
+        if (user) {
+          fetchMyRegistration(id);
+        }
       }
-    }, [id, fetchMatches])
+    }, [id, fetchMatches, fetchTournamentById, fetchMyRegistration, user])
   );
 
-  // Handle team selection toggle
-  const handleTeamSelect = useCallback((teamId: string) => {
-    setSelectedTeamId(prev => prev === teamId ? null : teamId);
-  }, []);
+  // Determine the current round (earliest round with scheduled/in-progress matches)
+  const currentRound = useMemo(() => {
+    const activeMatches = matches.filter(
+      (m) => m.status === 'Scheduled' || m.status === 'InProgress'
+    );
+    if (activeMatches.length === 0) return null;
+    return Math.min(...activeMatches.map((m) => m.round));
+  }, [matches]);
 
-  // Check if this is a double elimination tournament
+  // Check tournament format for bracket display
   const isDoubleElimination = currentTournament?.format === 'DoubleElimination';
+  const isSingleElimination = currentTournament?.format === 'SingleElimination';
 
   // Group matches by bracket type for double elimination
   const groupedMatches = useMemo(() => {
@@ -201,33 +222,16 @@ export default function BracketScreen() {
   // Show loading only on initial load
   const showLoading = isLoading && matches.length === 0;
 
-  // Get selected team name for header display
-  const selectedTeamName = useMemo(() => {
-    if (!selectedTeamId) return null;
-    const match = matches.find(m =>
-      m.homeTeamId === selectedTeamId || m.awayTeamId === selectedTeamId
-    );
-    if (!match) return null;
-    return match.homeTeamId === selectedTeamId ? match.homeTeamName : match.awayTeamName;
-  }, [selectedTeamId, matches]);
-
   return (
     <View style={styles.container}>
       <Stack.Screen
         options={{
           title: isDoubleElimination ? 'Double Elimination' : 'Bracket',
-          headerRight: selectedTeamId
-            ? () => (
-                <TouchableOpacity onPress={() => setSelectedTeamId(null)}>
-                  <Text style={{ color: colors.primary.teal, fontSize: 15 }}>Clear</Text>
-                </TouchableOpacity>
-              )
-            : undefined,
         }}
       />
 
-      {/* Round selector chips */}
-      {rounds.length > 0 && (
+      {/* Round selector chips - only for list view (Round Robin) */}
+      {rounds.length > 0 && !isSingleElimination && !isDoubleElimination && (
         <View style={styles.chipContainer}>
           {renderRoundChip(null, 'All')}
           {rounds.map((round) =>
@@ -243,11 +247,21 @@ export default function BracketScreen() {
         </View>
       ) : matches.length === 0 ? (
         renderEmptyState()
+      ) : isSingleElimination ? (
+        // Single Elimination: WinnersBracket has its own ScrollView
+        <View style={styles.singleElimContainer}>
+          <WinnersBracket
+            matches={matches}
+            userTeamId={userTeamId || undefined}
+            currentRound={currentRound}
+            onMatchPress={handleMatchPress}
+            canEdit={currentTournament?.canManage ?? false}
+            showHeader={false}
+          />
+        </View>
       ) : isDoubleElimination && groupedMatches ? (
-        // Double Elimination Graphical View
+        // Double Elimination: Multiple brackets stacked vertically
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={true}
           showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.doubleElimScrollContent}
           refreshControl={
@@ -265,9 +279,9 @@ export default function BracketScreen() {
               <View style={styles.bracketSection}>
                 <WinnersBracket
                   matches={groupedMatches.winners}
-                  selectedTeamId={selectedTeamId || undefined}
+                  userTeamId={userTeamId || undefined}
+                  currentRound={currentRound}
                   onMatchPress={handleMatchPress}
-                  onTeamPress={handleTeamSelect}
                   canEdit={currentTournament?.canManage ?? false}
                 />
               </View>
@@ -284,9 +298,8 @@ export default function BracketScreen() {
                 <LosersBracket
                   matches={groupedMatches.losers}
                   allMatches={matches}
-                  selectedTeamId={selectedTeamId || undefined}
+                  selectedTeamId={userTeamId || undefined}
                   onMatchPress={handleMatchPress}
-                  onTeamPress={handleTeamSelect}
                   canEdit={currentTournament?.canManage ?? false}
                 />
               </View>
@@ -297,9 +310,8 @@ export default function BracketScreen() {
               <View style={styles.grandFinalSection}>
                 <GrandFinalSection
                   matches={groupedMatches.grandFinal}
-                  selectedTeamId={selectedTeamId || undefined}
+                  selectedTeamId={userTeamId || undefined}
                   onMatchPress={handleMatchPress}
-                  onTeamPress={handleTeamSelect}
                   canEdit={currentTournament?.canManage ?? false}
                 />
               </View>
@@ -307,7 +319,7 @@ export default function BracketScreen() {
           </View>
         </ScrollView>
       ) : (
-        // Single Elimination / Round Robin List View
+        // Round Robin List View
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
@@ -426,6 +438,11 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // Single elimination bracket styles
+  singleElimContainer: {
+    flex: 1,
   },
 
   // Double elimination bracket styles

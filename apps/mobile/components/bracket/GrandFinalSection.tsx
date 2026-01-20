@@ -119,41 +119,41 @@ export function GrandFinalSection({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: spacing.lg,
+    marginVertical: spacing.md,
   },
   topDivider: {
-    height: 3,
+    height: 2,
     backgroundColor: '#FFD700', // Gold
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     borderRadius: radius.sm,
   },
   bottomDivider: {
-    height: 3,
+    height: 2,
     backgroundColor: '#FFD700', // Gold
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     borderRadius: radius.sm,
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   headerText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFD700', // Gold
     textTransform: 'uppercase',
-    letterSpacing: 1.5,
+    letterSpacing: 1,
     textShadowColor: 'rgba(255, 215, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   matchesContainer: {
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   matchWrapper: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 320,
     alignItems: 'center',
   },
 });
