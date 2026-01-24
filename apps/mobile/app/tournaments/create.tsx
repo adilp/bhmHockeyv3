@@ -19,7 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, Stack } from 'expo-router';
 import { useTournamentStore } from '../../stores/tournamentStore';
 import { useOrganizationStore } from '../../stores/organizationStore';
-import type { TournamentFormat, CreateTournamentRequest } from '@bhmhockey/shared';
+import type { TournamentFormat, TournamentTeamFormation, CreateTournamentRequest } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../../theme';
 
 // Platform-specific Picker props for dark theme
@@ -50,6 +50,20 @@ const TOURNAMENT_FORMATS: { value: TournamentFormat; label: string; description:
   },
 ];
 
+// Team formation options
+const TEAM_FORMATION_OPTIONS: { value: TournamentTeamFormation; label: string; description: string }[] = [
+  {
+    value: 'PreFormed',
+    label: 'Pre-Formed Teams',
+    description: 'Players create or join teams before the tournament',
+  },
+  {
+    value: 'OrganizerAssigned',
+    label: 'Organizer Assigned',
+    description: 'You assign players to teams after registration',
+  },
+];
+
 export default function CreateTournamentScreen() {
   const router = useRouter();
   const { createTournament, isCreating } = useTournamentStore();
@@ -60,6 +74,7 @@ export default function CreateTournamentScreen() {
   const [description, setDescription] = useState('');
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [format, setFormat] = useState<TournamentFormat>('SingleElimination');
+  const [teamFormation, setTeamFormation] = useState<TournamentTeamFormation>('PreFormed');
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() + 14); // Default to 2 weeks from now
@@ -89,6 +104,7 @@ export default function CreateTournamentScreen() {
   // Picker modal states
   const [showOrgPicker, setShowOrgPicker] = useState(false);
   const [showFormatPicker, setShowFormatPicker] = useState(false);
+  const [showTeamFormationPicker, setShowTeamFormationPicker] = useState(false);
 
   // Keyboard accessory ID for iOS
   const inputAccessoryViewID = 'tournamentFormAccessory';
@@ -133,6 +149,11 @@ export default function CreateTournamentScreen() {
   const getFormatDisplayName = () => {
     const selectedFormat = TOURNAMENT_FORMATS.find(f => f.value === format);
     return selectedFormat?.label || format;
+  };
+
+  const getTeamFormationDisplayName = () => {
+    const selected = TEAM_FORMATION_OPTIONS.find(f => f.value === teamFormation);
+    return selected?.label || teamFormation;
   };
 
   const formatDate = (date: Date) => {
@@ -212,7 +233,7 @@ export default function CreateTournamentScreen() {
       name: name.trim(),
       description: description.trim() || undefined,
       format,
-      teamFormation: 'OrganizerAssigned', // Default for MVP
+      teamFormation,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       registrationDeadline: registrationDeadline.toISOString(),
@@ -317,6 +338,44 @@ export default function CreateTournamentScreen() {
             </View>
             <Text style={styles.formatDescription}>
               {TOURNAMENT_FORMATS.find(f => f.value === format)?.description}
+            </Text>
+          </View>
+
+          {/* Team Formation Selector */}
+          <View style={styles.field}>
+            <Text style={styles.label}>Team Formation *</Text>
+            <TouchableOpacity
+              style={styles.pickerButton}
+              onPress={() => setShowTeamFormationPicker(true)}
+            >
+              <Text style={styles.pickerButtonText}>{getTeamFormationDisplayName()}</Text>
+              <Text style={styles.pickerArrow}>&#9660;</Text>
+            </TouchableOpacity>
+
+            {/* Team formation chips for quick selection */}
+            <View style={styles.formatChipsContainer}>
+              {TEAM_FORMATION_OPTIONS.map((f) => (
+                <TouchableOpacity
+                  key={f.value}
+                  style={[
+                    styles.formatChip,
+                    teamFormation === f.value && styles.formatChipSelected,
+                  ]}
+                  onPress={() => setTeamFormation(f.value)}
+                >
+                  <Text
+                    style={[
+                      styles.formatChipText,
+                      teamFormation === f.value && styles.formatChipTextSelected,
+                    ]}
+                  >
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.formatDescription}>
+              {TEAM_FORMATION_OPTIONS.find(f => f.value === teamFormation)?.description}
             </Text>
           </View>
 
@@ -549,6 +608,35 @@ export default function CreateTournamentScreen() {
                   {...pickerProps}
                 >
                   {TOURNAMENT_FORMATS.map((f) => (
+                    <Picker.Item key={f.value} label={f.label} value={f.value} color={getPickerItemColor()} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Team Formation Picker Modal */}
+          <Modal
+            visible={showTeamFormationPicker}
+            transparent
+            animationType="slide"
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Team Formation</Text>
+                  <TouchableOpacity onPress={() => setShowTeamFormationPicker(false)}>
+                    <Text style={styles.modalDone}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <Picker
+                  selectedValue={teamFormation}
+                  onValueChange={setTeamFormation}
+                  style={styles.modalPicker}
+                  dropdownIconColor={colors.text.primary}
+                  {...pickerProps}
+                >
+                  {TEAM_FORMATION_OPTIONS.map((f) => (
                     <Picker.Item key={f.value} label={f.label} value={f.value} color={getPickerItemColor()} />
                   ))}
                 </Picker>
