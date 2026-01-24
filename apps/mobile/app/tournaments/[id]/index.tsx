@@ -262,40 +262,25 @@ function InfoTab({ tournament, isRefreshing, onRefresh, myRegistration, onShowSt
         </View>
       )}
 
-      {/* Pre-Formed Team Actions */}
-      {tournament.teamFormation === 'PreFormed' && !checkingTeams && (
+      {/* Pre-Formed Team Actions - only show if user has a team */}
+      {tournament.teamFormation === 'PreFormed' && !checkingTeams && userTeam && (
         <View style={styles.infoSection}>
-          {userTeam ? (
-            <>
-              <Text style={styles.sectionLabel}>YOUR TEAM</Text>
-              <TouchableOpacity
-                style={styles.teamActionButton}
-                onPress={() => onNavigate(`/tournaments/${tournament.id}/teams/${userTeam.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.teamActionContent}>
-                  <View>
-                    <Text style={styles.teamActionTitle}>{userTeam.name}</Text>
-                    <Text style={styles.teamActionSubtitle}>
-                      Tap to view team details
-                    </Text>
-                  </View>
-                  <Text style={styles.teamActionArrow}>→</Text>
-                </View>
-              </TouchableOpacity>
-            </>
-          ) : tournament.status === 'Open' && (
-            <>
-              <Text style={styles.sectionLabel}>TEAM MANAGEMENT</Text>
-              <TouchableOpacity
-                style={styles.createTeamButton}
-                onPress={() => onNavigate(`/tournaments/${tournament.id}/teams/create`)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.createTeamButtonText}>Create Team</Text>
-              </TouchableOpacity>
-            </>
-          )}
+          <Text style={styles.sectionLabel}>YOUR TEAM</Text>
+          <TouchableOpacity
+            style={styles.teamActionButton}
+            onPress={() => onNavigate(`/tournaments/${tournament.id}/teams/${userTeam.id}`)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.teamActionContent}>
+              <View>
+                <Text style={styles.teamActionTitle}>{userTeam.name}</Text>
+                <Text style={styles.teamActionSubtitle}>
+                  Tap to view team details
+                </Text>
+              </View>
+              <Text style={styles.teamActionArrow}>→</Text>
+            </View>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -456,7 +441,13 @@ export default function TournamentDetailScreen() {
 
   const handleRegisterNow = () => {
     if (!id) return;
-    router.push(`/tournaments/${id}/register`);
+    // For PreFormed tournaments, show the entry screen with options
+    // For OrganizerAssigned tournaments, go directly to registration
+    if (currentTournament?.teamFormation === 'PreFormed') {
+      router.push(`/tournaments/${id}/register/entry`);
+    } else {
+      router.push(`/tournaments/${id}/register`);
+    }
   };
 
   const handleTabChange = (tab: TabKey) => {

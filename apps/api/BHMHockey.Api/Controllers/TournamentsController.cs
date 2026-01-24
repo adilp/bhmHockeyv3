@@ -1,7 +1,9 @@
+using BHMHockey.Api.Data;
 using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace BHMHockey.Api.Controllers;
@@ -22,6 +24,7 @@ public class TournamentsController : ControllerBase
     private readonly ITournamentAdminService _adminService;
     private readonly ITournamentAuditService _auditService;
     private readonly ITournamentAnnouncementService _announcementService;
+    private readonly AppDbContext _context;
 
     public TournamentsController(
         ITournamentService tournamentService,
@@ -35,7 +38,8 @@ public class TournamentsController : ControllerBase
         IStandingsService standingsService,
         ITournamentAdminService adminService,
         ITournamentAuditService auditService,
-        ITournamentAnnouncementService announcementService)
+        ITournamentAnnouncementService announcementService,
+        AppDbContext context)
     {
         _tournamentService = tournamentService;
         _lifecycleService = lifecycleService;
@@ -44,6 +48,7 @@ public class TournamentsController : ControllerBase
         _bracketGenerationService = bracketGenerationService;
         _registrationService = registrationService;
         _teamAssignmentService = teamAssignmentService;
+        _context = context;
         _teamMemberService = teamMemberService;
         _standingsService = standingsService;
         _adminService = adminService;
@@ -1233,6 +1238,52 @@ public class TournamentsController : ControllerBase
             var userId = GetCurrentUserId();
             var registrations = await _registrationService.GetAllAsync(id, userId);
             return Ok(registrations);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Remove a registration from the tournament. Admin only.
+    /// </summary>
+    /// <param name="id">Tournament ID</param>
+    /// <param name="registrationId">Registration ID to remove</param>
+    /// <response code="204">Registration removed successfully</response>
+    /// <response code="401">Not authenticated</response>
+    /// <response code="403">Not authorized to remove registrations</response>
+    /// <response code="404">Registration not found</response>
+    [HttpDelete("{id:guid}/registrations/{registrationId:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveRegistration(Guid id, Guid registrationId)
+    {
+        try
+        {
+            var adminUserId = GetCurrentUserId();
+
+            // Look up the registration to get the target user's ID
+            var registration = await _context.TournamentRegistrations
+                .FirstOrDefaultAsync(r => r.Id == registrationId && r.TournamentId == id && r.Status != "Cancelled");
+
+            if (registration == null)
+            {
+                return NotFound();
+            }
+
+            // Use the existing WithdrawAsync with targetUserId to leverage admin auth check
+            var removed = await _registrationService.WithdrawAsync(id, adminUserId, registration.UserId);
+
+            if (!removed)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
         }
         catch (UnauthorizedAccessException ex)
         {

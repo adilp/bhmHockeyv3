@@ -1,7 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius } from '../../../../theme';
+import { useTournamentStore } from '../../../../stores/tournamentStore';
 
 interface ManageOptionProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -29,11 +32,108 @@ export default function ManageTournamentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
+  const currentTournament = useTournamentStore(state => state.currentTournament);
+  const processingId = useTournamentStore(state => state.processingId);
+  const fetchTournamentById = useTournamentStore(state => state.fetchTournamentById);
+  const publishTournament = useTournamentStore(state => state.publishTournament);
+  const deleteTournament = useTournamentStore(state => state.deleteTournament);
+
+  const isPublishing = processingId === `publish-${id}`;
+  const isDeleting = processingId === `delete-${id}`;
+  const isDraft = currentTournament?.status === 'Draft';
+
+  // Fetch tournament data on focus
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        fetchTournamentById(id);
+      }
+    }, [id])
+  );
+
+  const handlePublish = () => {
+    Alert.alert(
+      'Publish Tournament',
+      'This will make your tournament visible to all users and open registration. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Publish',
+          style: 'default',
+          onPress: async () => {
+            if (!id) return;
+            const success = await publishTournament(id);
+            if (success) {
+              Alert.alert('Success', 'Tournament published! Registration is now open.');
+            } else {
+              Alert.alert('Error', 'Failed to publish tournament. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Tournament',
+      'Are you sure you want to delete this tournament? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!id) return;
+            const success = await deleteTournament(id);
+            if (success) {
+              Alert.alert('Deleted', 'Tournament has been deleted.', [
+                { text: 'OK', onPress: () => router.replace('/tournaments') },
+              ]);
+            } else {
+              Alert.alert('Error', 'Failed to delete tournament. Only Draft tournaments can be deleted.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: 'Manage Tournament' }} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Draft Status Banner with Publish Button */}
+        {isDraft && (
+          <View style={styles.draftBanner}>
+            <View style={styles.draftInfo}>
+              <Ionicons name="eye-off" size={20} color={colors.status.warning} />
+              <View style={styles.draftTextContainer}>
+                <Text style={styles.draftTitle}>Draft Mode</Text>
+                <Text style={styles.draftDescription}>
+                  This tournament is only visible to you. Publish to open registration.
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.publishButton, isPublishing && styles.publishButtonDisabled]}
+              onPress={handlePublish}
+              disabled={isPublishing}
+              activeOpacity={0.7}
+            >
+              {isPublishing ? (
+                <ActivityIndicator size="small" color={colors.bg.darkest} />
+              ) : (
+                <>
+                  <Ionicons name="rocket" size={18} color={colors.bg.darkest} />
+                  <Text style={styles.publishButtonText}>Publish</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Tournament Settings Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tournament</Text>
@@ -122,6 +222,29 @@ export default function ManageTournamentScreen() {
           />
         </View>
 
+        {/* Danger Zone Section - Only show for Draft tournaments */}
+        {isDraft && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, styles.dangerSectionTitle]}>Danger Zone</Text>
+
+            <TouchableOpacity
+              style={[styles.deleteButton, isDeleting && styles.deleteButtonDisabled]}
+              onPress={handleDelete}
+              disabled={isDeleting}
+              activeOpacity={0.7}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color={colors.status.error} />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={20} color={colors.status.error} />
+                  <Text style={styles.deleteButtonText}>Delete Tournament</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
@@ -181,5 +304,73 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: spacing.xxl,
+  },
+  draftBanner: {
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.status.warning,
+  },
+  draftInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  draftTextContainer: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  draftTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.status.warning,
+  },
+  draftDescription: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  publishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary.teal,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+  },
+  publishButtonDisabled: {
+    opacity: 0.6,
+  },
+  publishButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.bg.darkest,
+  },
+  dangerSectionTitle: {
+    color: colors.status.error,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.status.error,
+    gap: spacing.sm,
+  },
+  deleteButtonDisabled: {
+    opacity: 0.6,
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.status.error,
   },
 });

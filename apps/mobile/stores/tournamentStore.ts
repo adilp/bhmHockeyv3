@@ -75,6 +75,7 @@ interface TournamentState {
   fetchTeams: (tournamentId: string) => Promise<void>;
   fetchMatches: (tournamentId: string) => Promise<void>;
   createTournament: (data: CreateTournamentRequest) => Promise<TournamentDto | null>;
+  deleteTournament: (tournamentId: string) => Promise<boolean>;
   enterScore: (tournamentId: string, matchId: string, homeScore: number, awayScore: number) => Promise<boolean>;
   generateBracket: (tournamentId: string) => Promise<boolean>;
   clearTournament: () => void;
@@ -88,6 +89,7 @@ interface TournamentState {
   markPayment: (tournamentId: string) => Promise<boolean>;
   fetchAllRegistrations: (tournamentId: string) => Promise<void>;
   verifyPayment: (tournamentId: string, registrationId: string, verified: boolean) => Promise<boolean>;
+  removeRegistration: (tournamentId: string, registrationId: string) => Promise<boolean>;
   assignPlayerToTeam: (tournamentId: string, registrationId: string, teamId: string) => Promise<boolean>;
   autoAssignTeams: (tournamentId: string, balanceBySkillLevel?: boolean) => Promise<TeamAssignmentResultDto | null>;
   bulkCreateTeams: (tournamentId: string, count: number, namePrefix: string) => Promise<BulkCreateTeamsResponse | null>;
@@ -121,6 +123,9 @@ interface TournamentState {
   createAnnouncement: (tournamentId: string, title: string, body: string, target?: AnnouncementTarget | null, targetTeamIds?: string[] | null) => Promise<boolean>;
   deleteAnnouncement: (tournamentId: string, announcementId: string) => Promise<boolean>;
   clearAnnouncements: () => void;
+
+  // Lifecycle actions
+  publishTournament: (tournamentId: string) => Promise<boolean>;
 }
 
 export const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -257,6 +262,30 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         isCreating: false,
       });
       return null;
+    }
+  },
+
+  // Delete a tournament (Draft status only)
+  deleteTournament: async (tournamentId: string) => {
+    set({ processingId: `delete-${tournamentId}`, error: null });
+    try {
+      await tournamentService.delete(tournamentId);
+      // Remove tournament from list
+      const { tournaments } = get();
+      const updatedTournaments = tournaments.filter(t => t.id !== tournamentId);
+      set({
+        tournaments: updatedTournaments,
+        currentTournament: null,
+        processingId: null,
+      });
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to delete tournament';
+      set({
+        error: errorMessage,
+        processingId: null,
+      });
+      return false;
     }
   },
 
@@ -460,6 +489,24 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       return true;
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || error?.message || 'Failed to verify payment';
+      set({ registrationError: errorMessage });
+      return false;
+    }
+  },
+
+  // Admin: Remove a registration
+  removeRegistration: async (tournamentId: string, registrationId: string) => {
+    set({ registrationError: null });
+    try {
+      await tournamentService.removeRegistration(tournamentId, registrationId);
+
+      // Remove registration from the array
+      const { registrations } = get();
+      const updatedRegistrations = registrations.filter(reg => reg.id !== registrationId);
+      set({ registrations: updatedRegistrations });
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to remove registration';
       set({ registrationError: errorMessage });
       return false;
     }
@@ -821,4 +868,42 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
     isLoadingAnnouncements: false,
     isSendingAnnouncement: false,
   }),
+
+  // ============================================
+  // Lifecycle Actions
+  // ============================================
+
+  // Publish tournament (Draft -> Open)
+  publishTournament: async (tournamentId: string) => {
+    const { processingId } = get();
+
+    // Prevent double-clicks
+    if (processingId === `publish-${tournamentId}`) {
+      return false;
+    }
+
+    set({ processingId: `publish-${tournamentId}`, error: null });
+    try {
+      const updatedTournament = await tournamentService.publish(tournamentId);
+
+      // Update current tournament in state
+      set({ currentTournament: updatedTournament, processingId: null });
+
+      // Also update the tournament in the list if it exists
+      const { tournaments } = get();
+      const updatedTournaments = tournaments.map(t =>
+        t.id === tournamentId ? updatedTournament : t
+      );
+      set({ tournaments: updatedTournaments });
+
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to publish tournament';
+      set({
+        processingId: null,
+        error: errorMessage,
+      });
+      return false;
+    }
+  },
 }));

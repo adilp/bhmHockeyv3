@@ -413,6 +413,13 @@ export const tournamentService = {
     return response.data;
   },
 
+  /**
+   * Remove a registration from the tournament (admin only)
+   */
+  async removeRegistration(tournamentId: string, registrationId: string): Promise<void> {
+    await apiClient.instance.delete(`/tournaments/${tournamentId}/registrations/${registrationId}`);
+  },
+
   // ============================================
   // Team Assignment
   // ============================================

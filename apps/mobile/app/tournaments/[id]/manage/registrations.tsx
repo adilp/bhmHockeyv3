@@ -44,7 +44,7 @@ export default function RegistrationsScreen() {
   const [positionFilter, setPositionFilter] = useState<PositionFilter>('All');
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>('All');
 
-  const { registrations, fetchAllRegistrations, verifyPayment, isLoading } = useTournamentStore();
+  const { registrations, fetchAllRegistrations, verifyPayment, removeRegistration, isLoading } = useTournamentStore();
 
   useFocusEffect(
     useCallback(() => {
@@ -105,12 +105,32 @@ export default function RegistrationsScreen() {
     const currentStatus = registration.paymentStatus || 'Pending';
     const playerName = `${registration.user.firstName} ${registration.user.lastName}`;
 
+    const handleRemoveRegistration = () => {
+      Alert.alert(
+        'Remove Registration',
+        `Are you sure you want to remove ${playerName} from this tournament?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: async () => {
+              const success = await removeRegistration(id, registration.id);
+              if (success) {
+                Alert.alert('Done', `${playerName} has been removed from the tournament.`);
+              }
+            },
+          },
+        ]
+      );
+    };
+
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Cancel', 'Verify Payment', 'Reject Payment'],
+          options: ['Cancel', 'Verify Payment', 'Reject Payment', 'Remove Registration'],
           cancelButtonIndex: 0,
-          destructiveButtonIndex: currentStatus === 'Verified' ? 2 : undefined,
+          destructiveButtonIndex: 3,
           title: `${playerName} - ${currentStatus}`,
         },
         async (buttonIndex) => {
@@ -141,6 +161,9 @@ export default function RegistrationsScreen() {
                 },
               ]
             );
+          } else if (buttonIndex === 3) {
+            // Remove Registration
+            handleRemoveRegistration();
           }
         }
       );
@@ -159,13 +182,17 @@ export default function RegistrationsScreen() {
         },
         {
           text: 'Reject Payment',
-          style: 'destructive',
           onPress: async () => {
             const success = await verifyPayment(id, registration.id, false);
             if (success) {
               Alert.alert('Done', `Payment rejected for ${playerName}`);
             }
           },
+        },
+        {
+          text: 'Remove Registration',
+          style: 'destructive',
+          onPress: handleRemoveRegistration,
         },
       ]);
     }

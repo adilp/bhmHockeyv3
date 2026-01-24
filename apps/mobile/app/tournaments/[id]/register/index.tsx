@@ -17,9 +17,9 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { useTournamentStore } from '../../../stores/tournamentStore';
-import { useAuthStore } from '../../../stores/authStore';
-import { colors, spacing, radius } from '../../../theme';
+import { useTournamentStore } from '../../../../stores/tournamentStore';
+import { useAuthStore } from '../../../../stores/authStore';
+import { colors, spacing, radius } from '../../../../theme';
 import type { CreateTournamentRegistrationRequest } from '@bhmhockey/shared';
 
 // Custom question types
@@ -150,11 +150,18 @@ export default function TournamentRegisterScreen() {
     const result = await registerForTournament(id, request);
 
     if (result) {
-      // Show success message
+      // Show success message - different for PreFormed tournaments (free agent)
       if (result.status === 'Waitlisted') {
         Alert.alert(
           'Added to Waitlist',
           `You're #${result.waitlistPosition} on the waitlist. We'll notify you when a spot opens up!`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else if (currentTournament?.teamFormation === 'PreFormed') {
+        // PreFormed tournament - user is joining as free agent
+        Alert.alert(
+          'Registration Successful',
+          "You've registered as a free agent! The free agent pool feature is coming soon. In the meantime, you can browse teams and contact captains directly to join a team.",
           [{ text: 'OK', onPress: () => router.back() }]
         );
       } else {
