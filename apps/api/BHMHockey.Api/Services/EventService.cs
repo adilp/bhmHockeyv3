@@ -1197,6 +1197,12 @@ public class EventService : IEventService
 
     private async Task NotifyUserPromotedFromWaitlistAsync(Event evt, User user)
     {
+        // Don't notify about promotions during draft mode
+        if (!ShouldSendRosterNotification(evt))
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(user.PushToken))
         {
             return;
