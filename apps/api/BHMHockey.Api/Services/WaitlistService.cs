@@ -166,6 +166,12 @@ public class WaitlistService : IWaitlistService
 
     private async Task NotifyUserAutoPromotedAsync(EventRegistration registration)
     {
+        // Don't notify about auto-promotions during draft mode
+        if (!registration.Event.IsRosterPublished)
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(registration.User.PushToken))
         {
             return;
@@ -230,6 +236,12 @@ public class WaitlistService : IWaitlistService
 
     private async Task NotifyOrganizerAutoPromotionAsync(EventRegistration registration)
     {
+        // Don't notify about auto-promotions during draft mode
+        if (!registration.Event.IsRosterPublished)
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(registration.Event.Creator.PushToken))
         {
             return;
