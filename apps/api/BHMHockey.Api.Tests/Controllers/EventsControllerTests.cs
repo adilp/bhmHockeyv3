@@ -87,6 +87,7 @@ public class EventsControllerTests
             IsRegistered: isRegistered,
             CanManage: isCreator,
             CreatedAt: DateTime.UtcNow,
+            IsRosterPublished: true,     // Roster draft mode
             CreatorVenmoHandle: null,    // Phase 4
             MyPaymentStatus: null,       // Phase 4
             MyTeamAssignment: null,      // Team assignment
