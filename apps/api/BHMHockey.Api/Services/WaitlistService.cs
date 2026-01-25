@@ -426,6 +426,12 @@ public class WaitlistService : IWaitlistService
     {
         foreach (var notification in notifications)
         {
+            // Don't send roster-related notifications during draft mode
+            if (!notification.Event.IsRosterPublished)
+            {
+                continue;
+            }
+
             if (notification.Type == NotificationType.AutoPromoted)
             {
                 // Send auto-promoted notification to user
