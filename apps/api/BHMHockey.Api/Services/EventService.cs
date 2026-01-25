@@ -808,6 +808,7 @@ public class EventService : IEventService
             isRegistered,
             canManage,
             evt.CreatedAt,
+            evt.IsRosterPublished,  // Roster draft mode
             creatorVenmoHandle,  // Phase 4
             myPaymentStatus,     // Phase 4
             myTeamAssignment,    // Team assignment
