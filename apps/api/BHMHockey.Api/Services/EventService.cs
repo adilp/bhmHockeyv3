@@ -1226,6 +1226,12 @@ public class EventService : IEventService
     /// </summary>
     private async Task NotifyUserRemovedFromEventAsync(Event evt, User user)
     {
+        // Don't notify about removals during draft mode
+        if (!ShouldSendRosterNotification(evt))
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(user.PushToken))
         {
             return;
