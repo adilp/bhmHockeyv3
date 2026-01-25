@@ -43,6 +43,15 @@ public class EventService : IEventService
     }
 
     /// <summary>
+    /// Returns true if roster-related notifications should be sent for this event.
+    /// Notifications are suppressed while roster is unpublished (draft mode).
+    /// </summary>
+    private bool ShouldSendRosterNotification(Event evt)
+    {
+        return evt.IsRosterPublished;
+    }
+
+    /// <summary>
     /// Check if user can manage an event.
     /// For standalone events: only the creator can manage.
     /// For org-linked events: any org admin can manage.
