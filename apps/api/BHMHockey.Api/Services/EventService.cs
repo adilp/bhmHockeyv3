@@ -1169,6 +1169,12 @@ public class EventService : IEventService
     // Notification helpers
     private async Task NotifyOrganizerNewWaitlistSignupAsync(Event evt, User user, int waitlistPosition)
     {
+        // Don't notify about waitlist signups during draft mode
+        if (!ShouldSendRosterNotification(evt))
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(evt.Creator.PushToken))
         {
             return;
