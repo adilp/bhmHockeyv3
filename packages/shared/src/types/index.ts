@@ -190,6 +190,8 @@ export interface EventDto {
   isRegistered: boolean;
   canManage: boolean;            // True if current user can manage this event (creator for standalone, org admin for org events)
   createdAt: string;
+  // Roster draft mode
+  isRosterPublished: boolean;    // True if roster/waitlist details are visible to players
   // Payment fields (Phase 4)
   creatorVenmoHandle?: string;   // For "Pay with Venmo" button
   myPaymentStatus?: PaymentStatus; // Current user's payment status
