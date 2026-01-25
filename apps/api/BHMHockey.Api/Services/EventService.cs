@@ -1036,6 +1036,12 @@ public class EventService : IEventService
     /// </summary>
     private async Task NotifyUserPaymentVerifiedButFullAsync(Event evt, User user)
     {
+        // Don't notify about waitlist status during draft mode
+        if (!ShouldSendRosterNotification(evt))
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(user.PushToken))
         {
             return;
