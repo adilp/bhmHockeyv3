@@ -20,6 +20,10 @@ public class Event
     public DateTime? RegistrationDeadline { get; set; }
     public string Status { get; set; } = "Published"; // Draft, Published, Full, Completed, Cancelled
 
+    // Roster publication state - controls whether players can see roster/waitlist details
+    // New events start unpublished; organizers must publish before players see placements
+    public bool IsRosterPublished { get; set; } = false;
+
     // Visibility controls who can see and register for the event
     // - Public: Anyone can see and register
     // - OrganizationMembers: Only subscribers of the organization (requires OrganizationId)
