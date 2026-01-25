@@ -126,7 +126,8 @@ public class EventServiceTests : IDisposable
         string visibility = "Public",
         string status = "Published",
         DateTime? eventDate = null,
-        decimal cost = 25.00m)
+        decimal cost = 25.00m,
+        bool isRosterPublished = false)
     {
         var evt = new Event
         {
@@ -142,6 +143,7 @@ public class EventServiceTests : IDisposable
             Cost = cost,
             Status = status,
             Visibility = visibility,
+            IsRosterPublished = isRosterPublished,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -406,8 +408,9 @@ public class EventServiceTests : IDisposable
     public async Task RemoveRegistrationAsync_NotifiesRemovedUser()
     {
         // Arrange - Removed user should receive notification
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, isRosterPublished: true);
 
         var removedUser = await CreateTestUser("removed@example.com");
         removedUser.PushToken = "ExponentPushToken[removed]";
@@ -595,12 +598,13 @@ public class EventServiceTests : IDisposable
     public async Task RegisterAsync_ForPaidEvent_NotifiesOrganizer()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com");
         creator.PushToken = "ExponentPushToken[test]";
         await _context.SaveChangesAsync();
 
         var user = await CreateTestUser("user@example.com");
-        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, isRosterPublished: true);
 
         // Act
         await _sut.RegisterAsync(evt.Id, user.Id);
@@ -2138,12 +2142,13 @@ public class EventServiceTests : IDisposable
     public async Task UpdatePaymentStatusAsync_WaitlistedUserPromoted_SendsNotification()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com");
         var waitlistedUser = await CreateTestUser("waitlisted@example.com");
         waitlistedUser.PushToken = "ExponentPushToken[test]";
         await _context.SaveChangesAsync();
 
-        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10);
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, isRosterPublished: true);
 
         var registration = await CreateRegistration(evt.Id, waitlistedUser.Id, "Waitlisted");
         registration.PaymentStatus = "MarkedPaid";
@@ -2172,8 +2177,9 @@ public class EventServiceTests : IDisposable
     public async Task UpdatePaymentStatusAsync_WaitlistedUserRosterFull_SendsVerifiedButFullNotification()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id, maxPlayers: 1);
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 1, isRosterPublished: true);
 
         // Fill the roster
         var user1 = await CreateTestUser("user1@example.com");

@@ -71,7 +71,8 @@ public class WaitlistServiceTests : IDisposable
         Guid creatorId,
         decimal cost = 25.00m,
         int maxPlayers = 10,
-        string name = "Test Event")
+        string name = "Test Event",
+        bool isRosterPublished = false)
     {
         var evt = new Event
         {
@@ -86,6 +87,7 @@ public class WaitlistServiceTests : IDisposable
             Cost = cost,
             Status = "Published",
             Visibility = "Public",
+            IsRosterPublished = isRosterPublished,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -315,8 +317,9 @@ public class WaitlistServiceTests : IDisposable
     public async Task PromoteNextFromWaitlistAsync_SendsNotification_WhenUserHasPushToken()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, isRosterPublished: true);
 
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[xxxxx]");
         await CreateRegistration(evt.Id, user.Id, status: "Waitlisted", waitlistPosition: 1);
@@ -534,8 +537,9 @@ public class WaitlistServiceTests : IDisposable
     public async Task PromoteNextFromWaitlistAsync_SendsAutoPromotedNotification_WithCorrectType()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com", pushToken: "ExponentPushToken[creator]");
-        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, isRosterPublished: true);
 
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[user]");
         await CreateRegistration(evt.Id, user.Id, status: "Waitlisted", waitlistPosition: 1);
@@ -561,8 +565,9 @@ public class WaitlistServiceTests : IDisposable
     public async Task PromoteNextFromWaitlistAsync_SendsOrganizerAutoPromotionNotification_WithCorrectType()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com", pushToken: "ExponentPushToken[creator]");
-        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, isRosterPublished: true);
 
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[user]");
         await CreateRegistration(evt.Id, user.Id, status: "Waitlisted", waitlistPosition: 1);
@@ -588,8 +593,9 @@ public class WaitlistServiceTests : IDisposable
     public async Task PromoteNextFromWaitlistAsync_SendsBothNotifications_WhenBothHavePushTokens()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com", pushToken: "ExponentPushToken[creator]");
-        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, isRosterPublished: true);
 
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[user]");
         await CreateRegistration(evt.Id, user.Id, status: "Waitlisted", waitlistPosition: 1);
@@ -615,8 +621,9 @@ public class WaitlistServiceTests : IDisposable
     public async Task PromoteNextFromWaitlistAsync_SkipsOrganizerNotification_WhenOrganizerHasNoPushToken()
     {
         // Arrange - Creator has no push token
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com", pushToken: null);
-        var evt = await CreateTestEvent(creator.Id, cost: 25.00m);
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, isRosterPublished: true);
 
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[user]");
         await CreateRegistration(evt.Id, user.Id, status: "Waitlisted", waitlistPosition: 1);
@@ -945,8 +952,9 @@ public class WaitlistServiceTests : IDisposable
     public async Task PromoteFromWaitlistAsync_MethodOwnsTransaction_SendsNotifications()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com", pushToken: "ExponentPushToken[creator]");
-        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, maxPlayers: 10);
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, maxPlayers: 10, isRosterPublished: true);
 
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[user]");
         var reg = new EventRegistration
@@ -1072,8 +1080,9 @@ public class WaitlistServiceTests : IDisposable
     public async Task SendPendingNotificationsAsync_SendsAutoPromotedNotification()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com", pushToken: "ExponentPushToken[creator]");
-        var evt = await CreateTestEvent(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, isRosterPublished: true);
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[user]");
 
         var notifications = new List<PendingNotification>
@@ -1121,8 +1130,9 @@ public class WaitlistServiceTests : IDisposable
     public async Task SendPendingNotificationsAsync_SendsSpotAvailableNotification()
     {
         // Arrange
+        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, isRosterPublished: true);
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[user]");
 
         var notifications = new List<PendingNotification>
