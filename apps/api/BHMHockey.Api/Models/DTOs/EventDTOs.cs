@@ -20,6 +20,8 @@ public record EventDto(
     bool IsRegistered,
     bool CanManage,               // True if current user can manage this event (creator for standalone, org admin for org events)
     DateTime CreatedAt,
+    // Roster draft mode
+    bool IsRosterPublished,       // True if roster/waitlist details are visible to players
     // Payment fields (Phase 4)
     string? CreatorVenmoHandle,   // For "Pay with Venmo" button
     string? MyPaymentStatus,      // Current user's payment status (null if not registered or free event)
