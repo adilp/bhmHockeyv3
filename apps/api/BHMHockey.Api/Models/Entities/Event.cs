@@ -40,6 +40,12 @@ public class Event
     public DateTime? PlayerReminderSentAt { get; set; }
     public DateTime? OrganizerPaymentReminderSentAt { get; set; }
 
+    // Publishing tracking - for roster publication state and reminders
+    public DateTime? PublishedAt { get; set; }
+    public DateTime? OrganizerPublishReminder24hSentAt { get; set; }
+    public DateTime? OrganizerPublishReminder8hSentAt { get; set; }
+    public DateTime? OrganizerPublishReminder5hSentAt { get; set; }
+
     // Navigation properties
     public ICollection<EventRegistration> Registrations { get; set; } = new List<EventRegistration>();
 
