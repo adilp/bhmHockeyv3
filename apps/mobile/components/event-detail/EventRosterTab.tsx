@@ -5,6 +5,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
+  Text,
 } from 'react-native';
 import { eventService } from '@bhmhockey/api-client';
 import type {
@@ -34,9 +36,10 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<EventRegistrationDto | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const isUpdatingRoster = useRef(false);
   const hasLoadedOnce = useRef(false);
-  const { updatePaymentStatus, updateTeamAssignment, removeRegistration } = useEventStore();
+  const { updatePaymentStatus, updateTeamAssignment, removeRegistration, publishRoster } = useEventStore();
 
   // Filter into registered and waitlisted
   const registrations = useMemo(
@@ -111,6 +114,37 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const handleCloseModal = () => {
     setIsModalVisible(false);
     setSelectedPlayer(null);
+  };
+
+  const handlePublishRoster = async () => {
+    Alert.alert(
+      'Publish Roster',
+      'This will notify all players of their placement. Players will see their team assignment and waitlist position. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Publish',
+          onPress: async () => {
+            setIsPublishing(true);
+            try {
+              const result = await publishRoster(eventId);
+              if (result?.success) {
+                Alert.alert(
+                  'Roster Published',
+                  `Roster is now live! ${result.notificationsSent} player${result.notificationsSent === 1 ? '' : 's'} notified.`
+                );
+              } else {
+                Alert.alert('Error', result?.message || 'Failed to publish roster');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to publish roster. Please try again.');
+            } finally {
+              setIsPublishing(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Payment handlers
@@ -342,6 +376,23 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Publish Roster button for organizers on unpublished events */}
+        {canManage && !event.isRosterPublished && (
+          <TouchableOpacity
+            style={[styles.publishButton, isPublishing && styles.publishButtonDisabled]}
+            onPress={handlePublishRoster}
+            disabled={isPublishing}
+          >
+            {isPublishing ? (
+              <ActivityIndicator size="small" color={colors.text.primary} />
+            ) : (
+              <Text style={styles.publishButtonText} allowFontScaling={false}>
+                Publish Roster
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
+
         {/* Roster View */}
         <View>
           {registrations.length === 0 ? (
@@ -407,6 +458,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.xl,
+  },
+  publishButton: {
+    backgroundColor: colors.primary.teal,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  publishButtonDisabled: {
+    opacity: 0.6,
+  },
+  publishButtonText: {
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   centered: {
     flex: 1,
