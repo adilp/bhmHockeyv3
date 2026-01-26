@@ -207,6 +207,67 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     );
   };
 
+  // Move to roster handler (waitlisted -> rostered)
+  const handleMoveToRoster = async (registration: EventRegistrationDto) => {
+    const userName = `${registration.user.firstName} ${registration.user.lastName}`;
+
+    Alert.alert(
+      'Move to Roster',
+      `Move ${userName} from the waitlist to the roster?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Move',
+          onPress: async () => {
+            try {
+              const result = await eventService.moveToRoster(eventId, registration.id);
+              if (result.success) {
+                await reloadRegistrations();
+                Alert.alert('Success', 'Player moved to roster');
+              } else {
+                Alert.alert('Error', result.message || 'Failed to move player');
+              }
+            } catch (error: any) {
+              const message = error?.response?.data?.message || 'Failed to move player to roster';
+              Alert.alert('Error', message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Move to waitlist handler (rostered -> waitlisted)
+  const handleMoveToWaitlist = async (registration: EventRegistrationDto) => {
+    const userName = `${registration.user.firstName} ${registration.user.lastName}`;
+
+    Alert.alert(
+      'Move to Waitlist',
+      `Move ${userName} from the roster to the waitlist?\n\nTheir team assignment and payment deadline will be cleared.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Move',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await eventService.moveToWaitlist(eventId, registration.id);
+              if (result.success) {
+                await reloadRegistrations();
+                Alert.alert('Success', 'Player moved to waitlist');
+              } else {
+                Alert.alert('Error', result.message || 'Failed to move player');
+              }
+            } catch (error: any) {
+              const message = error?.response?.data?.message || 'Failed to move player to waitlist';
+              Alert.alert('Error', message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Waitlist item tap handler - shows player detail modal (same as roster)
   const handleWaitlistItemPress = (registration: EventRegistrationDto) => {
     handlePlayerPress(registration);
@@ -327,6 +388,8 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         onMarkPaid={canManage ? handleMarkPaid : undefined}
         onVerifyPayment={canManage ? handleVerifyPayment : undefined}
         onResetPayment={canManage ? handleResetPayment : undefined}
+        onMoveToRoster={canManage && selectedPlayer?.isWaitlisted ? handleMoveToRoster : undefined}
+        onMoveToWaitlist={canManage && !selectedPlayer?.isWaitlisted ? handleMoveToWaitlist : undefined}
       />
     </View>
   );

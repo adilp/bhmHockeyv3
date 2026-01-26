@@ -27,6 +27,10 @@ interface PlayerDetailModalProps {
   onMarkPaid?: (registration: EventRegistrationDto) => void;
   onVerifyPayment?: (registration: EventRegistrationDto) => void;
   onResetPayment?: (registration: EventRegistrationDto) => void;
+  /** Move waitlisted player to roster (organizer only) */
+  onMoveToRoster?: (registration: EventRegistrationDto) => void;
+  /** Move rostered player to waitlist (organizer only) */
+  onMoveToWaitlist?: (registration: EventRegistrationDto) => void;
 }
 
 const getPaymentStatusDisplay = (status?: string): { label: string; color: string } => {
@@ -52,6 +56,8 @@ export function PlayerDetailModal({
   onMarkPaid,
   onVerifyPayment,
   onResetPayment,
+  onMoveToRoster,
+  onMoveToWaitlist,
 }: PlayerDetailModalProps) {
   const [badges, setBadges] = useState<UserBadgeDto[]>([]);
   const [isLoadingBadges, setIsLoadingBadges] = useState(false);
@@ -120,8 +126,21 @@ export function PlayerDetailModal({
     onClose();
   };
 
+  const handleMoveToRoster = () => {
+    onMoveToRoster?.(registration);
+    onClose();
+  };
+
+  const handleMoveToWaitlist = () => {
+    onMoveToWaitlist?.(registration);
+    onClose();
+  };
+
   // Check if we have any admin actions to show
-  const hasAdminActions = isAdmin && (onSwapTeam || onRemove || onMarkPaid || onVerifyPayment || onResetPayment);
+  const hasAdminActions = isAdmin && (
+    onSwapTeam || onRemove || onMarkPaid || onVerifyPayment || onResetPayment ||
+    onMoveToRoster || onMoveToWaitlist
+  );
 
   return (
     <Modal
@@ -182,6 +201,30 @@ export function PlayerDetailModal({
                     {onSwapTeam && (
                       <TouchableOpacity style={styles.actionButton} onPress={handleSwapTeam}>
                         <Text style={styles.actionButtonText} allowFontScaling={false}>Move to Team {otherTeam}</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Move to Roster - only show for waitlisted players when organizer */}
+                    {registration.isWaitlisted && onMoveToRoster && (
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.successButton]}
+                        onPress={handleMoveToRoster}
+                      >
+                        <Text style={styles.successButtonText} allowFontScaling={false}>
+                          Move to Roster
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Move to Waitlist - only show for rostered players when organizer */}
+                    {!registration.isWaitlisted && onMoveToWaitlist && (
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.warningButton]}
+                        onPress={handleMoveToWaitlist}
+                      >
+                        <Text style={styles.warningButtonText} allowFontScaling={false}>
+                          Move to Waitlist
+                        </Text>
                       </TouchableOpacity>
                     )}
 
