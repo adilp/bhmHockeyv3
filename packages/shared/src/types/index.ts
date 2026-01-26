@@ -276,6 +276,13 @@ export interface PaymentUpdateResultDto {
   registration?: EventRegistrationDto;
 }
 
+// Move operation result DTO (Phase 3 - roster/waitlist moves)
+export interface MoveResultDto {
+  success: boolean;
+  message: string;
+  registration?: EventRegistrationDto;
+}
+
 // Waitlist reorder types (Phase 5)
 export interface WaitlistOrderItem {
   registrationId: string;

@@ -364,6 +364,58 @@ public class EventsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Move a waitlisted player to the roster (organizer only).
+    /// </summary>
+    [Authorize]
+    [HttpPost("{eventId:guid}/registrations/{registrationId:guid}/move-to-roster")]
+    public async Task<ActionResult<MoveResultDto>> MoveToRoster(Guid eventId, Guid registrationId)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var result = await _eventService.MoveToRosterAsync(eventId, registrationId, userId);
+
+            if (!result.Success)
+            {
+                return BadRequest(new { message = result.Message });
+            }
+
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
+    /// <summary>
+    /// Move a rostered player to the waitlist (organizer only).
+    /// </summary>
+    [Authorize]
+    [HttpPost("{eventId:guid}/registrations/{registrationId:guid}/move-to-waitlist")]
+    public async Task<ActionResult<MoveResultDto>> MoveToWaitlist(Guid eventId, Guid registrationId)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var result = await _eventService.MoveToWaitlistAsync(eventId, registrationId, userId);
+
+            if (!result.Success)
+            {
+                return BadRequest(new { message = result.Message });
+            }
+
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
     #endregion
 
     #region Team Assignment

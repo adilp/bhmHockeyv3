@@ -2399,4 +2399,276 @@ public class EventServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Move Operations (Phase 3)
+
+    [Fact]
+    public async Task MoveToRosterAsync_WaitlistedPlayer_MovesToRoster()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var player = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MoveToRosterAsync(evt.Id, registration.Id, organizer.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Message.Should().Be("Player moved to roster");
+        result.Registration.Should().NotBeNull();
+        result.Registration!.Status.Should().Be("Registered");
+        result.Registration.WaitlistPosition.Should().BeNull();
+        result.Registration.TeamAssignment.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_RosterFull_ReturnsFailure()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 1,  // Only 1 spot
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        // Fill the single roster spot
+        var existingPlayer = await CreateTestUser("existing@example.com");
+        var existingReg = await CreateRegistration(evt.Id, existingPlayer.Id, "Registered");
+        existingReg.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        // Waitlisted player trying to move to roster
+        var waitlistedPlayer = await CreateTestUser("waitlisted@example.com");
+        var waitlistReg = await CreateRegistration(evt.Id, waitlistedPlayer.Id, "Waitlisted");
+        waitlistReg.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MoveToRosterAsync(evt.Id, waitlistReg.Id, organizer.Id);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.Message.Should().Be("Roster is full");
+        result.Registration.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task MoveToWaitlistAsync_RegisteredPlayer_MovesToWaitlist()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var player = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 20,
+            isRosterPublished: false
+        );
+
+        var registration = await CreateRegistration(evt.Id, player.Id, "Registered");
+        registration.TeamAssignment = "Black";
+        registration.RosterOrder = 1;
+        registration.PaymentDeadlineAt = DateTime.UtcNow.AddHours(2);
+        await _context.SaveChangesAsync();
+
+        // Setup mock for GetNextWaitlistPositionAsync
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(evt.Id))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _sut.MoveToWaitlistAsync(evt.Id, registration.Id, organizer.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Message.Should().Be("Player moved to waitlist");
+        result.Registration.Should().NotBeNull();
+        result.Registration!.Status.Should().Be("Waitlisted");
+        result.Registration.IsWaitlisted.Should().BeTrue();
+        result.Registration.WaitlistPosition.Should().Be(1);
+        result.Registration.TeamAssignment.Should().BeNull();
+        result.Registration.RosterOrder.Should().BeNull();
+        result.Registration.PaymentDeadlineAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_NonOrganizer_ThrowsUnauthorized()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var nonOrganizer = await CreateTestUser("random@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.MoveToRosterAsync(evt.Id, registration.Id, nonOrganizer.Id)
+        );
+    }
+
+    [Fact]
+    public async Task MoveToWaitlistAsync_NonOrganizer_ThrowsUnauthorized()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var nonOrganizer = await CreateTestUser("random@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        var registration = await CreateRegistration(evt.Id, player.Id, "Registered");
+        registration.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.MoveToWaitlistAsync(evt.Id, registration.Id, nonOrganizer.Id)
+        );
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_NotWaitlisted_ReturnsFailure()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var player = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        // Player is already registered, not waitlisted
+        var registration = await CreateRegistration(evt.Id, player.Id, "Registered");
+        registration.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MoveToRosterAsync(evt.Id, registration.Id, organizer.Id);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.Message.Should().Be("Player is not on the waitlist");
+    }
+
+    [Fact]
+    public async Task MoveToWaitlistAsync_NotRegistered_ReturnsFailure()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var player = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        // Player is already waitlisted, not registered
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MoveToWaitlistAsync(evt.Id, registration.Id, organizer.Id);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.Message.Should().Be("Player is not on the roster");
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_PaidEvent_SetsPaymentDeadline()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var player = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 25,  // Paid event
+            isRosterPublished: false
+        );
+
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        registration.PaymentStatus = "Pending";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.MoveToRosterAsync(evt.Id, registration.Id, organizer.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Registration.Should().NotBeNull();
+        result.Registration!.PaymentDeadlineAt.Should().NotBeNull();
+        result.Registration.PaymentDeadlineAt.Should().BeCloseTo(
+            DateTime.UtcNow.AddHours(2), TimeSpan.FromMinutes(5));
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_OrgAdmin_CanMoveForOrgEvent()
+    {
+        // Arrange - Org admin (not event creator) should be able to move players
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var player = await CreateTestUser("player@example.com");
+
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(
+            eventCreator.Id,
+            organizationId: org.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act - Org admin (not event creator) moves player to roster
+        var result = await _sut.MoveToRosterAsync(evt.Id, registration.Id, orgAdmin.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Registration.Should().NotBeNull();
+        result.Registration!.Status.Should().Be("Registered");
+    }
+
+    #endregion
 }

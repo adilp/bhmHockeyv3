@@ -28,6 +28,18 @@ public interface IEventService
     // Organizer registration management
     Task<bool> RemoveRegistrationAsync(Guid eventId, Guid registrationId, Guid organizerId);
 
+    /// <summary>
+    /// Move a waitlisted player to the roster (organizer only).
+    /// Returns failure if roster is full or player is not waitlisted.
+    /// </summary>
+    Task<MoveResultDto> MoveToRosterAsync(Guid eventId, Guid registrationId, Guid organizerId);
+
+    /// <summary>
+    /// Move a rostered player to the waitlist (organizer only).
+    /// Clears team assignment and payment deadline, assigns next waitlist position.
+    /// </summary>
+    Task<MoveResultDto> MoveToWaitlistAsync(Guid eventId, Guid registrationId, Guid organizerId);
+
     // Authorization helpers
     Task<bool> CanUserManageEventAsync(Guid eventId, Guid userId);
 

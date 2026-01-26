@@ -1178,6 +1178,129 @@ public class EventService : IEventService
         }
     }
 
+    // Roster/Waitlist move operations (Phase 3 - Organizer Controls)
+    public async Task<MoveResultDto> MoveToRosterAsync(Guid eventId, Guid registrationId, Guid organizerId)
+    {
+        var evt = await _context.Events
+            .Include(e => e.Registrations)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (evt == null)
+            return new MoveResultDto(false, "Event not found", null);
+
+        if (!await CanUserManageEventAsync(evt, organizerId))
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+
+        var registration = await _context.EventRegistrations
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId);
+
+        if (registration == null)
+            return new MoveResultDto(false, "Registration not found", null);
+
+        if (registration.Status != "Waitlisted")
+            return new MoveResultDto(false, "Player is not on the waitlist", null);
+
+        // Check roster capacity
+        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
+        if (registeredCount >= evt.MaxPlayers)
+            return new MoveResultDto(false, "Roster is full", null);
+
+        // Perform the move
+        registration.Status = "Registered";
+        registration.WaitlistPosition = null;
+        registration.TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registration.RegisteredPosition ?? "Skater");
+        registration.PromotedAt = DateTime.UtcNow;
+
+        // Set payment deadline if event has a cost
+        if (evt.Cost > 0)
+        {
+            registration.PaymentDeadlineAt = DateTime.UtcNow.AddHours(2);
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Renumber remaining waitlist
+        await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
+
+        // Build response DTO (no notification during draft - ShouldSendRosterNotification returns false)
+        var dto = MapRegistrationToDto(registration);
+        return new MoveResultDto(true, "Player moved to roster", dto);
+    }
+
+    public async Task<MoveResultDto> MoveToWaitlistAsync(Guid eventId, Guid registrationId, Guid organizerId)
+    {
+        var evt = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (evt == null)
+            return new MoveResultDto(false, "Event not found", null);
+
+        if (!await CanUserManageEventAsync(evt, organizerId))
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+
+        var registration = await _context.EventRegistrations
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId);
+
+        if (registration == null)
+            return new MoveResultDto(false, "Registration not found", null);
+
+        if (registration.Status != "Registered")
+            return new MoveResultDto(false, "Player is not on the roster", null);
+
+        // Get next waitlist position
+        var nextPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
+
+        // Perform the move - clear roster-specific fields
+        registration.Status = "Waitlisted";
+        registration.WaitlistPosition = nextPosition;
+        registration.TeamAssignment = null;      // No team on waitlist
+        registration.RosterOrder = null;         // No roster order on waitlist
+        registration.PromotedAt = null;          // Not promoted
+        registration.PaymentDeadlineAt = null;   // No deadline on waitlist
+
+        await _context.SaveChangesAsync();
+
+        var dto = MapRegistrationToDto(registration);
+        return new MoveResultDto(true, "Player moved to waitlist", dto);
+    }
+
+    /// <summary>
+    /// Helper to map EventRegistration to EventRegistrationDto
+    /// </summary>
+    private EventRegistrationDto MapRegistrationToDto(EventRegistration registration)
+    {
+        return new EventRegistrationDto(
+            registration.Id,
+            registration.EventId,
+            new UserDto(
+                registration.User.Id,
+                registration.User.Email,
+                registration.User.FirstName,
+                registration.User.LastName,
+                registration.User.PhoneNumber,
+                registration.User.Positions,
+                registration.User.VenmoHandle,
+                registration.User.Role,
+                registration.User.CreatedAt,
+                null,  // Badges not included in move response
+                0      // Total badge count not included
+            ),
+            registration.Status,
+            registration.RegisteredAt,
+            registration.RegisteredPosition,
+            registration.PaymentStatus,
+            registration.PaymentMarkedAt,
+            registration.PaymentVerifiedAt,
+            registration.TeamAssignment,
+            registration.RosterOrder,
+            registration.WaitlistPosition,
+            registration.PromotedAt,
+            registration.PaymentDeadlineAt,
+            registration.IsWaitlisted
+        );
+    }
+
     // Notification helpers
     private async Task NotifyOrganizerNewWaitlistSignupAsync(Event evt, User user, int waitlistPosition)
     {

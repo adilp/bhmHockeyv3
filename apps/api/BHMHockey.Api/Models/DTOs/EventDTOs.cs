@@ -149,3 +149,10 @@ public record PaymentUpdateResultDto(
     string Message,              // User-friendly message (e.g., "Payment verified - user promoted to roster")
     EventRegistrationDto? Registration  // Updated registration details (null on failure)
 );
+
+// Move operation result DTO (Phase 3 - roster/waitlist moves)
+public record MoveResultDto(
+    bool Success,                        // Whether the operation succeeded
+    string Message,                      // User-friendly message (e.g., "Player moved to roster")
+    EventRegistrationDto? Registration   // Updated registration details (null on failure)
+);

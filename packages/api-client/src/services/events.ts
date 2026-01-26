@@ -6,6 +6,7 @@ import type {
   MarkPaymentRequest,
   UpdatePaymentStatusRequest,
   PaymentUpdateResultDto,
+  MoveResultDto,
   UpdateTeamAssignmentRequest,
   UpdateRosterOrderRequest,
   RosterOrderItem,
@@ -147,6 +148,29 @@ export const eventService = {
     await apiClient.instance.delete(
       `/events/${eventId}/registrations/${registrationId}`
     );
+  },
+
+  // Roster/Waitlist move operations (organizer)
+
+  /**
+   * Move a waitlisted player to the roster (organizer only)
+   * Returns error if roster is full
+   */
+  async moveToRoster(eventId: string, registrationId: string): Promise<MoveResultDto> {
+    const response = await apiClient.instance.post<MoveResultDto>(
+      `/events/${eventId}/registrations/${registrationId}/move-to-roster`
+    );
+    return response.data;
+  },
+
+  /**
+   * Move a rostered player to the waitlist (organizer only)
+   */
+  async moveToWaitlist(eventId: string, registrationId: string): Promise<MoveResultDto> {
+    const response = await apiClient.instance.post<MoveResultDto>(
+      `/events/${eventId}/registrations/${registrationId}/move-to-waitlist`
+    );
+    return response.data;
   },
 
   // Roster order management (organizer)
