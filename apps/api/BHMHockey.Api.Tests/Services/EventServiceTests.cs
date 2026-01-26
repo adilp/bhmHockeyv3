@@ -2238,4 +2238,165 @@ public class EventServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Draft Mode Placement Filtering Tests (Phase 2)
+
+    [Fact]
+    public async Task GetByIdAsync_UnpublishedEvent_NonOrganizer_HidesPlacementDetails()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(
+            creator.Id,
+            maxPlayers: 10,
+            cost: 25.00m,
+            isRosterPublished: false  // Draft mode
+        );
+
+        // Register player on waitlist
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        registration.TeamAssignment = "Black";
+        registration.PaymentStatus = "Pending";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, player.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.IsRosterPublished.Should().BeFalse();
+        result.AmIWaitlisted.Should().BeTrue();  // Registration status visible
+        result.MyPaymentStatus.Should().Be("Pending");  // Payment status visible
+        result.MyWaitlistPosition.Should().BeNull();  // Position hidden during draft
+        result.MyTeamAssignment.Should().BeNull();  // Team hidden during draft
+        result.CanManage.Should().BeFalse();  // Not organizer
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_UnpublishedEvent_Organizer_SeesPlacementDetails()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 25.00m,
+            isRosterPublished: false  // Draft mode
+        );
+
+        // Organizer is also registered (and waitlisted for this test)
+        var registration = await CreateRegistration(evt.Id, organizer.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        registration.TeamAssignment = "Black";
+        registration.PaymentStatus = "Pending";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, organizer.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.CanManage.Should().BeTrue();
+        result.IsRosterPublished.Should().BeFalse();
+        result.MyWaitlistPosition.Should().Be(1);  // Position visible to organizer
+        result.MyTeamAssignment.Should().Be("Black");  // Team visible to organizer
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_PublishedEvent_NonOrganizer_SeesPlacementDetails()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(
+            creator.Id,
+            maxPlayers: 10,
+            cost: 25.00m,
+            isRosterPublished: true  // Published
+        );
+
+        // Register player on waitlist
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        registration.TeamAssignment = "Black";
+        registration.PaymentStatus = "Pending";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, player.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.IsRosterPublished.Should().BeTrue();
+        result.CanManage.Should().BeFalse();
+        result.MyWaitlistPosition.Should().Be(1);  // Position visible when published
+        result.MyTeamAssignment.Should().Be("Black");  // Team visible when published
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_UnpublishedEvent_OrgAdmin_SeesPlacementDetails()
+    {
+        // Arrange - Org admin (not event creator) should see placement details
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(
+            eventCreator.Id,
+            organizationId: org.Id,
+            maxPlayers: 10,
+            cost: 25.00m,
+            isRosterPublished: false  // Draft mode
+        );
+
+        // Org admin is registered
+        var registration = await CreateRegistration(evt.Id, orgAdmin.Id, "Waitlisted");
+        registration.WaitlistPosition = 2;
+        registration.TeamAssignment = "White";
+        registration.PaymentStatus = "MarkedPaid";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, orgAdmin.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.CanManage.Should().BeTrue();  // Org admin can manage
+        result.IsRosterPublished.Should().BeFalse();
+        result.MyWaitlistPosition.Should().Be(2);  // Position visible to org admin
+        result.MyTeamAssignment.Should().Be("White");  // Team visible to org admin
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_UnpublishedEvent_NonOrganizer_StillSeesRegistrationStatus()
+    {
+        // Arrange - Non-organizer should still see isRegistered and amIWaitlisted
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(
+            creator.Id,
+            maxPlayers: 10,
+            cost: 0,  // Free event
+            isRosterPublished: false  // Draft mode
+        );
+
+        // Register player directly (free event)
+        var registration = await CreateRegistration(evt.Id, player.Id, "Registered");
+        registration.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, player.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.IsRegistered.Should().BeTrue();  // Can see they're registered
+        result.AmIWaitlisted.Should().BeFalse();  // Can see they're not waitlisted
+        result.MyTeamAssignment.Should().BeNull();  // But can't see team during draft
+    }
+
+    #endregion
 }
