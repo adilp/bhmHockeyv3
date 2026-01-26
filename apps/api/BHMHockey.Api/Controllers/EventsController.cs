@@ -190,12 +190,26 @@ public class EventsController : ControllerBase
 
     /// <summary>
     /// Get all registrations for an event.
+    /// Returns empty list for non-organizers when roster is unpublished (draft mode).
     /// </summary>
     [HttpGet("{id:guid}/registrations")]
     public async Task<ActionResult<List<EventRegistrationDto>>> GetRegistrations(Guid id)
     {
-        var registrations = await _eventService.GetRegistrationsAsync(id);
-        return Ok(registrations);
+        var currentUserId = GetCurrentUserIdOrNull();
+        var evt = await _eventService.GetByIdAsync(id, currentUserId);
+
+        if (evt == null)
+            return NotFound();
+
+        // Organizers and published events: full roster
+        if (evt.CanManage || evt.IsRosterPublished)
+        {
+            return Ok(await _eventService.GetRegistrationsAsync(id));
+        }
+
+        // Non-organizers on unpublished events: empty list
+        // (They see their own status via EventDto fields instead)
+        return Ok(new List<EventRegistrationDto>());
     }
 
     /// <summary>
