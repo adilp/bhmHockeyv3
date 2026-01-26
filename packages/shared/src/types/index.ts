@@ -283,6 +283,13 @@ export interface MoveResultDto {
   registration?: EventRegistrationDto;
 }
 
+// Publish roster result DTO (Phase 4 - publishing)
+export interface PublishResultDto {
+  success: boolean;
+  message: string;
+  notificationsSent: number;
+}
+
 // Waitlist reorder types (Phase 5)
 export interface WaitlistOrderItem {
   registrationId: string;

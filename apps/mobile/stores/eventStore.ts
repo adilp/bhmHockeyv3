@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto } from '@bhmhockey/shared';
+import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto, PublishResultDto } from '@bhmhockey/shared';
 
 interface EventState {
   // State
@@ -37,6 +37,9 @@ interface EventState {
 
   // Event management (organizer)
   cancelEvent: (eventId: string) => Promise<boolean>;
+
+  // Roster publishing (organizer)
+  publishRoster: (eventId: string) => Promise<PublishResultDto | null>;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
@@ -386,6 +389,21 @@ export const useEventStore = create<EventState>((set, get) => ({
         error: error instanceof Error ? error.message : 'Failed to cancel event',
       });
       return false;
+    }
+  },
+
+  // Publish the roster for an event (organizer only)
+  publishRoster: async (eventId: string) => {
+    try {
+      const result = await eventService.publishRoster(eventId);
+      // Refresh event data to update isRosterPublished
+      await get().fetchEventById(eventId);
+      return result;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to publish roster',
+      });
+      return null;
     }
   },
 }));

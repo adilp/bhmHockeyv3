@@ -7,6 +7,7 @@ import type {
   UpdatePaymentStatusRequest,
   PaymentUpdateResultDto,
   MoveResultDto,
+  PublishResultDto,
   UpdateTeamAssignmentRequest,
   UpdateRosterOrderRequest,
   RosterOrderItem,
@@ -169,6 +170,19 @@ export const eventService = {
   async moveToWaitlist(eventId: string, registrationId: string): Promise<MoveResultDto> {
     const response = await apiClient.instance.post<MoveResultDto>(
       `/events/${eventId}/registrations/${registrationId}/move-to-waitlist`
+    );
+    return response.data;
+  },
+
+  // Roster publishing (organizer)
+
+  /**
+   * Publish the roster for an event (organizer only).
+   * Sets isRosterPublished=true and notifies all players of their placement.
+   */
+  async publishRoster(eventId: string): Promise<PublishResultDto> {
+    const response = await apiClient.instance.post<PublishResultDto>(
+      `/events/${eventId}/publish-roster`
     );
     return response.data;
   },
