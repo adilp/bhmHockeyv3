@@ -416,6 +416,33 @@ public class EventsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Publish the roster for an event (organizer only).
+    /// Sets IsRosterPublished=true and sends notifications to all players.
+    /// </summary>
+    [Authorize]
+    [HttpPost("{eventId:guid}/publish-roster")]
+    public async Task<ActionResult<PublishResultDto>> PublishRoster(Guid eventId)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var result = await _eventService.PublishRosterAsync(eventId, userId);
+
+            if (!result.Success)
+            {
+                return BadRequest(new { message = result.Message });
+            }
+
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
     #endregion
 
     #region Team Assignment
