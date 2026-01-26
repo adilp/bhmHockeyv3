@@ -20,6 +20,7 @@ import { SectionHeader } from '../SectionHeader';
 import { DraggableRoster } from '../DraggableRoster';
 import { DraggableWaitlist } from '../DraggableWaitlist';
 import { PlayerDetailModal } from '../PlayerDetailModal';
+import { DraftModeRoster } from './DraftModeRoster';
 import { colors, spacing, radius } from '../../theme';
 
 interface EventRosterTabProps {
@@ -268,6 +269,11 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         <ActivityIndicator size="large" color={colors.primary.teal} />
       </View>
     );
+  }
+
+  // Draft mode: non-organizers see simplified view without roster details
+  if (!event.isRosterPublished && !canManage) {
+    return <DraftModeRoster event={event} />;
   }
 
   const showPayment = canManage;
