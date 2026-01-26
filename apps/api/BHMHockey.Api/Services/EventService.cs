@@ -764,8 +764,14 @@ public class EventService : IEventService
                 ?? await _context.EventRegistrations.FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && (r.Status == "Registered" || r.Status == "Waitlisted"));
             if (myRegistration != null)
             {
+                // Payment status always visible (players need to know their payment state during draft)
                 myPaymentStatus = evt.Cost > 0 ? myRegistration.PaymentStatus : null;
-                myTeamAssignment = myRegistration.TeamAssignment;
+
+                // Team assignment only visible if roster is published OR user can manage
+                if (evt.IsRosterPublished || canManage)
+                {
+                    myTeamAssignment = myRegistration.TeamAssignment;
+                }
             }
         }
 
@@ -791,9 +797,15 @@ public class EventService : IEventService
                 ?? await _context.EventRegistrations.FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == currentUserId.Value && r.Status != "Cancelled");
             if (myReg != null)
             {
-                myWaitlistPosition = myReg.WaitlistPosition;
+                // Payment deadline always visible (players need deadlines during draft)
                 myPaymentDeadline = myReg.PaymentDeadlineAt;
                 amIWaitlisted = myReg.Status == "Waitlisted";
+
+                // Waitlist position only visible if roster is published OR user can manage
+                if (evt.IsRosterPublished || canManage)
+                {
+                    myWaitlistPosition = myReg.WaitlistPosition;
+                }
             }
         }
 
