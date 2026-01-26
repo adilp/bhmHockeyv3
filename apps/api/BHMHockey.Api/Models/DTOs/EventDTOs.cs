@@ -156,3 +156,10 @@ public record MoveResultDto(
     string Message,                      // User-friendly message (e.g., "Player moved to roster")
     EventRegistrationDto? Registration   // Updated registration details (null on failure)
 );
+
+// Publish roster result DTO (Phase 4 - publishing automation)
+public record PublishResultDto(
+    bool Success,                        // Whether the operation succeeded
+    string Message,                      // User-friendly message (e.g., "Roster published successfully")
+    int NotificationsSent                // Count of notifications sent to players
+);

@@ -1265,6 +1265,85 @@ public class EventService : IEventService
         return new MoveResultDto(true, "Player moved to waitlist", dto);
     }
 
+    public async Task<PublishResultDto> PublishRosterAsync(Guid eventId, Guid organizerId)
+    {
+        var evt = await _context.Events
+            .Include(e => e.Registrations)
+                .ThenInclude(r => r.User)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (evt == null)
+            return new PublishResultDto(false, "Event not found", 0);
+
+        if (!await CanUserManageEventAsync(evt, organizerId))
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+
+        // Check if already published
+        if (evt.IsRosterPublished)
+            return new PublishResultDto(false, "Roster is already published", 0);
+
+        // Mark as published
+        evt.IsRosterPublished = true;
+        evt.PublishedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        // Send notifications to all registered and waitlisted players
+        var eventName = evt.Name ?? "Hockey Game";
+        var sentCount = 0;
+
+        foreach (var registration in evt.Registrations)
+        {
+            // Skip cancelled registrations
+            if (registration.Status == "Cancelled")
+                continue;
+
+            // Skip users without push tokens
+            if (string.IsNullOrEmpty(registration.User.PushToken))
+                continue;
+
+            string title;
+            string body;
+
+            if (registration.Status == "Registered")
+            {
+                title = "You're on the Roster!";
+                if (!string.IsNullOrEmpty(registration.TeamAssignment))
+                {
+                    body = $"You're playing in {eventName}! Team {registration.TeamAssignment}.";
+                }
+                else
+                {
+                    body = $"You're playing in {eventName}! Check app for team assignment.";
+                }
+            }
+            else if (registration.Status == "Waitlisted")
+            {
+                title = "You're on the Waitlist";
+                body = $"You're #{registration.WaitlistPosition} on the waitlist for {eventName}.";
+            }
+            else
+            {
+                // Unknown status, skip
+                continue;
+            }
+
+            await _notificationService.SendPushNotificationAsync(
+                registration.User.PushToken,
+                title,
+                body,
+                new { eventId = evt.Id.ToString(), type = "roster_published" },
+                userId: registration.UserId,
+                type: "roster_published",
+                organizationId: evt.OrganizationId,
+                eventId: evt.Id
+            );
+
+            sentCount++;
+        }
+
+        return new PublishResultDto(true, "Roster published successfully", sentCount);
+    }
+
     /// <summary>
     /// Helper to map EventRegistration to EventRegistrationDto
     /// </summary>

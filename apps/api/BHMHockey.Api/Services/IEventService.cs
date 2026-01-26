@@ -45,4 +45,11 @@ public interface IEventService
 
     // Waitlist with badges (for organizer view)
     Task<List<EventRegistrationDto>> GetWaitlistWithBadgesAsync(Guid eventId);
+
+    /// <summary>
+    /// Publish the roster for an event (organizer only).
+    /// Sets IsRosterPublished=true, records PublishedAt timestamp, and sends notifications to all players.
+    /// Returns failure if roster is already published.
+    /// </summary>
+    Task<PublishResultDto> PublishRosterAsync(Guid eventId, Guid organizerId);
 }
