@@ -62,6 +62,8 @@ const createMockEvent = (overrides: Partial<EventDto> = {}): EventDto => ({
   // Waitlist fields (Phase 5)
   waitlistCount: 0,
   amIWaitlisted: false,
+  // Roster publishing (Phase 2)
+  isRosterPublished: true,
   ...overrides,
 });
 
