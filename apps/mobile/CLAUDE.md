@@ -165,6 +165,36 @@ TextInput.defaultProps.allowFontScaling = false;
 | `FormInput` | Dark-themed text input with label |
 | `EventForm` / `OrgForm` | Create/edit forms |
 
+### Badge Component
+
+Always use the shared `Badge` component for status indicators. Never create custom badge styles.
+
+```typescript
+import { Badge } from '../../components';
+
+// Variants: default, teal, green, purple, warning, error
+<Badge variant="green">Paid</Badge>
+<Badge variant="warning">Pending</Badge>
+<Badge variant="error">Unpaid</Badge>
+```
+
+**Payment Status Badges:**
+| Status | Variant | Text |
+|--------|---------|------|
+| `Verified` | `green` | "Paid" |
+| `MarkedPaid` | `warning` | "Pending" |
+| `Pending` | `error` | "Unpaid" |
+
+**Other Common Badges:**
+| Use Case | Variant | Text |
+|----------|---------|------|
+| Registered | `green` | "Registered" |
+| Waitlist | `warning` | "Waitlist" or "#N Waitlist" (when published) |
+| Organizer | `purple` | "Organizer" |
+| Invite Only | `warning` | "Invite Only" |
+
+**Draft Mode Note:** Don't show position numbers or team assignments in badges when `event.isRosterPublished` is false.
+
 ## Testing
 
 ```bash

@@ -124,15 +124,20 @@ export function EventInfoTab({
 
         {/* Status Badges Row */}
         {(canManage || event.isRegistered || event.amIWaitlisted ||
-          event.visibility === 'InviteOnly' || event.visibility === 'OrganizationMembers') && (
+          event.visibility === 'InviteOnly') && (
           <View style={styles.statusBadgeRow}>
             {canManage && <Badge variant="purple">Organizer</Badge>}
             {event.isRegistered && <Badge variant="green">Registered</Badge>}
             {event.amIWaitlisted && (
-              <Badge variant="warning">#{event.myWaitlistPosition} Waitlist</Badge>
+              <Badge variant="warning">
+                {event.isRosterPublished ? `#${event.myWaitlistPosition} Waitlist` : 'Waitlist'}
+              </Badge>
+            )}
+            {/* Payment status badge for registered/waitlisted users on paid events */}
+            {(event.isRegistered || event.amIWaitlisted) && event.cost > 0 && (
+              <Badge variant={getPaymentBadgeInfo().variant}>{getPaymentBadgeInfo().text}</Badge>
             )}
             {event.visibility === 'InviteOnly' && <Badge variant="warning">Invite Only</Badge>}
-            {event.visibility === 'OrganizationMembers' && <Badge variant="teal">Members Only</Badge>}
           </View>
         )}
 
@@ -152,8 +157,8 @@ export function EventInfoTab({
             <View style={styles.paymentDivider} />
 
             <View style={styles.waitlistPaymentSection}>
-              {/* Waitlist Position Header - only show when roster is full */}
-              {isRosterFull && (
+              {/* Waitlist Position Header - only show when roster is full AND published */}
+              {isRosterFull && event.isRosterPublished && (
                 <Text style={styles.waitlistPositionText}>
                   You're #{event.myWaitlistPosition} on the waitlist
                 </Text>
@@ -163,9 +168,11 @@ export function EventInfoTab({
               {event.myPaymentStatus === 'Pending' && (
                 <>
                   <Text style={styles.waitlistPaymentPrompt}>
-                    {isRosterFull
-                      ? 'Pay to be ready when a spot opens'
-                      : 'Pay to secure your spot on the roster'}
+                    {!event.isRosterPublished
+                      ? 'Pay to secure your registration'
+                      : isRosterFull
+                        ? 'Pay to be ready when a spot opens'
+                        : 'Pay to secure your spot on the roster'}
                   </Text>
 
                   <View style={styles.paymentActions}>
@@ -204,9 +211,11 @@ export function EventInfoTab({
               {/* Verified: Payment confirmed */}
               {event.myPaymentStatus === 'Verified' && (
                 <Text style={[styles.statusMessage, { color: colors.primary.green }]}>
-                  {isRosterFull
-                    ? "Payment verified! You'll be automatically added when a spot opens."
-                    : "Payment verified! You'll be added to the roster shortly."}
+                  {!event.isRosterPublished
+                    ? "Payment verified - you're all set!"
+                    : isRosterFull
+                      ? "Payment verified! You'll be automatically added when a spot opens."
+                      : "Payment verified! You'll be added to the roster shortly."}
                 </Text>
               )}
             </View>
@@ -228,7 +237,7 @@ export function EventInfoTab({
                   <Badge variant={getPaymentBadgeInfo().variant}>{getPaymentBadgeInfo().text}</Badge>
                 </View>
 
-                {event.myTeamAssignment && (
+                {event.myTeamAssignment && event.isRosterPublished && (
                   <View style={styles.teamSection}>
                     <View
                       style={[

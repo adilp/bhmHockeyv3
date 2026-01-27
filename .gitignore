@@ -79,3 +79,4 @@ apps/mobile/android/
 
 # Legal documents (not sensitive but not needed in repo)
 *.pdf
+.planning/

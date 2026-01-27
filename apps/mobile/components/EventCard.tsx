@@ -167,12 +167,12 @@ function WaitlistedBadges({ event }: { event: EventDto }) {
   const spotsLeft = event.maxPlayers - event.registeredCount;
   const isFull = spotsLeft <= 0;
 
-  // If roster is full, show position (you're actually queued for capacity)
+  // If roster is full and published, show position (you're actually queued for capacity)
   if (isFull) {
     return (
       <View style={styles.waitlistedStats}>
         <Badge variant="warning">
-          #{event.myWaitlistPosition} on waitlist
+          {event.isRosterPublished ? `#${event.myWaitlistPosition} on waitlist` : 'Waitlist'}
         </Badge>
       </View>
     );
@@ -194,8 +194,8 @@ function RegisteredBadges({ event }: { event: EventDto }) {
 
   return (
     <View style={styles.registeredStats}>
-      {/* Team badge */}
-      {event.myTeamAssignment && (
+      {/* Team badge - only show when roster is published */}
+      {event.myTeamAssignment && event.isRosterPublished && (
         <View style={[
           styles.teamBadge,
           isBlackTeam ? styles.teamBlack : styles.teamWhite

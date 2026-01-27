@@ -1,6 +1,32 @@
 import { View, Text, StyleSheet } from 'react-native';
-import type { EventDto } from '@bhmhockey/shared';
+import type { EventDto, PaymentStatus } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../../theme';
+import { Badge, BadgeVariant } from '../Badge';
+
+// Helper functions to match EventCard badge styling
+function getPaymentBadgeVariant(status: PaymentStatus): BadgeVariant {
+  switch (status) {
+    case 'Verified':
+      return 'green';
+    case 'MarkedPaid':
+      return 'warning';
+    case 'Pending':
+    default:
+      return 'error';
+  }
+}
+
+function getPaymentBadgeText(status: PaymentStatus): string {
+  switch (status) {
+    case 'Verified':
+      return 'Paid';
+    case 'MarkedPaid':
+      return 'Pending';
+    case 'Pending':
+    default:
+      return 'Unpaid';
+  }
+}
 
 interface DraftModeRosterProps {
   event: EventDto;
@@ -45,10 +71,9 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
           </Text>
           {isPaidEvent && paymentStatus && (
             <View style={styles.paymentRow}>
-              <Text style={styles.paymentLabel} allowFontScaling={false}>
-                Payment:
-              </Text>
-              <PaymentBadge status={paymentStatus} />
+              <Badge variant={getPaymentBadgeVariant(paymentStatus)}>
+                {getPaymentBadgeText(paymentStatus)}
+              </Badge>
             </View>
           )}
         </View>
@@ -69,10 +94,9 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
           </Text>
           {isPaidEvent && paymentStatus && (
             <View style={styles.paymentRow}>
-              <Text style={styles.paymentLabel} allowFontScaling={false}>
-                Payment:
-              </Text>
-              <PaymentBadge status={paymentStatus} />
+              <Badge variant={getPaymentBadgeVariant(paymentStatus)}>
+                {getPaymentBadgeText(paymentStatus)}
+              </Badge>
             </View>
           )}
         </View>
@@ -85,31 +109,6 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
           </Text>
         </View>
       )}
-    </View>
-  );
-}
-
-// Simple payment status badge
-function PaymentBadge({ status }: { status: string }) {
-  const getStatusStyle = () => {
-    switch (status) {
-      case 'Verified':
-        return { bg: colors.status.success, text: 'Paid' };
-      case 'MarkedPaid':
-        return { bg: colors.status.warning, text: 'Pending Verification' };
-      case 'Pending':
-      default:
-        return { bg: colors.status.error, text: 'Unpaid' };
-    }
-  };
-
-  const statusInfo = getStatusStyle();
-
-  return (
-    <View style={[styles.badge, { backgroundColor: statusInfo.bg }]}>
-      <Text style={styles.badgeText} allowFontScaling={false}>
-        {statusInfo.text}
-      </Text>
     </View>
   );
 }
@@ -178,27 +177,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border.default,
-  },
-  paymentLabel: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    marginRight: spacing.sm,
-  },
-  badge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text.primary,
   },
   notRegisteredCard: {
     backgroundColor: colors.bg.dark,
