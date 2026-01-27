@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { EventDto, PaymentStatus } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../../theme';
 import { Badge, BadgeVariant } from '../Badge';
@@ -42,9 +43,7 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
     <View style={styles.container}>
       {/* Draft State Banner */}
       <View style={styles.banner}>
-        <Text style={styles.bannerIcon} allowFontScaling={false}>
-          📋
-        </Text>
+        <Ionicons name="clipboard-outline" size={32} color={colors.text.secondary} style={styles.bannerIcon} />
         <Text style={styles.bannerTitle} allowFontScaling={false}>
           Roster Not Yet Published
         </Text>
@@ -58,9 +57,7 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
       {isRegistered && !isWaitlisted && (
         <View style={styles.confirmationCard}>
           <View style={styles.confirmationHeader}>
-            <Text style={styles.checkmark} allowFontScaling={false}>
-              ✓
-            </Text>
+            <Ionicons name="checkmark-circle" size={20} color={colors.status.success} style={styles.iconMargin} />
             <Text style={styles.confirmationTitle} allowFontScaling={false}>
               You're Registered
             </Text>
@@ -82,9 +79,7 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
       {isWaitlisted && (
         <View style={styles.confirmationCard}>
           <View style={styles.confirmationHeader}>
-            <Text style={styles.waitlistIcon} allowFontScaling={false}>
-              ⏳
-            </Text>
+            <Ionicons name="time-outline" size={20} color={colors.status.warning} style={styles.iconMargin} />
             <Text style={styles.confirmationTitle} allowFontScaling={false}>
               You're on the Waitlist
             </Text>
@@ -129,7 +124,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border.default,
   },
   bannerIcon: {
-    fontSize: 32,
     marginBottom: spacing.sm,
   },
   bannerTitle: {
@@ -157,13 +151,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
-  checkmark: {
-    fontSize: 20,
-    color: colors.status.success,
-    marginRight: spacing.sm,
-  },
-  waitlistIcon: {
-    fontSize: 20,
+  iconMargin: {
     marginRight: spacing.sm,
   },
   confirmationTitle: {

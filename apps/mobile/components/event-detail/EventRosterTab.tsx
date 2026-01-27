@@ -149,74 +149,72 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
 
   // Payment handlers
   const handleMarkPaid = async (registration: EventRegistrationDto) => {
-    Alert.alert('Mark as Paid', `Mark payment from ${registration.user.firstName} as verified?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Yes, Mark Paid',
-        onPress: async () => {
-          const result = await updatePaymentStatus(eventId, registration.id, 'Verified');
-          if (result) {
-            await reloadRegistrations();
-            const message = result.promoted
-              ? 'Payment verified and user promoted to roster'
-              : 'Payment verified';
-            Alert.alert('Success', message);
-          } else {
-            Alert.alert('Error', 'Failed to verify payment');
-          }
-        },
-      },
-    ]);
+    // Optimistic update
+    setAllRegistrations((prev) =>
+      prev.map((reg) =>
+        reg.id === registration.id ? { ...reg, paymentStatus: 'Verified' } : reg
+      )
+    );
+
+    const result = await updatePaymentStatus(eventId, registration.id, 'Verified');
+    if (!result) {
+      Alert.alert('Error', 'Failed to verify payment');
+      await reloadRegistrations();
+    } else if (result.promoted) {
+      // User was promoted from waitlist - need full refresh to get updated state
+      await reloadRegistrations();
+    }
   };
 
   const handleVerifyPayment = async (registration: EventRegistrationDto) => {
-    Alert.alert('Verify Payment', `Verify payment from ${registration.user.firstName}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Yes, Verify',
-        onPress: async () => {
-          const result = await updatePaymentStatus(eventId, registration.id, 'Verified');
-          if (result) {
-            await reloadRegistrations();
-            const message = result.promoted
-              ? 'Payment verified and user promoted to roster'
-              : 'Payment verified';
-            Alert.alert('Success', message);
-          } else {
-            Alert.alert('Error', 'Failed to verify payment');
-          }
-        },
-      },
-    ]);
+    // Optimistic update
+    setAllRegistrations((prev) =>
+      prev.map((reg) =>
+        reg.id === registration.id ? { ...reg, paymentStatus: 'Verified' } : reg
+      )
+    );
+
+    const result = await updatePaymentStatus(eventId, registration.id, 'Verified');
+    if (!result) {
+      Alert.alert('Error', 'Failed to verify payment');
+      await reloadRegistrations();
+    } else if (result.promoted) {
+      // User was promoted from waitlist - need full refresh to get updated state
+      await reloadRegistrations();
+    }
   };
 
   const handleResetPayment = async (registration: EventRegistrationDto) => {
-    Alert.alert(
-      'Reset Payment',
-      `Reset payment status for ${registration.user.firstName} to Unpaid?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await updatePaymentStatus(eventId, registration.id, 'Pending');
-            if (success) {
-              await reloadRegistrations();
-            } else {
-              Alert.alert('Error', 'Failed to reset payment status');
-            }
-          },
-        },
-      ]
+    // Optimistic update
+    setAllRegistrations((prev) =>
+      prev.map((reg) =>
+        reg.id === registration.id ? { ...reg, paymentStatus: 'Pending' } : reg
+      )
     );
+
+    const success = await updatePaymentStatus(eventId, registration.id, 'Pending');
+    if (!success) {
+      Alert.alert('Error', 'Failed to reset payment status');
+      await reloadRegistrations();
+    }
   };
 
   // Team swap handler
   const handleSwapTeam = async (registration: EventRegistrationDto) => {
     const newTeam: TeamAssignment = registration.teamAssignment === 'Black' ? 'White' : 'Black';
+
+    // Optimistic update
+    setAllRegistrations((prev) =>
+      prev.map((reg) =>
+        reg.id === registration.id ? { ...reg, teamAssignment: newTeam } : reg
+      )
+    );
+
     const success = await updateTeamAssignment(eventId, registration.id, newTeam);
-    if (success) await reloadRegistrations();
+    if (!success) {
+      Alert.alert('Error', 'Failed to swap team');
+      await reloadRegistrations();
+    }
   };
 
   // Remove handler
@@ -233,8 +231,31 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
+            // Optimistic update - remove immediately
+            setAllRegistrations((prev) => {
+              const filtered = prev.filter((reg) => reg.id !== registration.id);
+              // Renumber waitlist if we removed a waitlisted player
+              if (isWaitlisted) {
+                return filtered.map((reg) => {
+                  if (reg.isWaitlisted && reg.waitlistPosition && registration.waitlistPosition) {
+                    if (reg.waitlistPosition > registration.waitlistPosition) {
+                      return { ...reg, waitlistPosition: reg.waitlistPosition - 1 };
+                    }
+                  }
+                  return reg;
+                });
+              }
+              return filtered;
+            });
+
             const success = await removeRegistration(eventId, registration.id);
-            if (success) await reloadRegistrations();
+            if (!success) {
+              Alert.alert('Error', 'Failed to remove registration');
+              await reloadRegistrations();
+            } else if (!isWaitlisted) {
+              // Rostered player removed - waitlist promotion may have happened
+              await reloadRegistrations();
+            }
           },
         },
       ]
@@ -253,17 +274,52 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         {
           text: 'Move',
           onPress: async () => {
+            // Determine team assignment (balance teams)
+            const blackCount = allRegistrations.filter(
+              (r) => !r.isWaitlisted && r.teamAssignment === 'Black'
+            ).length;
+            const whiteCount = allRegistrations.filter(
+              (r) => !r.isWaitlisted && r.teamAssignment === 'White'
+            ).length;
+            const newTeam: TeamAssignment = blackCount <= whiteCount ? 'Black' : 'White';
+
+            // Optimistic update - move to roster immediately
+            setAllRegistrations((prev) => {
+              // Get remaining waitlist to renumber
+              const remainingWaitlist = prev
+                .filter((r) => r.isWaitlisted && r.id !== registration.id)
+                .sort((a, b) => (a.waitlistPosition ?? 999) - (b.waitlistPosition ?? 999));
+
+              return prev.map((reg) => {
+                if (reg.id === registration.id) {
+                  return {
+                    ...reg,
+                    isWaitlisted: false,
+                    waitlistPosition: null,
+                    teamAssignment: newTeam,
+                    status: 'Registered',
+                  };
+                }
+                // Renumber remaining waitlist
+                if (reg.isWaitlisted) {
+                  const newPosition = remainingWaitlist.findIndex((r) => r.id === reg.id) + 1;
+                  return { ...reg, waitlistPosition: newPosition };
+                }
+                return reg;
+              });
+            });
+
+            // API call in background
             try {
               const result = await eventService.moveToRoster(eventId, registration.id);
-              if (result.success) {
-                await reloadRegistrations();
-                Alert.alert('Success', 'Player moved to roster');
-              } else {
+              if (!result.success) {
                 Alert.alert('Error', result.message || 'Failed to move player');
+                await reloadRegistrations(); // Revert on failure
               }
             } catch (error: any) {
               const message = error?.response?.data?.message || 'Failed to move player to roster';
               Alert.alert('Error', message);
+              await reloadRegistrations(); // Revert on error
             }
           },
         },
@@ -284,17 +340,43 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
           text: 'Move',
           style: 'destructive',
           onPress: async () => {
+            // Calculate next waitlist position
+            const currentWaitlist = allRegistrations.filter((r) => r.isWaitlisted);
+            const maxPosition = currentWaitlist.reduce(
+              (max, r) => Math.max(max, r.waitlistPosition ?? 0),
+              0
+            );
+            const nextPosition = maxPosition + 1;
+
+            // Optimistic update - move to waitlist immediately
+            setAllRegistrations((prev) =>
+              prev.map((reg) => {
+                if (reg.id === registration.id) {
+                  return {
+                    ...reg,
+                    isWaitlisted: true,
+                    waitlistPosition: nextPosition,
+                    teamAssignment: null,
+                    rosterOrder: null,
+                    paymentDeadlineAt: null,
+                    status: 'Waitlisted',
+                  };
+                }
+                return reg;
+              })
+            );
+
+            // API call in background
             try {
               const result = await eventService.moveToWaitlist(eventId, registration.id);
-              if (result.success) {
-                await reloadRegistrations();
-                Alert.alert('Success', 'Player moved to waitlist');
-              } else {
+              if (!result.success) {
                 Alert.alert('Error', result.message || 'Failed to move player');
+                await reloadRegistrations(); // Revert on failure
               }
             } catch (error: any) {
               const message = error?.response?.data?.message || 'Failed to move player to waitlist';
               Alert.alert('Error', message);
+              await reloadRegistrations(); // Revert on error
             }
           },
         },

@@ -10,7 +10,11 @@ export default function TabLayout() {
   const unreadCount = useNotificationStore((state) => state.unreadCount);
   const fetchUnreadCount = useNotificationStore((state) => state.fetchUnreadCount);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const userEmail = useAuthStore((state) => state.user?.email);
   const appState = useRef(AppState.currentState);
+
+  // Only show tournaments tab for specific user
+  const showTournamentsTab = userEmail === 'a@a.com';
 
   // Fetch unread count on mount and when auth changes
   useEffect(() => {
@@ -78,6 +82,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="tournaments"
         options={{
+          href: showTournamentsTab ? '/tournaments' : null,
           tabBarLabel: 'Tourneys',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trophy" size={size} color={color} />
