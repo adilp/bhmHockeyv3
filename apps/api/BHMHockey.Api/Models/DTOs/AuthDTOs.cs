@@ -52,3 +52,8 @@ public record ForgotPasswordRequest(
 public record ForgotPasswordResponse(
     string Message
 );
+
+public record AdminStatsResponse(
+    int TotalUsers,
+    int ActiveUsers
+);

@@ -112,15 +112,32 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Admin-only endpoint to search users by email.
+    /// Admin-only endpoint to get system stats.
     /// </summary>
-    /// <param name="email">Email to search for (partial match)</param>
+    /// <returns>Stats including user counts</returns>
+    [HttpGet("admin/stats")]
+    [Authorize]
+    public async Task<ActionResult<AdminStatsResponse>> GetAdminStats()
+    {
+        if (!IsAdmin())
+        {
+            return Forbid();
+        }
+
+        var stats = await _authService.GetAdminStatsAsync();
+        return Ok(stats);
+    }
+
+    /// <summary>
+    /// Admin-only endpoint to search users by email or name.
+    /// </summary>
+    /// <param name="query">Search query (matches email, first name, or last name)</param>
     /// <returns>List of matching users</returns>
     [HttpGet("admin/users/search")]
     [Authorize]
-    public async Task<ActionResult<List<AdminUserSearchResult>>> SearchUsers([FromQuery] string email)
+    public async Task<ActionResult<List<AdminUserSearchResult>>> SearchUsers([FromQuery] string query)
     {
-        Console.WriteLine($"🔍 [SearchUsers] Called with email: {email}");
+        Console.WriteLine($"🔍 [SearchUsers] Called with query: {query}");
         Console.WriteLine($"🔍 [SearchUsers] User email: {GetCurrentUserEmail()}");
         Console.WriteLine($"🔍 [SearchUsers] IsAdmin: {IsAdmin()}");
 
@@ -130,15 +147,15 @@ public class AuthController : ControllerBase
             return Forbid();
         }
 
-        if (string.IsNullOrWhiteSpace(email) || email.Length < 2)
+        if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
         {
-            Console.WriteLine($"🔍 [SearchUsers] Bad request - email too short");
-            return BadRequest(new { message = "Email search must be at least 2 characters" });
+            Console.WriteLine($"🔍 [SearchUsers] Bad request - query too short");
+            return BadRequest(new { message = "Search query must be at least 2 characters" });
         }
 
         try
         {
-            var results = await _authService.SearchUsersAsync(email);
+            var results = await _authService.SearchUsersAsync(query);
             Console.WriteLine($"🔍 [SearchUsers] Found {results.Count} results");
             return Ok(results);
         }

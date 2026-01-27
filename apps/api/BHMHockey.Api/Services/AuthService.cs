@@ -128,11 +128,16 @@ public class AuthService : IAuthService
         );
     }
 
-    public async Task<List<AdminUserSearchResult>> SearchUsersAsync(string email)
+    public async Task<List<AdminUserSearchResult>> SearchUsersAsync(string query)
     {
+        var queryLower = query.ToLower();
         var users = await _context.Users
-            .Where(u => u.Email.ToLower().Contains(email.ToLower()))
-            .OrderBy(u => u.Email)
+            .Where(u =>
+                u.Email.ToLower().Contains(queryLower) ||
+                u.FirstName.ToLower().Contains(queryLower) ||
+                u.LastName.ToLower().Contains(queryLower))
+            .OrderBy(u => u.LastName)
+            .ThenBy(u => u.FirstName)
             .Take(20)
             .Select(u => new AdminUserSearchResult(
                 u.Id,
@@ -207,6 +212,14 @@ public class AuthService : IAuthService
         }
 
         return new ForgotPasswordResponse(successMessage);
+    }
+
+    public async Task<AdminStatsResponse> GetAdminStatsAsync()
+    {
+        var totalUsers = await _context.Users.CountAsync();
+        var activeUsers = await _context.Users.CountAsync(u => u.IsActive);
+
+        return new AdminStatsResponse(totalUsers, activeUsers);
     }
 
     private static string GenerateTemporaryPassword()

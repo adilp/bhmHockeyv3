@@ -84,6 +84,35 @@ const { id } = useLocalSearchParams<{ id: string }>();
 router.push(`/events/${eventId}`);
 ```
 
+### Screen Headers (Navigation)
+**NEVER create custom header components.** Always use the native navigation bar configured in `app/_layout.tsx`.
+
+To set a screen's title, add a `Stack.Screen` entry in `app/_layout.tsx`:
+```typescript
+// In app/_layout.tsx, inside the <Stack> component:
+<Stack.Screen name="admin/index" options={{ title: 'Admin Panel' }} />
+<Stack.Screen name="events/[id]/index" options={{ title: 'Event' }} />
+```
+
+For dynamic titles based on data, use `useLayoutEffect` in the screen:
+```typescript
+import { useLayoutEffect } from 'react';
+import { useNavigation } from 'expo-router';
+
+export default function MyScreen() {
+  const navigation = useNavigation();
+  const [data, setData] = useState(null);
+
+  useLayoutEffect(() => {
+    if (data) {
+      navigation.setOptions({ title: data.name });
+    }
+  }, [navigation, data]);
+}
+```
+
+**Why:** Custom headers cause double headers, inconsistent styling, and break native gestures (swipe back).
+
 ## Common Gotchas
 
 ### API URL Hardcoded

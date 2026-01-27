@@ -1592,11 +1592,12 @@ public class EventService : IEventService
             throw new InvalidOperationException("User not found");
         }
 
-        // Check if user is already registered (not cancelled)
+        // Check if user has any existing registration (including cancelled)
         var existingReg = await _context.EventRegistrations
-            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId && r.Status != "Cancelled");
+            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
 
-        if (existingReg != null)
+        // If already registered or waitlisted, throw error
+        if (existingReg != null && (existingReg.Status == "Registered" || existingReg.Status == "Waitlisted"))
         {
             throw new InvalidOperationException("User is already registered for this event");
         }
@@ -1607,19 +1608,40 @@ public class EventService : IEventService
         // Get next waitlist position
         var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
 
-        // Create registration with Status="Waitlisted"
         var isPaidEvent = evt.Cost > 0;
-        var registration = new Models.Entities.EventRegistration
-        {
-            EventId = eventId,
-            UserId = userId,
-            Status = "Waitlisted",
-            RegisteredPosition = registeredPosition,
-            WaitlistPosition = waitlistPosition,
-            PaymentStatus = isPaidEvent ? "Pending" : null
-        };
+        Models.Entities.EventRegistration registration;
 
-        _context.EventRegistrations.Add(registration);
+        if (existingReg != null)
+        {
+            // Re-activate cancelled registration
+            existingReg.Status = "Waitlisted";
+            existingReg.RegisteredAt = DateTime.UtcNow;
+            existingReg.RegisteredPosition = registeredPosition;
+            existingReg.WaitlistPosition = waitlistPosition;
+            existingReg.TeamAssignment = null;
+            existingReg.RosterOrder = null;
+            existingReg.PaymentStatus = isPaidEvent ? "Pending" : null;
+            existingReg.PaymentMarkedAt = null;
+            existingReg.PaymentVerifiedAt = null;
+            existingReg.PromotedAt = null;
+            existingReg.PaymentDeadlineAt = null;
+            registration = existingReg;
+        }
+        else
+        {
+            // Create new registration with Status="Waitlisted"
+            registration = new Models.Entities.EventRegistration
+            {
+                EventId = eventId,
+                UserId = userId,
+                Status = "Waitlisted",
+                RegisteredPosition = registeredPosition,
+                WaitlistPosition = waitlistPosition,
+                PaymentStatus = isPaidEvent ? "Pending" : null
+            };
+            _context.EventRegistrations.Add(registration);
+        }
+
         await _context.SaveChangesAsync();
 
         // Send notification to user

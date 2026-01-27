@@ -1033,6 +1033,12 @@ export interface AdminPasswordResetResponse {
   message: string;
 }
 
+// Response from admin stats
+export interface AdminStatsResponse {
+  totalUsers: number;
+  activeUsers: number;
+}
+
 // User search result for admin
 export interface AdminUserSearchResult {
   id: string;

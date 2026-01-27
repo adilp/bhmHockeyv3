@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { adminService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
-import type { AdminUserSearchResult, AdminPasswordResetResponse } from '@bhmhockey/shared';
+import type { AdminUserSearchResult, AdminPasswordResetResponse, AdminStatsResponse } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../../theme';
 
 const ADMIN_EMAIL = 'a@a.com';
@@ -28,13 +28,20 @@ export default function AdminScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [isResetting, setIsResetting] = useState<string | null>(null);
   const [lastResetResult, setLastResetResult] = useState<AdminPasswordResetResponse | null>(null);
+  const [stats, setStats] = useState<AdminStatsResponse | null>(null);
 
-  // Redirect if not admin
+  // Redirect if not admin, and fetch stats
   useFocusEffect(
     useCallback(() => {
       if (user?.email !== ADMIN_EMAIL) {
         router.replace('/(tabs)/profile');
+        return;
       }
+
+      // Fetch admin stats
+      adminService.getStats()
+        .then(setStats)
+        .catch(console.error);
     }, [user, router])
   );
 
@@ -52,7 +59,7 @@ export default function AdminScreen() {
       console.log('🔍 Results:', results);
       setSearchResults(results);
       if (results.length === 0) {
-        Alert.alert('No Results', 'No users found matching that email');
+        Alert.alert('No Results', 'No users found matching that search');
       }
     } catch (error: any) {
       console.error('🔍 Search failed - full error:', JSON.stringify(error, null, 2));
@@ -120,24 +127,33 @@ export default function AdminScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Admin Panel</Text>
-        <Text style={styles.subtitle}>Password Reset Tool</Text>
-      </View>
-
       <View style={styles.content}>
+        {/* Stats Section */}
+        {stats && (
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.totalUsers}</Text>
+              <Text style={styles.statLabel}>Total Users</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.activeUsers}</Text>
+              <Text style={styles.statLabel}>Active Users</Text>
+            </View>
+          </View>
+        )}
+
         {/* Search Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Search User</Text>
           <View style={styles.searchRow}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Enter email..."
+              placeholder="Search by name or email..."
               placeholderTextColor={colors.text.muted}
               value={searchEmail}
               onChangeText={setSearchEmail}
               autoCapitalize="none"
-              keyboardType="email-address"
+              autoCorrect={false}
               onSubmitEditing={handleSearch}
             />
             <TouchableOpacity
@@ -226,24 +242,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.bg.darkest,
   },
-  header: {
-    padding: spacing.lg,
-    backgroundColor: colors.bg.dark,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.default,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.primary.purple,
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.text.muted,
-  },
   content: {
     padding: spacing.lg,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  statValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.primary.teal,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: colors.text.muted,
+    marginTop: spacing.xs,
   },
   section: {
     marginBottom: spacing.lg,
