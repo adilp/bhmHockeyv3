@@ -23,6 +23,7 @@ import { DraggableRoster } from '../DraggableRoster';
 import { DraggableWaitlist } from '../DraggableWaitlist';
 import { PlayerDetailModal } from '../PlayerDetailModal';
 import { DraftModeRoster } from './DraftModeRoster';
+import { AddPlayerModal } from './AddPlayerModal';
 import { colors, spacing, radius } from '../../theme';
 
 interface EventRosterTabProps {
@@ -37,6 +38,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const [selectedPlayer, setSelectedPlayer] = useState<EventRegistrationDto | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isAddPlayerModalVisible, setIsAddPlayerModalVisible] = useState(false);
   const isUpdatingRoster = useRef(false);
   const hasLoadedOnce = useRef(false);
   const { updatePaymentStatus, updateTeamAssignment, removeRegistration, publishRoster } = useEventStore();
@@ -114,6 +116,11 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const handleCloseModal = () => {
     setIsModalVisible(false);
     setSelectedPlayer(null);
+  };
+
+  const handlePlayerAdded = () => {
+    // Reload registrations to show the newly added player
+    reloadRegistrations();
   };
 
   const handlePublishRoster = async () => {
@@ -458,21 +465,36 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Publish Roster button for organizers on unpublished events */}
-        {canManage && !event.isRosterPublished && (
-          <TouchableOpacity
-            style={[styles.publishButton, isPublishing && styles.publishButtonDisabled]}
-            onPress={handlePublishRoster}
-            disabled={isPublishing}
-          >
-            {isPublishing ? (
-              <ActivityIndicator size="small" color={colors.text.primary} />
-            ) : (
-              <Text style={styles.publishButtonText} allowFontScaling={false}>
-                Publish Roster
+        {/* Organizer action buttons */}
+        {canManage && (
+          <View style={styles.organizerActions}>
+            {/* Add Player button */}
+            <TouchableOpacity
+              style={styles.addPlayerButton}
+              onPress={() => setIsAddPlayerModalVisible(true)}
+            >
+              <Text style={styles.addPlayerButtonText} allowFontScaling={false}>
+                + Add Player
               </Text>
+            </TouchableOpacity>
+
+            {/* Publish Roster button (only on unpublished events) */}
+            {!event.isRosterPublished && (
+              <TouchableOpacity
+                style={[styles.publishButton, isPublishing && styles.publishButtonDisabled]}
+                onPress={handlePublishRoster}
+                disabled={isPublishing}
+              >
+                {isPublishing ? (
+                  <ActivityIndicator size="small" color={colors.text.primary} />
+                ) : (
+                  <Text style={styles.publishButtonText} allowFontScaling={false}>
+                    Publish Roster
+                  </Text>
+                )}
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </View>
         )}
 
         {/* Roster View */}
@@ -524,6 +546,14 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         onMoveToRoster={canManage && selectedPlayer?.isWaitlisted ? handleMoveToRoster : undefined}
         onMoveToWaitlist={canManage && !selectedPlayer?.isWaitlisted ? handleMoveToWaitlist : undefined}
       />
+
+      {/* Add Player Modal */}
+      <AddPlayerModal
+        visible={isAddPlayerModalVisible}
+        eventId={eventId}
+        onClose={() => setIsAddPlayerModalVisible(false)}
+        onPlayerAdded={handlePlayerAdded}
+      />
     </View>
   );
 }
@@ -541,13 +571,33 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.xl,
   },
+  organizerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  addPlayerButton: {
+    flex: 1,
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 1,
+    borderColor: colors.primary.teal,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+  },
+  addPlayerButtonText: {
+    color: colors.primary.teal,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   publishButton: {
+    flex: 1,
     backgroundColor: colors.primary.teal,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.lg,
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
   publishButtonDisabled: {
     opacity: 0.6,

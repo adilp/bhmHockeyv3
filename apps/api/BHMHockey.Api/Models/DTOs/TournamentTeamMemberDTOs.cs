@@ -85,7 +85,7 @@ public record PendingTeamInvitationDto
 }
 
 /// <summary>
-/// DTO for user search results (captain-accessible for team building)
+/// DTO for user search results (captain-accessible for team building, also used for adding players to events)
 /// </summary>
 public record UserSearchResultDto
 {
@@ -93,4 +93,5 @@ public record UserSearchResultDto
     public required string FirstName { get; init; }
     public required string LastName { get; init; }
     public required string Email { get; init; }
+    public Dictionary<string, string>? Positions { get; init; }  // position -> skill level (e.g., "goalie" -> "Silver")
 }

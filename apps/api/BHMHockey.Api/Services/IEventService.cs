@@ -52,4 +52,16 @@ public interface IEventService
     /// Returns failure if roster is already published.
     /// </summary>
     Task<PublishResultDto> PublishRosterAsync(Guid eventId, Guid organizerId);
+
+    /// <summary>
+    /// Search for users that can be added to an event's waitlist (organizer only).
+    /// Returns users matching the query by first name or last name, excluding those already registered.
+    /// </summary>
+    Task<List<UserSearchResultDto>> SearchUsersForEventAsync(Guid eventId, Guid organizerId, string query);
+
+    /// <summary>
+    /// Add a user to an event's waitlist (organizer only).
+    /// Creates a new registration with Status="Waitlisted" and sends a notification to the user.
+    /// </summary>
+    Task<EventRegistrationDto> AddUserToWaitlistAsync(Guid eventId, Guid userId, Guid organizerId, string? position);
 }

@@ -163,3 +163,9 @@ public record PublishResultDto(
     string Message,                      // User-friendly message (e.g., "Roster published successfully")
     int NotificationsSent                // Count of notifications sent to players
 );
+
+// Request to add a user to an event's waitlist (Phase 5 - Waitlist)
+public record AddUserToEventRequest(
+    Guid UserId,
+    string? Position                      // Optional: "Goalie" or "Skater" (required if user has multiple positions)
+);

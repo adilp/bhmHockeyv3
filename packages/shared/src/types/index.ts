@@ -900,12 +900,19 @@ export interface RespondToTeamInviteRequest {
   customResponses?: string;  // JSON string
 }
 
-// TRN-012: Team Members - User search result for captain search
+// TRN-012: Team Members - User search result for captain search (also used for adding players to events)
 export interface UserSearchResultDto {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
+  positions?: Record<string, string>;  // position -> skill level (e.g., "goalie" -> "Silver")
+}
+
+// Request to add a user to an event's waitlist
+export interface AddUserToEventRequest {
+  userId: string;
+  position?: string;  // Optional: "Goalie" or "Skater" (required if user has multiple positions)
 }
 
 // TRN-012: Team Members - Pending team invitation DTO

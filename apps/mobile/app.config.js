@@ -6,6 +6,11 @@ export default ({ config }) => {
 
   return {
     ...config,
+    android: {
+      ...config.android,
+      // Use EAS secret file if available, otherwise fall back to local file
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || './google-services.json',
+    },
     extra: {
       ...config.extra,
       // API URL - always use production for builds/updates, localhost only for local dev server

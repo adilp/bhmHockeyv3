@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto, PublishResultDto } from '@bhmhockey/shared';
+import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto, PublishResultDto, UserSearchResultDto } from '@bhmhockey/shared';
 
 interface EventState {
   // State
@@ -40,6 +40,10 @@ interface EventState {
 
   // Roster publishing (organizer)
   publishRoster: (eventId: string) => Promise<PublishResultDto | null>;
+
+  // User management (organizer)
+  searchUsersForEvent: (eventId: string, query: string) => Promise<UserSearchResultDto[]>;
+  addUserToEvent: (eventId: string, userId: string, position?: string) => Promise<boolean>;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
@@ -404,6 +408,30 @@ export const useEventStore = create<EventState>((set, get) => ({
         error: error instanceof Error ? error.message : 'Failed to publish roster',
       });
       return null;
+    }
+  },
+
+  // Search for users that can be added to an event (organizer only)
+  searchUsersForEvent: async (eventId: string, query: string) => {
+    try {
+      return await eventService.searchUsersForEvent(eventId, query);
+    } catch (error) {
+      console.error('Failed to search users:', error);
+      return [];
+    }
+  },
+
+  // Add a user to an event's waitlist (organizer only)
+  addUserToEvent: async (eventId: string, userId: string, position?: string) => {
+    try {
+      await eventService.addUserToEvent(eventId, { userId, position });
+      // Refresh event data to get updated registrations
+      await get().fetchEventById(eventId);
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to add user';
+      set({ error: errorMessage });
+      return false;
     }
   },
 }));

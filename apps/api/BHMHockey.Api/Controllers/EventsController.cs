@@ -477,6 +477,57 @@ public class EventsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Search for users that can be added to an event's waitlist (organizer only).
+    /// Returns users matching the query by first name or last name, excluding those already registered.
+    /// </summary>
+    [Authorize]
+    [HttpGet("{eventId:guid}/search-users")]
+    public async Task<ActionResult<List<UserSearchResultDto>>> SearchUsersForEvent(
+        Guid eventId,
+        [FromQuery] string query)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var results = await _eventService.SearchUsersForEventAsync(eventId, userId, query);
+            return Ok(results);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
+    /// <summary>
+    /// Add a user to an event's waitlist (organizer only).
+    /// Creates a new registration with Status="Waitlisted" and sends a notification to the user.
+    /// </summary>
+    [Authorize]
+    [HttpPost("{eventId:guid}/registrations/add-user")]
+    public async Task<ActionResult<EventRegistrationDto>> AddUserToEvent(
+        Guid eventId,
+        [FromBody] AddUserToEventRequest request)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var registration = await _eventService.AddUserToWaitlistAsync(
+                eventId, request.UserId, userId, request.Position);
+            return Ok(registration);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     #endregion
 
     #region Roster Order

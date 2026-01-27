@@ -1516,4 +1516,182 @@ public class EventService : IEventService
 
         return result;
     }
+
+    /// <summary>
+    /// Search for users that can be added to an event's waitlist (organizer only).
+    /// Returns users matching the query by first name or last name, excluding those already registered.
+    /// </summary>
+    public async Task<List<UserSearchResultDto>> SearchUsersForEventAsync(Guid eventId, Guid organizerId, string query)
+    {
+        // Verify organizer can manage this event
+        if (!await CanUserManageEventAsync(eventId, organizerId))
+        {
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+        }
+
+        if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+        {
+            return new List<UserSearchResultDto>();
+        }
+
+        // Get user IDs already registered for this event (not cancelled)
+        var registeredUserIds = await _context.EventRegistrations
+            .Where(r => r.EventId == eventId && r.Status != "Cancelled")
+            .Select(r => r.UserId)
+            .ToListAsync();
+
+        // Search users by first name OR last name (case-insensitive, contains)
+        var queryLower = query.ToLower();
+        var users = await _context.Users
+            .Where(u =>
+                (u.FirstName.ToLower().Contains(queryLower) ||
+                 u.LastName.ToLower().Contains(queryLower)) &&
+                !registeredUserIds.Contains(u.Id))
+            .OrderBy(u => u.LastName)
+            .ThenBy(u => u.FirstName)
+            .Take(20)
+            .Select(u => new UserSearchResultDto
+            {
+                Id = u.Id,
+                FirstName = u.FirstName,
+                LastName = u.LastName,
+                Email = u.Email,
+                Positions = u.Positions
+            })
+            .ToListAsync();
+
+        return users;
+    }
+
+    /// <summary>
+    /// Add a user to an event's waitlist (organizer only).
+    /// Creates a new registration with Status="Waitlisted" and sends a notification to the user.
+    /// </summary>
+    public async Task<EventRegistrationDto> AddUserToWaitlistAsync(Guid eventId, Guid userId, Guid organizerId, string? position)
+    {
+        // Load event
+        var evt = await _context.Events
+            .Include(e => e.Registrations)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (evt == null)
+        {
+            throw new InvalidOperationException("Event not found");
+        }
+
+        // Verify organizer can manage this event
+        if (!await CanUserManageEventAsync(evt, organizerId))
+        {
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+        }
+
+        // Verify user exists
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found");
+        }
+
+        // Check if user is already registered (not cancelled)
+        var existingReg = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId && r.Status != "Cancelled");
+
+        if (existingReg != null)
+        {
+            throw new InvalidOperationException("User is already registered for this event");
+        }
+
+        // Determine position
+        var registeredPosition = DetermineRegistrationPositionForAddedUser(user, position);
+
+        // Get next waitlist position
+        var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
+
+        // Create registration with Status="Waitlisted"
+        var isPaidEvent = evt.Cost > 0;
+        var registration = new Models.Entities.EventRegistration
+        {
+            EventId = eventId,
+            UserId = userId,
+            Status = "Waitlisted",
+            RegisteredPosition = registeredPosition,
+            WaitlistPosition = waitlistPosition,
+            PaymentStatus = isPaidEvent ? "Pending" : null
+        };
+
+        _context.EventRegistrations.Add(registration);
+        await _context.SaveChangesAsync();
+
+        // Send notification to user
+        await NotifyUserAddedToWaitlistAsync(evt, user, waitlistPosition);
+
+        // Load user for DTO
+        await _context.Entry(registration).Reference(r => r.User).LoadAsync();
+
+        return MapRegistrationToDto(registration);
+    }
+
+    /// <summary>
+    /// Determines which position to register with for an added user.
+    /// Similar to DetermineRegistrationPosition but with different error messages.
+    /// </summary>
+    private string DetermineRegistrationPositionForAddedUser(Models.Entities.User user, string? requestedPosition)
+    {
+        // If user has no positions set up, default to Skater
+        if (user.Positions == null || user.Positions.Count == 0)
+        {
+            return "Skater";
+        }
+
+        // If user has exactly one position, use it (ignore requestedPosition)
+        if (user.Positions.Count == 1)
+        {
+            var singlePosition = user.Positions.Keys.First();
+            return singlePosition == "goalie" ? "Goalie" : "Skater";
+        }
+
+        // User has multiple positions - they must specify which one
+        if (string.IsNullOrEmpty(requestedPosition))
+        {
+            throw new InvalidOperationException("User has multiple positions. Please select which position to register as");
+        }
+
+        // Normalize and validate the requested position
+        var normalizedPosition = requestedPosition.ToLowerInvariant();
+        if (normalizedPosition != "goalie" && normalizedPosition != "skater")
+        {
+            throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
+        }
+
+        // Verify user has this position in their profile
+        if (!user.Positions.ContainsKey(normalizedPosition))
+        {
+            throw new InvalidOperationException($"User doesn't have {requestedPosition} in their profile positions");
+        }
+
+        return normalizedPosition == "goalie" ? "Goalie" : "Skater";
+    }
+
+    /// <summary>
+    /// Notify a user that they have been added to an event's waitlist by an organizer.
+    /// </summary>
+    private async Task NotifyUserAddedToWaitlistAsync(Models.Entities.Event evt, Models.Entities.User user, int waitlistPosition)
+    {
+        if (string.IsNullOrEmpty(user.PushToken))
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+
+        await _notificationService.SendPushNotificationAsync(
+            user.PushToken,
+            "Added to Waitlist",
+            $"You've been added to the waitlist for {eventName} (#{waitlistPosition}).",
+            new { eventId = evt.Id.ToString(), type = "added_to_waitlist" },
+            userId: user.Id,
+            type: "added_to_waitlist",
+            organizationId: evt.OrganizationId,
+            eventId: evt.Id);
+    }
 }

@@ -15,7 +15,9 @@ import type {
   RegistrationResultDto,
   Position,
   TeamAssignment,
-  WaitlistOrderItem
+  WaitlistOrderItem,
+  UserSearchResultDto,
+  AddUserToEventRequest
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -211,5 +213,31 @@ export const eventService = {
       `/events/${eventId}/waitlist/reorder`,
       { items }
     );
+  },
+
+  // User management (organizer)
+
+  /**
+   * Search for users that can be added to an event's waitlist (organizer only)
+   * Returns users matching the query by first name or last name, excluding those already registered
+   */
+  async searchUsersForEvent(eventId: string, query: string): Promise<UserSearchResultDto[]> {
+    const response = await apiClient.instance.get<UserSearchResultDto[]>(
+      `/events/${eventId}/search-users`,
+      { params: { query } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Add a user to an event's waitlist (organizer only)
+   * Creates a new registration with Status="Waitlisted" and sends a notification to the user
+   */
+  async addUserToEvent(eventId: string, request: AddUserToEventRequest): Promise<EventRegistrationDto> {
+    const response = await apiClient.instance.post<EventRegistrationDto>(
+      `/events/${eventId}/registrations/add-user`,
+      request
+    );
+    return response.data;
   },
 };
