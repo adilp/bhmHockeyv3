@@ -258,6 +258,16 @@ public class AuthService : IAuthService
         );
     }
 
+    public async Task<string> GetUserRoleAsync(Guid userId)
+    {
+        var user = await _context.Users
+            .Where(u => u.Id == userId && u.IsActive)
+            .Select(u => u.Role)
+            .FirstOrDefaultAsync();
+
+        return user ?? "Player";
+    }
+
     private static string GenerateTemporaryPassword()
     {
         // Generate a readable temporary password: 3 words + 2 digits

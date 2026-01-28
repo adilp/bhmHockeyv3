@@ -40,6 +40,14 @@ dotnet run --project BHMHockey.Api             # Run API directly
 - Never check `Organization.CreatorId` directly - use the admin service
 - Event management: creator owns standalone events, org admins own org events
 
+### Role-Based Access Control
+- **Always check roles from the database, NOT from JWT claims**
+- Use `IAuthService.GetUserRoleAsync(userId)` to get current role
+- JWT tokens contain the role at login time, but roles can change without re-login
+- Valid roles: `"Player"`, `"Organizer"`, `"Admin"`
+- Only Organizer/Admin can create events and organizations
+- Only Admin can access admin panel endpoints (`/auth/admin/*`)
+
 ### UserDto Updates
 When adding fields to `User` entity, update ALL `UserDto` creation sites:
 - `AuthService.MapToUserDto()`
@@ -63,6 +71,7 @@ When adding fields to `User` entity, update ALL `UserDto` creation sites:
 
 | Field | Valid Values |
 |-------|-------------|
+| User Roles | `"Player"`, `"Organizer"`, `"Admin"` |
 | Skill Levels | `"Gold"`, `"Silver"`, `"Bronze"`, `"D-League"` |
 | Event Visibility | `"Public"`, `"OrganizationMembers"`, `"InviteOnly"` |
 | Event Status | `"Draft"`, `"Published"`, `"Full"`, `"Completed"`, `"Cancelled"` |

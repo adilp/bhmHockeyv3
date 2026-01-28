@@ -30,9 +30,10 @@ public class AuthController : ControllerBase
         return userId;
     }
 
-    private bool IsAdmin()
+    private async Task<bool> IsAdminAsync()
     {
-        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        var userId = GetCurrentUserId();
+        var role = await _authService.GetUserRoleAsync(userId);
         return role == "Admin";
     }
 
@@ -88,7 +89,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<AdminPasswordResetResponse>> AdminResetPassword(Guid userId)
     {
-        if (!IsAdmin())
+        if (!await IsAdminAsync())
         {
             return Forbid();
         }
@@ -112,7 +113,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<AdminStatsResponse>> GetAdminStats()
     {
-        if (!IsAdmin())
+        if (!await IsAdminAsync())
         {
             return Forbid();
         }
@@ -130,7 +131,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<List<AdminUserSearchResult>>> SearchUsers([FromQuery] string query)
     {
-        if (!IsAdmin())
+        if (!await IsAdminAsync())
         {
             return Forbid();
         }
@@ -193,7 +194,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<AdminUpdateRoleResponse>> UpdateUserRole(Guid userId, [FromBody] AdminUpdateRoleRequest request)
     {
-        if (!IsAdmin())
+        if (!await IsAdminAsync())
         {
             return Forbid();
         }

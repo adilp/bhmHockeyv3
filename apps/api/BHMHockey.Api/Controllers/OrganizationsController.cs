@@ -12,11 +12,13 @@ public class OrganizationsController : ControllerBase
 {
     private readonly IOrganizationService _organizationService;
     private readonly IOrganizationAdminService _adminService;
+    private readonly IAuthService _authService;
 
-    public OrganizationsController(IOrganizationService organizationService, IOrganizationAdminService adminService)
+    public OrganizationsController(IOrganizationService organizationService, IOrganizationAdminService adminService, IAuthService authService)
     {
         _organizationService = organizationService;
         _adminService = adminService;
+        _authService = authService;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -47,9 +49,10 @@ public class OrganizationsController : ControllerBase
         return userId.Value;
     }
 
-    private string GetCurrentUserRole()
+    private async Task<string> GetCurrentUserRoleAsync()
     {
-        return User.FindFirst(ClaimTypes.Role)?.Value ?? "Player";
+        var userId = GetCurrentUserId();
+        return await _authService.GetUserRoleAsync(userId);
     }
 
     /// <summary>
@@ -87,7 +90,7 @@ public class OrganizationsController : ControllerBase
     [Authorize]
     public async Task<ActionResult<OrganizationDto>> Create([FromBody] CreateOrganizationRequest request)
     {
-        var role = GetCurrentUserRole();
+        var role = await GetCurrentUserRoleAsync();
         if (role == "Player")
         {
             return Forbid();
