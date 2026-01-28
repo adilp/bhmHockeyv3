@@ -103,24 +103,25 @@ function PlayerCell({
       {/* Skill level bar on inner edge */}
       <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
 
-      {/* Line 1: Name with Guest indicator */}
-      <View style={[styles.playerNameRow, side === 'left' ? styles.playerNameRowLeft : styles.playerNameRowRight]}>
-        <Text
-          style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
-          numberOfLines={1}
-          allowFontScaling={false}
-        >
-          {fullName}
+      {/* Line 1: Name */}
+      <Text
+        style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
+        numberOfLines={1}
+        allowFontScaling={false}
+      >
+        {fullName}
+      </Text>
+      {/* Line 2: Achievement Badges or Guest label */}
+      {registration.user.isGhostPlayer ? (
+        <Text style={[styles.guestLabel, side === 'left' ? styles.guestLabelLeft : styles.guestLabelRight]} allowFontScaling={false}>
+          Guest
         </Text>
-        {registration.user.isGhostPlayer && (
-          <Text style={styles.guestIndicator} allowFontScaling={false}>(Guest)</Text>
-        )}
-      </View>
-      {/* Line 2: Achievement Badges */}
-      <BadgeIconsRow
-        badges={user.badges || []}
-        totalCount={user.totalBadgeCount || 0}
-      />
+      ) : (
+        <BadgeIconsRow
+          badges={user.badges || []}
+          totalCount={user.totalBadgeCount || 0}
+        />
+      )}
     </Pressable>
   );
 }
@@ -177,24 +178,25 @@ function DragOverlay({
         {/* Skill level bar on inner edge */}
         <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
 
-        {/* Line 1: Name with Guest indicator */}
-        <View style={[styles.playerNameRow, side === 'left' ? styles.playerNameRowLeft : styles.playerNameRowRight]}>
-          <Text
-            style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
-            numberOfLines={1}
-            allowFontScaling={false}
-          >
-            {fullName}
+        {/* Line 1: Name */}
+        <Text
+          style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
+          numberOfLines={1}
+          allowFontScaling={false}
+        >
+          {fullName}
+        </Text>
+        {/* Line 2: Achievement Badges or Guest label */}
+        {registration.user.isGhostPlayer ? (
+          <Text style={[styles.guestLabel, side === 'left' ? styles.guestLabelLeft : styles.guestLabelRight]} allowFontScaling={false}>
+            Guest
           </Text>
-          {registration.user.isGhostPlayer && (
-            <Text style={styles.guestIndicator} allowFontScaling={false}>(Guest)</Text>
-          )}
-        </View>
-        {/* Line 2: Achievement Badges */}
-        <BadgeIconsRow
-          badges={user.badges || []}
-          totalCount={user.totalBadgeCount || 0}
-        />
+        ) : (
+          <BadgeIconsRow
+            badges={user.badges || []}
+            totalCount={user.totalBadgeCount || 0}
+          />
+        )}
       </View>
     </Animated.View>
   );
@@ -668,16 +670,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingLeft: 28,
   },
-  playerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  playerNameRowLeft: {
-    justifyContent: 'flex-end',
-  },
-  playerNameRowRight: {
-    justifyContent: 'flex-start',
-  },
   playerName: {
     fontSize: 14,
     fontWeight: '600',
@@ -690,10 +682,19 @@ const styles = StyleSheet.create({
   playerNameRight: {
     textAlign: 'left',
   },
-  guestIndicator: {
-    fontSize: 11,
+  guestLabel: {
+    fontSize: 12,
+    fontWeight: '500',
     color: colors.text.muted,
-    marginLeft: spacing.xs,
+    fontStyle: 'italic',
+  },
+  guestLabelLeft: {
+    textAlign: 'right',
+    paddingRight: 28,
+  },
+  guestLabelRight: {
+    textAlign: 'left',
+    paddingLeft: 28,
   },
   skillBar: {
     position: 'absolute',

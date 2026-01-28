@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.dark,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    maxHeight: '85%',
+    height: '90%',
     paddingBottom: spacing.xl + 20, // Extra padding for home indicator
   },
   header: {
@@ -741,7 +741,8 @@ const styles = StyleSheet.create({
   },
   createGuestContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
   },
   inputSection: {
     marginTop: spacing.md,
