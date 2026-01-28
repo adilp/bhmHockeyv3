@@ -4,6 +4,8 @@ import { router } from 'expo-router';
 /**
  * Deep link URL patterns:
  * - bhmhockey://tournament/{tournamentId}/team/{teamId}
+ * - bhmhockey://tournament/{tournamentId}
+ * - bhmhockey://organizations/{orgId}
  */
 
 interface DeepLinkData {
@@ -64,6 +66,15 @@ export function handleDeepLink(url: string) {
     const [, tournamentId] = tournamentMatch;
     console.log('🔗 Navigating to tournament:', tournamentId);
     router.push(`/tournaments/${tournamentId}`);
+    return;
+  }
+
+  // Match pattern: organizations/{orgId}
+  const organizationMatch = path.match(/^organizations\/([^/]+)\/?$/);
+  if (organizationMatch) {
+    const [, orgId] = organizationMatch;
+    console.log('🔗 Navigating to organization:', orgId);
+    router.push(`/organizations/${orgId}`);
     return;
   }
 
