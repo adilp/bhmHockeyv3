@@ -281,7 +281,10 @@ public class AuthService : IAuthService
             user.Positions,
             user.VenmoHandle,
             user.Role,
-            user.CreatedAt
+            user.CreatedAt,
+            null, // Badges
+            0,    // TotalBadgeCount
+            user.IsGhostPlayer
         );
     }
 }

@@ -12,10 +12,13 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
-import type { UserSearchResultDto } from '@bhmhockey/shared';
+import type { UserSearchResultDto, SkillLevel } from '@bhmhockey/shared';
 import { useEventStore } from '../../stores/eventStore';
 import { colors, spacing, radius } from '../../theme';
+
+type TabType = 'search' | 'create';
 
 interface AddPlayerModalProps {
   visible: boolean;
@@ -30,6 +33,10 @@ export function AddPlayerModal({
   onClose,
   onPlayerAdded,
 }: AddPlayerModalProps) {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('search');
+
+  // Search tab state
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserSearchResultDto[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -38,17 +45,33 @@ export function AddPlayerModal({
   const [isAdding, setIsAdding] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { searchUsersForEvent, addUserToEvent } = useEventStore();
+  // Create Guest tab state
+  const [guestFirstName, setGuestFirstName] = useState('');
+  const [guestLastName, setGuestLastName] = useState('');
+  const [guestPosition, setGuestPosition] = useState<'Goalie' | 'Skater' | null>(null);
+  const [guestSkillLevel, setGuestSkillLevel] = useState<SkillLevel | null>(null);
+  const [isCreatingGuest, setIsCreatingGuest] = useState(false);
+
+  const { searchUsersForEvent, addUserToEvent, createGhostPlayer } = useEventStore();
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (!visible) {
+      // Reset tab
+      setActiveTab('search');
+      // Reset search tab state
       setQuery('');
       setResults([]);
       setSelectedUser(null);
       setSelectedPosition(null);
       setIsSearching(false);
       setIsAdding(false);
+      // Reset create guest tab state
+      setGuestFirstName('');
+      setGuestLastName('');
+      setGuestPosition(null);
+      setGuestSkillLevel(null);
+      setIsCreatingGuest(false);
     }
   }, [visible]);
 
@@ -80,33 +103,21 @@ export function AddPlayerModal({
 
   const handleSelectUser = useCallback((user: UserSearchResultDto) => {
     setSelectedUser(user);
-
-    // Determine if position selection is needed
-    const positions = user.positions ? Object.keys(user.positions) : [];
-    if (positions.length === 1) {
-      // Auto-select single position
-      setSelectedPosition(positions[0] === 'goalie' ? 'Goalie' : 'Skater');
-    } else if (positions.length === 0) {
-      // No positions configured, default to Skater
-      setSelectedPosition('Skater');
-    } else {
-      // Multiple positions, need to pick
-      setSelectedPosition(null);
-    }
+    // Always require position selection - organizers can add as any position
+    setSelectedPosition(null);
   }, []);
 
   const handleConfirmAdd = async () => {
     if (!selectedUser) return;
 
-    // Check if position is needed but not selected
-    const positions = selectedUser.positions ? Object.keys(selectedUser.positions) : [];
-    if (positions.length > 1 && !selectedPosition) {
+    // Position is always required
+    if (!selectedPosition) {
       Alert.alert('Select Position', 'Please select a position for this player.');
       return;
     }
 
     setIsAdding(true);
-    const success = await addUserToEvent(eventId, selectedUser.id, selectedPosition || undefined);
+    const success = await addUserToEvent(eventId, selectedUser.id, selectedPosition);
     setIsAdding(false);
 
     if (success) {
@@ -114,6 +125,36 @@ export function AddPlayerModal({
       onClose();
     } else {
       // Error is set in store and will show via error handling in parent
+    }
+  };
+
+  const handleCreateGuest = async () => {
+    if (!guestFirstName.trim()) {
+      Alert.alert('Required', 'Please enter a first name.');
+      return;
+    }
+    if (!guestLastName.trim()) {
+      Alert.alert('Required', 'Please enter a last name.');
+      return;
+    }
+    if (!guestPosition) {
+      Alert.alert('Required', 'Please select a position.');
+      return;
+    }
+
+    setIsCreatingGuest(true);
+    const success = await createGhostPlayer(
+      eventId,
+      guestFirstName.trim(),
+      guestLastName.trim(),
+      guestPosition,
+      guestSkillLevel || undefined
+    );
+    setIsCreatingGuest(false);
+
+    if (success) {
+      onPlayerAdded();
+      onClose();
     }
   };
 
@@ -147,10 +188,6 @@ export function AddPlayerModal({
     );
   };
 
-  const needsPositionSelection = selectedUser &&
-    selectedUser.positions &&
-    Object.keys(selectedUser.positions).length > 1;
-
   return (
     <Modal
       visible={visible}
@@ -174,133 +211,302 @@ export function AddPlayerModal({
                   </TouchableOpacity>
                 </View>
 
-                {/* Search Input */}
-                <View style={styles.searchContainer}>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search by name..."
-                    placeholderTextColor={colors.text.muted}
-                    value={query}
-                    onChangeText={setQuery}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoFocus
-                    allowFontScaling={false}
-                  />
-                  {isSearching && (
-                    <ActivityIndicator
-                      size="small"
-                      color={colors.primary.teal}
-                      style={styles.searchSpinner}
-                    />
-                  )}
+                {/* Tab Toggle */}
+                <View style={styles.tabContainer}>
+                  <TouchableOpacity
+                    style={[styles.tab, activeTab === 'search' && styles.tabActive]}
+                    onPress={() => setActiveTab('search')}
+                  >
+                    <Text
+                      style={[styles.tabText, activeTab === 'search' && styles.tabTextActive]}
+                      allowFontScaling={false}
+                    >
+                      Search
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.tab, activeTab === 'create' && styles.tabActive]}
+                    onPress={() => setActiveTab('create')}
+                  >
+                    <Text
+                      style={[styles.tabText, activeTab === 'create' && styles.tabTextActive]}
+                      allowFontScaling={false}
+                    >
+                      Create Guest
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Results or Selected User */}
-                {!selectedUser ? (
+                {activeTab === 'search' ? (
                   <>
-                    {/* Search Results */}
-                    {results.length > 0 ? (
-                      <FlatList
-                        data={results}
-                        keyExtractor={(item) => item.id}
-                        renderItem={renderUserItem}
-                        style={styles.resultsList}
-                        contentContainerStyle={styles.resultsContent}
-                        keyboardShouldPersistTaps="handled"
+                    {/* Search Input */}
+                    <View style={styles.searchContainer}>
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search by name..."
+                        placeholderTextColor={colors.text.muted}
+                        value={query}
+                        onChangeText={setQuery}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoFocus
+                        allowFontScaling={false}
                       />
-                    ) : query.length >= 2 && !isSearching ? (
-                      <View style={styles.emptyState}>
-                        <Text style={styles.emptyText} allowFontScaling={false}>
-                          No users found
-                        </Text>
-                      </View>
+                      {isSearching && (
+                        <ActivityIndicator
+                          size="small"
+                          color={colors.primary.teal}
+                          style={styles.searchSpinner}
+                        />
+                      )}
+                    </View>
+
+                    {/* Results or Selected User */}
+                    {!selectedUser ? (
+                      <>
+                        {/* Search Results */}
+                        {results.length > 0 ? (
+                          <FlatList
+                            data={results}
+                            keyExtractor={(item) => item.id}
+                            renderItem={renderUserItem}
+                            style={styles.resultsList}
+                            contentContainerStyle={styles.resultsContent}
+                            keyboardShouldPersistTaps="handled"
+                          />
+                        ) : query.length >= 2 && !isSearching ? (
+                          <View style={styles.emptyState}>
+                            <Text style={styles.emptyText} allowFontScaling={false}>
+                              No users found
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.emptyState}>
+                            <Text style={styles.emptyText} allowFontScaling={false}>
+                              Type at least 2 characters to search
+                            </Text>
+                          </View>
+                        )}
+                      </>
                     ) : (
-                      <View style={styles.emptyState}>
-                        <Text style={styles.emptyText} allowFontScaling={false}>
-                          Type at least 2 characters to search
-                        </Text>
-                      </View>
+                      <>
+                        {/* Selected User Display */}
+                        <View style={styles.selectedSection}>
+                          <Text style={styles.sectionLabel} allowFontScaling={false}>
+                            Selected Player
+                          </Text>
+                          <View style={styles.selectedUserCard}>
+                            <Text style={styles.selectedUserName} allowFontScaling={false}>
+                              {selectedUser.firstName} {selectedUser.lastName}
+                            </Text>
+                            <Text style={styles.selectedUserEmail} allowFontScaling={false}>
+                              {selectedUser.email}
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() => setSelectedUser(null)}
+                              style={styles.changeButton}
+                            >
+                              <Text style={styles.changeButtonText} allowFontScaling={false}>
+                                Change
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* Position Selection - always required */}
+                        <View style={styles.positionSection}>
+                          <Text style={styles.sectionLabel} allowFontScaling={false}>
+                            Select Position
+                          </Text>
+                          <View style={styles.positionButtons}>
+                            <TouchableOpacity
+                              style={[
+                                styles.positionButton,
+                                selectedPosition === 'Goalie' && styles.positionButtonSelected,
+                              ]}
+                              onPress={() => setSelectedPosition('Goalie')}
+                            >
+                              <Text
+                                style={[
+                                  styles.positionButtonText,
+                                  selectedPosition === 'Goalie' && styles.positionButtonTextSelected,
+                                ]}
+                                allowFontScaling={false}
+                              >
+                                Goalie
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.positionButton,
+                                selectedPosition === 'Skater' && styles.positionButtonSelected,
+                              ]}
+                              onPress={() => setSelectedPosition('Skater')}
+                            >
+                              <Text
+                                style={[
+                                  styles.positionButtonText,
+                                  selectedPosition === 'Skater' && styles.positionButtonTextSelected,
+                                ]}
+                                allowFontScaling={false}
+                              >
+                                Skater
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* Confirm Button */}
+                        <TouchableOpacity
+                          style={[
+                            styles.confirmButton,
+                            !selectedPosition && styles.confirmButtonDisabled,
+                          ]}
+                          onPress={handleConfirmAdd}
+                          disabled={isAdding || !selectedPosition}
+                        >
+                          {isAdding ? (
+                            <ActivityIndicator size="small" color={colors.text.primary} />
+                          ) : (
+                            <Text style={styles.confirmButtonText} allowFontScaling={false}>
+                              Add to Waitlist
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </>
                     )}
                   </>
                 ) : (
-                  <>
-                    {/* Selected User Display */}
-                    <View style={styles.selectedSection}>
+                  /* Create Guest Tab */
+                  <ScrollView
+                    style={styles.createGuestContainer}
+                    contentContainerStyle={styles.createGuestContent}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {/* First Name Input */}
+                    <View style={styles.inputSection}>
                       <Text style={styles.sectionLabel} allowFontScaling={false}>
-                        Selected Player
+                        First Name *
                       </Text>
-                      <View style={styles.selectedUserCard}>
-                        <Text style={styles.selectedUserName} allowFontScaling={false}>
-                          {selectedUser.firstName} {selectedUser.lastName}
-                        </Text>
-                        <Text style={styles.selectedUserEmail} allowFontScaling={false}>
-                          {selectedUser.email}
-                        </Text>
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="Enter first name"
+                        placeholderTextColor={colors.text.muted}
+                        value={guestFirstName}
+                        onChangeText={setGuestFirstName}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                        allowFontScaling={false}
+                      />
+                    </View>
+
+                    {/* Last Name Input */}
+                    <View style={styles.inputSection}>
+                      <Text style={styles.sectionLabel} allowFontScaling={false}>
+                        Last Name *
+                      </Text>
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="Enter last name"
+                        placeholderTextColor={colors.text.muted}
+                        value={guestLastName}
+                        onChangeText={setGuestLastName}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                        allowFontScaling={false}
+                      />
+                    </View>
+
+                    {/* Position Selector */}
+                    <View style={styles.inputSection}>
+                      <Text style={styles.sectionLabel} allowFontScaling={false}>
+                        Position *
+                      </Text>
+                      <View style={styles.positionButtons}>
                         <TouchableOpacity
-                          onPress={() => setSelectedUser(null)}
-                          style={styles.changeButton}
+                          style={[
+                            styles.positionButton,
+                            guestPosition === 'Goalie' && styles.positionButtonSelected,
+                          ]}
+                          onPress={() => setGuestPosition('Goalie')}
                         >
-                          <Text style={styles.changeButtonText} allowFontScaling={false}>
-                            Change
+                          <Text
+                            style={[
+                              styles.positionButtonText,
+                              guestPosition === 'Goalie' && styles.positionButtonTextSelected,
+                            ]}
+                            allowFontScaling={false}
+                          >
+                            Goalie
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.positionButton,
+                            guestPosition === 'Skater' && styles.positionButtonSelected,
+                          ]}
+                          onPress={() => setGuestPosition('Skater')}
+                        >
+                          <Text
+                            style={[
+                              styles.positionButtonText,
+                              guestPosition === 'Skater' && styles.positionButtonTextSelected,
+                            ]}
+                            allowFontScaling={false}
+                          >
+                            Skater
                           </Text>
                         </TouchableOpacity>
                       </View>
                     </View>
 
-                    {/* Position Selection (if needed) */}
-                    {needsPositionSelection && (
-                      <View style={styles.positionSection}>
-                        <Text style={styles.sectionLabel} allowFontScaling={false}>
-                          Select Position
-                        </Text>
-                        <View style={styles.positionButtons}>
-                          {selectedUser.positions && Object.keys(selectedUser.positions).map((pos) => {
-                            const displayName = pos === 'goalie' ? 'Goalie' : 'Skater';
-                            const isSelected = selectedPosition === displayName;
-                            return (
-                              <TouchableOpacity
-                                key={pos}
-                                style={[
-                                  styles.positionButton,
-                                  isSelected && styles.positionButtonSelected,
-                                ]}
-                                onPress={() => setSelectedPosition(displayName)}
-                              >
-                                <Text
-                                  style={[
-                                    styles.positionButtonText,
-                                    isSelected && styles.positionButtonTextSelected,
-                                  ]}
-                                  allowFontScaling={false}
-                                >
-                                  {displayName}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
+                    {/* Skill Level Selector (Optional) */}
+                    <View style={styles.inputSection}>
+                      <Text style={styles.sectionLabel} allowFontScaling={false}>
+                        Skill Level (Optional)
+                      </Text>
+                      <View style={styles.skillLevelButtons}>
+                        {(['Gold', 'Silver', 'Bronze', 'D-League'] as SkillLevel[]).map((level) => (
+                          <TouchableOpacity
+                            key={level}
+                            style={[
+                              styles.skillLevelButton,
+                              guestSkillLevel === level && styles.skillLevelButtonSelected,
+                            ]}
+                            onPress={() => setGuestSkillLevel(guestSkillLevel === level ? null : level)}
+                          >
+                            <Text
+                              style={[
+                                styles.skillLevelButtonText,
+                                guestSkillLevel === level && styles.skillLevelButtonTextSelected,
+                              ]}
+                              allowFontScaling={false}
+                            >
+                              {level}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
                       </View>
-                    )}
+                    </View>
 
-                    {/* Confirm Button */}
+                    {/* Create Guest Button */}
                     <TouchableOpacity
                       style={[
                         styles.confirmButton,
-                        (needsPositionSelection && !selectedPosition) && styles.confirmButtonDisabled,
+                        (!guestFirstName.trim() || !guestLastName.trim() || !guestPosition) && styles.confirmButtonDisabled,
                       ]}
-                      onPress={handleConfirmAdd}
-                      disabled={isAdding || Boolean(needsPositionSelection && !selectedPosition)}
+                      onPress={handleCreateGuest}
+                      disabled={isCreatingGuest || !guestFirstName.trim() || !guestLastName.trim() || !guestPosition}
                     >
-                      {isAdding ? (
+                      {isCreatingGuest ? (
                         <ActivityIndicator size="small" color={colors.text.primary} />
                       ) : (
                         <Text style={styles.confirmButtonText} allowFontScaling={false}>
-                          Add to Waitlist
+                          Create Guest
                         </Text>
                       )}
                     </TouchableOpacity>
-                  </>
+                  </ScrollView>
                 )}
               </View>
             </TouchableWithoutFeedback>
@@ -335,6 +541,31 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.md,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderRadius: radius.sm,
+  },
+  tabActive: {
+    backgroundColor: colors.primary.teal,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.muted,
+  },
+  tabTextActive: {
+    color: colors.text.primary,
   },
   title: {
     fontSize: 18,
@@ -503,5 +734,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.text.primary,
+  },
+  // Create Guest styles
+  createGuestContainer: {
+    flex: 1,
+  },
+  createGuestContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  inputSection: {
+    marginTop: spacing.md,
+  },
+  textInput: {
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text.primary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  skillLevelButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  skillLevelButton: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  skillLevelButtonSelected: {
+    borderColor: colors.primary.teal,
+    backgroundColor: colors.subtle.teal,
+  },
+  skillLevelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  skillLevelButtonTextSelected: {
+    color: colors.primary.teal,
   },
 });

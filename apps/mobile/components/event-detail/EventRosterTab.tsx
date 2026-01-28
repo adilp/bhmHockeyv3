@@ -302,7 +302,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
                   return {
                     ...reg,
                     isWaitlisted: false,
-                    waitlistPosition: null,
+                    waitlistPosition: undefined,
                     teamAssignment: newTeam,
                     status: 'Registered',
                   };
@@ -363,9 +363,9 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
                     ...reg,
                     isWaitlisted: true,
                     waitlistPosition: nextPosition,
-                    teamAssignment: null,
-                    rosterOrder: null,
-                    paymentDeadlineAt: null,
+                    teamAssignment: undefined,
+                    rosterOrder: undefined,
+                    paymentDeadlineAt: undefined,
                     status: 'Waitlisted',
                   };
                 }

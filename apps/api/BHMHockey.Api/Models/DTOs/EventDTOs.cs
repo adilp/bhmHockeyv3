@@ -169,3 +169,11 @@ public record AddUserToEventRequest(
     Guid UserId,
     string? Position                      // Optional: "Goalie" or "Skater" (required if user has multiple positions)
 );
+
+// Request to create a ghost player (placeholder account for non-app users)
+public record CreateGhostPlayerRequest(
+    string FirstName,
+    string LastName,
+    string Position,                      // "Goalie" or "Skater"
+    string? SkillLevel = null             // Optional: "Gold", "Silver", "Bronze", "D-League"
+);

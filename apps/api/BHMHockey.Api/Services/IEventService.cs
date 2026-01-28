@@ -64,4 +64,10 @@ public interface IEventService
     /// Creates a new registration with Status="Waitlisted" and sends a notification to the user.
     /// </summary>
     Task<EventRegistrationDto> AddUserToWaitlistAsync(Guid eventId, Guid userId, Guid organizerId, string? position);
+
+    /// <summary>
+    /// Create a ghost player and add them to an event's waitlist (organizer only).
+    /// Ghost players are placeholder accounts for people who don't have the app.
+    /// </summary>
+    Task<EventRegistrationDto> CreateGhostPlayerAsync(Guid eventId, Guid organizerId, string firstName, string lastName, string position, string? skillLevel);
 }

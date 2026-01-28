@@ -528,6 +528,34 @@ public class EventsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Create a ghost player and add them to an event's waitlist (organizer only).
+    /// Ghost players are placeholder accounts for people who don't have the app.
+    /// </summary>
+    [Authorize]
+    [HttpPost("{eventId:guid}/registrations/create-ghost-player")]
+    public async Task<ActionResult<EventRegistrationDto>> CreateGhostPlayer(
+        Guid eventId,
+        [FromBody] CreateGhostPlayerRequest request)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var registration = await _eventService.CreateGhostPlayerAsync(
+                eventId, userId, request.FirstName, request.LastName, request.Position, request.SkillLevel);
+            return Ok(registration);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     #endregion
 
     #region Roster Order

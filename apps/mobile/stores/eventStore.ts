@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { eventService } from '@bhmhockey/api-client';
-import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto, PublishResultDto, UserSearchResultDto } from '@bhmhockey/shared';
+import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto, PublishResultDto, UserSearchResultDto, SkillLevel } from '@bhmhockey/shared';
 
 interface EventState {
   // State
@@ -44,6 +44,7 @@ interface EventState {
   // User management (organizer)
   searchUsersForEvent: (eventId: string, query: string) => Promise<UserSearchResultDto[]>;
   addUserToEvent: (eventId: string, userId: string, position?: string) => Promise<boolean>;
+  createGhostPlayer: (eventId: string, firstName: string, lastName: string, position: 'Goalie' | 'Skater', skillLevel?: string) => Promise<boolean>;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
@@ -430,6 +431,25 @@ export const useEventStore = create<EventState>((set, get) => ({
       return true;
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || error?.message || 'Failed to add user';
+      set({ error: errorMessage });
+      return false;
+    }
+  },
+
+  // Create a ghost player and add them to an event's waitlist (organizer only)
+  createGhostPlayer: async (eventId, firstName, lastName, position, skillLevel) => {
+    try {
+      await eventService.createGhostPlayer(eventId, {
+        firstName,
+        lastName,
+        position,
+        skillLevel: skillLevel as SkillLevel | undefined,
+      });
+      // Refresh event data to get updated registrations
+      await get().fetchEventById(eventId);
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to create guest player';
       set({ error: errorMessage });
       return false;
     }

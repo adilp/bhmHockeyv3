@@ -475,7 +475,8 @@ public class TournamentRegistrationService : ITournamentRegistrationService
             user.Role,
             user.CreatedAt,
             null,  // Badges not included in tournament registration responses
-            0      // Total badge count
+            0,     // Total badge count
+            user.IsGhostPlayer
         );
 
         return new TournamentRegistrationDto(

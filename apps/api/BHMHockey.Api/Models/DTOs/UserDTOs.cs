@@ -12,7 +12,8 @@ public record UserDto(
     DateTime CreatedAt,
     // Badge fields (for roster display)
     List<UserBadgeDto>? Badges = null,      // Top 3 badges by displayOrder
-    int TotalBadgeCount = 0                  // Total badges user has earned
+    int TotalBadgeCount = 0,                 // Total badges user has earned
+    bool IsGhostPlayer = false               // True if this is a placeholder account
 );
 
 public record UpdateUserProfileRequest(

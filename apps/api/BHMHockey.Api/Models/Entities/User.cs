@@ -18,6 +18,7 @@ public class User
 
     public string Role { get; set; } = "Player"; // Player, Organizer, Admin
     public bool IsActive { get; set; } = true;
+    public bool IsGhostPlayer { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

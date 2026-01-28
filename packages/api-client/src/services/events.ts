@@ -17,7 +17,8 @@ import type {
   TeamAssignment,
   WaitlistOrderItem,
   UserSearchResultDto,
-  AddUserToEventRequest
+  AddUserToEventRequest,
+  CreateGhostPlayerRequest
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -236,6 +237,18 @@ export const eventService = {
   async addUserToEvent(eventId: string, request: AddUserToEventRequest): Promise<EventRegistrationDto> {
     const response = await apiClient.instance.post<EventRegistrationDto>(
       `/events/${eventId}/registrations/add-user`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Create a ghost player and add them to an event's waitlist (organizer only).
+   * Ghost players are placeholder accounts for people who don't have the app.
+   */
+  async createGhostPlayer(eventId: string, request: CreateGhostPlayerRequest): Promise<EventRegistrationDto> {
+    const response = await apiClient.instance.post<EventRegistrationDto>(
+      `/events/${eventId}/registrations/create-ghost-player`,
       request
     );
     return response.data;

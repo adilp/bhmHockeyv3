@@ -103,14 +103,19 @@ function PlayerCell({
       {/* Skill level bar on inner edge */}
       <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
 
-      {/* Line 1: Name */}
-      <Text
-        style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
-        numberOfLines={1}
-        allowFontScaling={false}
-      >
-        {fullName}
-      </Text>
+      {/* Line 1: Name with Guest indicator */}
+      <View style={[styles.playerNameRow, side === 'left' ? styles.playerNameRowLeft : styles.playerNameRowRight]}>
+        <Text
+          style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
+          numberOfLines={1}
+          allowFontScaling={false}
+        >
+          {fullName}
+        </Text>
+        {registration.user.isGhostPlayer && (
+          <Text style={styles.guestIndicator} allowFontScaling={false}>(Guest)</Text>
+        )}
+      </View>
       {/* Line 2: Achievement Badges */}
       <BadgeIconsRow
         badges={user.badges || []}
@@ -172,14 +177,19 @@ function DragOverlay({
         {/* Skill level bar on inner edge */}
         <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
 
-        {/* Line 1: Name */}
-        <Text
-          style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
-          numberOfLines={1}
-          allowFontScaling={false}
-        >
-          {fullName}
-        </Text>
+        {/* Line 1: Name with Guest indicator */}
+        <View style={[styles.playerNameRow, side === 'left' ? styles.playerNameRowLeft : styles.playerNameRowRight]}>
+          <Text
+            style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
+            numberOfLines={1}
+            allowFontScaling={false}
+          >
+            {fullName}
+          </Text>
+          {registration.user.isGhostPlayer && (
+            <Text style={styles.guestIndicator} allowFontScaling={false}>(Guest)</Text>
+          )}
+        </View>
         {/* Line 2: Achievement Badges */}
         <BadgeIconsRow
           badges={user.badges || []}
@@ -658,6 +668,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingLeft: 28,
   },
+  playerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  playerNameRowLeft: {
+    justifyContent: 'flex-end',
+  },
+  playerNameRowRight: {
+    justifyContent: 'flex-start',
+  },
   playerName: {
     fontSize: 14,
     fontWeight: '600',
@@ -669,6 +689,11 @@ const styles = StyleSheet.create({
   },
   playerNameRight: {
     textAlign: 'left',
+  },
+  guestIndicator: {
+    fontSize: 11,
+    color: colors.text.muted,
+    marginLeft: spacing.xs,
   },
   skillBar: {
     position: 'absolute',

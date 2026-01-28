@@ -15,7 +15,10 @@
       "Bash(yarn tsc:*)",
       "Bash(ls:*)",
       "Bash(xargs basename:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(yarn build)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(yarn type-check:*)"
     ]
   }
 }

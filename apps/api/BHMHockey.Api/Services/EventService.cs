@@ -612,7 +612,8 @@ public class EventService : IEventService
                     r.User.Role,
                     r.User.CreatedAt,
                     topBadges,      // Top 3 badges
-                    totalCount      // Total badge count
+                    totalCount,     // Total badge count
+                    r.User.IsGhostPlayer
                 ),
                 r.Status,
                 r.RegisteredAt,
@@ -657,7 +658,8 @@ public class EventService : IEventService
                     r.User.Role,
                     r.User.CreatedAt,
                     topBadges,      // Top 3 badges
-                    totalCount      // Total badge count
+                    totalCount,     // Total badge count
+                    r.User.IsGhostPlayer
                 ),
                 r.Status,
                 r.RegisteredAt,
@@ -1023,7 +1025,8 @@ public class EventService : IEventService
                 registration.User.Role,
                 registration.User.CreatedAt,
                 null,  // Badges not included in payment update response
-                0      // Total badge count not included
+                0,     // Total badge count not included
+                registration.User.IsGhostPlayer
             ),
             registration.Status,
             registration.RegisteredAt,
@@ -1363,7 +1366,8 @@ public class EventService : IEventService
                 registration.User.Role,
                 registration.User.CreatedAt,
                 null,  // Badges not included in move response
-                0      // Total badge count not included
+                0,     // Total badge count not included
+                registration.User.IsGhostPlayer
             ),
             registration.Status,
             registration.RegisteredAt,
@@ -1541,9 +1545,11 @@ public class EventService : IEventService
             .ToListAsync();
 
         // Search users by first name OR last name (case-insensitive, contains)
+        // Exclude ghost players - they are placeholders for non-app users
         var queryLower = query.ToLower();
         var users = await _context.Users
             .Where(u =>
+                !u.IsGhostPlayer &&
                 (u.FirstName.ToLower().Contains(queryLower) ||
                  u.LastName.ToLower().Contains(queryLower)) &&
                 !registeredUserIds.Contains(u.Id))
@@ -1659,23 +1665,11 @@ public class EventService : IEventService
     /// </summary>
     private string DetermineRegistrationPositionForAddedUser(Models.Entities.User user, string? requestedPosition)
     {
-        // If user has no positions set up, default to Skater
-        if (user.Positions == null || user.Positions.Count == 0)
-        {
-            return "Skater";
-        }
-
-        // If user has exactly one position, use it (ignore requestedPosition)
-        if (user.Positions.Count == 1)
-        {
-            var singlePosition = user.Positions.Keys.First();
-            return singlePosition == "goalie" ? "Goalie" : "Skater";
-        }
-
-        // User has multiple positions - they must specify which one
+        // Organizers can add users as any position, regardless of user's profile
+        // If position is specified, use it; otherwise default to Skater
         if (string.IsNullOrEmpty(requestedPosition))
         {
-            throw new InvalidOperationException("User has multiple positions. Please select which position to register as");
+            return "Skater";
         }
 
         // Normalize and validate the requested position
@@ -1683,12 +1677,6 @@ public class EventService : IEventService
         if (normalizedPosition != "goalie" && normalizedPosition != "skater")
         {
             throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
-        }
-
-        // Verify user has this position in their profile
-        if (!user.Positions.ContainsKey(normalizedPosition))
-        {
-            throw new InvalidOperationException($"User doesn't have {requestedPosition} in their profile positions");
         }
 
         return normalizedPosition == "goalie" ? "Goalie" : "Skater";
@@ -1715,5 +1703,89 @@ public class EventService : IEventService
             type: "added_to_waitlist",
             organizationId: evt.OrganizationId,
             eventId: evt.Id);
+    }
+
+    /// <summary>
+    /// Create a ghost player and add them to an event's waitlist (organizer only).
+    /// Ghost players are placeholder accounts for people who don't have the app.
+    /// </summary>
+    public async Task<EventRegistrationDto> CreateGhostPlayerAsync(
+        Guid eventId,
+        Guid organizerId,
+        string firstName,
+        string lastName,
+        string position,
+        string? skillLevel)
+    {
+        // Load event
+        var evt = await _context.Events
+            .Include(e => e.Registrations)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (evt == null)
+        {
+            throw new InvalidOperationException("Event not found");
+        }
+
+        // Verify organizer can manage this event
+        if (!await CanUserManageEventAsync(evt, organizerId))
+        {
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+        }
+
+        // Validate position
+        var normalizedPosition = position.ToLowerInvariant();
+        if (normalizedPosition != "goalie" && normalizedPosition != "skater")
+        {
+            throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
+        }
+        var registeredPosition = normalizedPosition == "goalie" ? "Goalie" : "Skater";
+
+        // Validate skill level if provided
+        if (!string.IsNullOrEmpty(skillLevel) && !ValidSkillLevels.Contains(skillLevel))
+        {
+            throw new InvalidOperationException($"Invalid skill level: '{skillLevel}'. Valid values: Gold, Silver, Bronze, D-League");
+        }
+
+        // Create ghost user
+        var ghostUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = $"ghost_{Guid.NewGuid():N}@placeholder.bhmhockey",
+            PasswordHash = "", // Ghost players cannot log in
+            FirstName = firstName,
+            LastName = lastName,
+            IsGhostPlayer = true,
+            IsActive = true,
+            Role = "Player",
+            Positions = !string.IsNullOrEmpty(skillLevel)
+                ? new Dictionary<string, string> { { normalizedPosition, skillLevel } }
+                : new Dictionary<string, string> { { normalizedPosition, "Bronze" } } // Default to Bronze if not specified
+        };
+
+        _context.Users.Add(ghostUser);
+        await _context.SaveChangesAsync();
+
+        // Get next waitlist position
+        var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
+
+        // Create registration - ghost players go directly to waitlist with auto-verified payment
+        var registration = new EventRegistration
+        {
+            EventId = eventId,
+            UserId = ghostUser.Id,
+            Status = "Waitlisted",
+            RegisteredPosition = registeredPosition,
+            WaitlistPosition = waitlistPosition,
+            PaymentStatus = evt.Cost > 0 ? "Verified" : null // Ghost players are auto-verified (they don't pay through the app)
+        };
+
+        _context.EventRegistrations.Add(registration);
+        await _context.SaveChangesAsync();
+
+        // Load user for DTO
+        registration.User = ghostUser;
+
+        return MapRegistrationToDto(registration);
     }
 }

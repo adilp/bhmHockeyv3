@@ -15,12 +15,21 @@ export interface User {
   // Badge fields (optional - included in roster responses)
   badges?: UserBadgeDto[];    // Top 3 badges by displayOrder
   totalBadgeCount?: number;   // Total badges user has earned
+  isGhostPlayer?: boolean;
 }
 
 export type UserRole = 'Player' | 'Organizer' | 'Admin';
 
 // Simplified positions: Goalie or Skater only
 export type Position = 'Goalie' | 'Skater';
+
+// Ghost player creation request
+export interface CreateGhostPlayerRequest {
+  firstName: string;
+  lastName: string;
+  position: 'Goalie' | 'Skater';
+  skillLevel?: SkillLevel;
+}
 
 // Position-skill mapping for multi-position support
 export type UserPositions = {

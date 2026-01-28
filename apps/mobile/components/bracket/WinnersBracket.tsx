@@ -22,7 +22,7 @@ interface WinnersBracketProps {
   showHeader?: boolean; // Whether to show "WINNERS BRACKET" header
 }
 
-export const WinnersBracket: React.FC<WinnersBracketProps> = ({
+export function WinnersBracket({
   matches,
   selectedTeamId,
   userTeamId,
@@ -31,7 +31,7 @@ export const WinnersBracket: React.FC<WinnersBracketProps> = ({
   onTeamPress,
   canEdit = false,
   showHeader = true,
-}) => {
+}: WinnersBracketProps) {
   // Use userTeamId as the effective highlighted team (user's team is always highlighted)
   const effectiveSelectedTeamId = userTeamId || selectedTeamId;
   // Calculate positions for all matches

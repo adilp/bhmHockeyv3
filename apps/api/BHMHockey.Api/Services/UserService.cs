@@ -31,7 +31,10 @@ public class UserService : IUserService
             user.Positions,
             user.VenmoHandle,
             user.Role,
-            user.CreatedAt
+            user.CreatedAt,
+            null, // Badges
+            0,    // TotalBadgeCount
+            user.IsGhostPlayer
         );
     }
 
@@ -76,7 +79,10 @@ public class UserService : IUserService
             user.Positions,
             user.VenmoHandle,
             user.Role,
-            user.CreatedAt
+            user.CreatedAt,
+            null, // Badges
+            0,    // TotalBadgeCount
+            user.IsGhostPlayer
         );
     }
 
