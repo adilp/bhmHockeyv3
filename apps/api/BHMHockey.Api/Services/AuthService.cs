@@ -144,6 +144,7 @@ public class AuthService : IAuthService
                 u.Email,
                 u.FirstName,
                 u.LastName,
+                u.Role,
                 u.IsActive
             ))
             .ToListAsync();
@@ -220,6 +221,41 @@ public class AuthService : IAuthService
         var activeUsers = await _context.Users.CountAsync(u => u.IsActive);
 
         return new AdminStatsResponse(totalUsers, activeUsers);
+    }
+
+    public async Task<AdminUpdateRoleResponse> UpdateUserRoleAsync(Guid userId, string newRole)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found");
+        }
+
+        if (!user.IsActive)
+        {
+            throw new InvalidOperationException("Cannot update role for deactivated account");
+        }
+
+        var previousRole = user.Role;
+
+        if (previousRole == newRole)
+        {
+            throw new InvalidOperationException($"User is already a {newRole}");
+        }
+
+        user.Role = newRole;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return new AdminUpdateRoleResponse(
+            user.Id,
+            user.Email,
+            previousRole,
+            newRole,
+            $"Successfully updated {user.FirstName} {user.LastName} from {previousRole} to {newRole}"
+        );
     }
 
     private static string GenerateTemporaryPassword()

@@ -26,7 +26,6 @@ import {
 import { colors, spacing, radius } from '../../theme';
 
 const BADGE_SAVE_DEBOUNCE_MS = 500;
-const ADMIN_EMAIL = 'a@a.com';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -259,8 +258,8 @@ export default function ProfileScreen() {
         <Text style={styles.subtitle}>{user?.email}</Text>
       </View>
 
-      {/* Admin Panel Button - only for a@a.com */}
-      {user?.email === ADMIN_EMAIL && (
+      {/* Admin Panel Button - only for Admin role */}
+      {user?.role === 'Admin' && (
         <TouchableOpacity
           style={styles.adminButton}
           onPress={() => router.push('/admin')}

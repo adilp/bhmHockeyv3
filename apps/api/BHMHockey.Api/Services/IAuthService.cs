@@ -13,4 +13,5 @@ public interface IAuthService
     Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request);
     Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request);
     Task<AdminStatsResponse> GetAdminStatsAsync();
+    Task<AdminUpdateRoleResponse> UpdateUserRoleAsync(Guid userId, string newRole);
 }

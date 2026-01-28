@@ -1054,7 +1054,22 @@ export interface AdminUserSearchResult {
   email: string;
   firstName: string;
   lastName: string;
+  role: UserRole;
   isActive: boolean;
+}
+
+// Request to update a user's role (admin only)
+export interface AdminUpdateRoleRequest {
+  role: UserRole;
+}
+
+// Response from updating a user's role
+export interface AdminUpdateRoleResponse {
+  userId: string;
+  email: string;
+  previousRole: UserRole;
+  newRole: UserRole;
+  message: string;
 }
 
 // Change password request

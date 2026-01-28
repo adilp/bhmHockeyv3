@@ -37,7 +37,20 @@ public record AdminUserSearchResult(
     string Email,
     string FirstName,
     string LastName,
+    string Role,
     bool IsActive
+);
+
+public record AdminUpdateRoleRequest(
+    string Role
+);
+
+public record AdminUpdateRoleResponse(
+    Guid UserId,
+    string Email,
+    string PreviousRole,
+    string NewRole,
+    string Message
 );
 
 public record ChangePasswordRequest(

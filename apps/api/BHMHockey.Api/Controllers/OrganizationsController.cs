@@ -1,8 +1,8 @@
+using System.Security.Claims;
 using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace BHMHockey.Api.Controllers;
 
@@ -47,6 +47,11 @@ public class OrganizationsController : ControllerBase
         return userId.Value;
     }
 
+    private string GetCurrentUserRole()
+    {
+        return User.FindFirst(ClaimTypes.Role)?.Value ?? "Player";
+    }
+
     /// <summary>
     /// Get all organizations. If authenticated, includes subscription status.
     /// </summary>
@@ -76,12 +81,18 @@ public class OrganizationsController : ControllerBase
     }
 
     /// <summary>
-    /// Create a new organization. Requires authentication.
+    /// Create a new organization. Requires authentication and Organizer/Admin role.
     /// </summary>
     [HttpPost]
     [Authorize]
     public async Task<ActionResult<OrganizationDto>> Create([FromBody] CreateOrganizationRequest request)
     {
+        var role = GetCurrentUserRole();
+        if (role == "Player")
+        {
+            return Forbid();
+        }
+
         var userId = GetCurrentUserId();
         var organization = await _organizationService.CreateAsync(request, userId);
         return CreatedAtAction(nameof(GetById), new { id = organization.Id }, organization);

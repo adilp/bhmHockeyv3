@@ -50,6 +50,11 @@ public class EventsController : ControllerBase
         return userId.Value;
     }
 
+    private string GetCurrentUserRole()
+    {
+        return User.FindFirst(ClaimTypes.Role)?.Value ?? "Player";
+    }
+
     #endregion
 
     #region Event CRUD
@@ -92,12 +97,18 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
-    /// Create a new event. Requires authentication.
+    /// Create a new event. Requires authentication and Organizer/Admin role.
     /// </summary>
     [Authorize]
     [HttpPost]
     public async Task<ActionResult<EventDto>> Create([FromBody] CreateEventRequest request)
     {
+        var role = GetCurrentUserRole();
+        if (role == "Player")
+        {
+            return Forbid();
+        }
+
         var userId = GetCurrentUserId();
         var eventDto = await _eventService.CreateAsync(request, userId);
 

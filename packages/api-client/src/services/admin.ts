@@ -1,4 +1,4 @@
-import type { AdminPasswordResetResponse, AdminUserSearchResult, AdminStatsResponse } from '@bhmhockey/shared';
+import type { AdminPasswordResetResponse, AdminUserSearchResult, AdminStatsResponse, AdminUpdateRoleResponse, UserRole } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
 /**
@@ -31,6 +31,17 @@ export const adminService = {
     const response = await apiClient.instance.get<AdminUserSearchResult[]>(
       '/auth/admin/users/search',
       { params: { query } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Update a user's role (admin only)
+   */
+  async updateUserRole(userId: string, role: UserRole): Promise<AdminUpdateRoleResponse> {
+    const response = await apiClient.instance.put<AdminUpdateRoleResponse>(
+      `/auth/admin/users/${userId}/role`,
+      { role }
     );
     return response.data;
   },

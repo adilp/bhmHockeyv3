@@ -10,7 +10,6 @@ namespace BHMHockey.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private const string ADMIN_EMAIL = "a@a.com";
     private readonly IAuthService _authService;
 
     public AuthController(IAuthService authService)
@@ -31,16 +30,10 @@ public class AuthController : ControllerBase
         return userId;
     }
 
-    private string? GetCurrentUserEmail()
-    {
-        return User.FindFirst(ClaimTypes.Email)?.Value
-            ?? User.FindFirst("email")?.Value;
-    }
-
     private bool IsAdmin()
     {
-        var email = GetCurrentUserEmail();
-        return email?.ToLower() == ADMIN_EMAIL.ToLower();
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        return role == "Admin";
     }
 
     [HttpPost("register")]
@@ -137,34 +130,18 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<List<AdminUserSearchResult>>> SearchUsers([FromQuery] string query)
     {
-        Console.WriteLine($"🔍 [SearchUsers] Called with query: {query}");
-        Console.WriteLine($"🔍 [SearchUsers] User email: {GetCurrentUserEmail()}");
-        Console.WriteLine($"🔍 [SearchUsers] IsAdmin: {IsAdmin()}");
-
         if (!IsAdmin())
         {
-            Console.WriteLine($"🔍 [SearchUsers] Forbidden - not admin");
             return Forbid();
         }
 
         if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
         {
-            Console.WriteLine($"🔍 [SearchUsers] Bad request - query too short");
             return BadRequest(new { message = "Search query must be at least 2 characters" });
         }
 
-        try
-        {
-            var results = await _authService.SearchUsersAsync(query);
-            Console.WriteLine($"🔍 [SearchUsers] Found {results.Count} results");
-            return Ok(results);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"🔍 [SearchUsers] Error: {ex.Message}");
-            Console.WriteLine($"🔍 [SearchUsers] Stack: {ex.StackTrace}");
-            throw;
-        }
+        var results = await _authService.SearchUsersAsync(query);
+        return Ok(results);
     }
 
     /// <summary>
@@ -204,5 +181,37 @@ public class AuthController : ControllerBase
 
         var response = await _authService.ForgotPasswordAsync(request);
         return Ok(response);
+    }
+
+    /// <summary>
+    /// Admin-only endpoint to update a user's role.
+    /// </summary>
+    /// <param name="userId">The user ID to update</param>
+    /// <param name="request">The new role</param>
+    /// <returns>Updated user info</returns>
+    [HttpPut("admin/users/{userId}/role")]
+    [Authorize]
+    public async Task<ActionResult<AdminUpdateRoleResponse>> UpdateUserRole(Guid userId, [FromBody] AdminUpdateRoleRequest request)
+    {
+        if (!IsAdmin())
+        {
+            return Forbid();
+        }
+
+        var validRoles = new[] { "Player", "Organizer", "Admin" };
+        if (!validRoles.Contains(request.Role))
+        {
+            return BadRequest(new { message = "Invalid role. Must be Player, Organizer, or Admin." });
+        }
+
+        try
+        {
+            var response = await _authService.UpdateUserRoleAsync(userId, request.Role);
+            return Ok(response);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

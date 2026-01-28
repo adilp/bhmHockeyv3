@@ -8,10 +8,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useEventStore } from '../../stores/eventStore';
 import { useAuthStore } from '../../stores/authStore';
+import type { UserRole } from '@bhmhockey/shared';
 import { EventCard, EmptyState } from '../../components';
 import { colors, spacing, radius } from '../../theme';
 import type { EventDto } from '@bhmhockey/shared';
@@ -36,9 +38,21 @@ function getEventVariant(event: EventDto): EventCardVariant {
   return 'available';
 }
 
+const canCreateContent = (role?: UserRole): boolean => {
+  return role === 'Organizer' || role === 'Admin';
+};
+
+const showOrganizerAccessDialog = () => {
+  Alert.alert(
+    'Organizer Access Required',
+    'Creating events and organizations is limited to approved organizers. Please contact Adil Patel to request organizer access.',
+    [{ text: 'OK' }]
+  );
+};
+
 export default function EventsScreen() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const {
     events,
     isLoading,
@@ -108,7 +122,13 @@ export default function EventsScreen() {
           {isAuthenticated && (
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => router.push('/events/create')}
+              onPress={() => {
+                if (canCreateContent(user?.role)) {
+                  router.push('/events/create');
+                } else {
+                  showOrganizerAccessDialog();
+                }
+              }}
             >
               <Text style={styles.createButtonText}>+</Text>
             </TouchableOpacity>
@@ -172,7 +192,13 @@ export default function EventsScreen() {
             title="No Upcoming Events"
             message="Join organizations to see their events, or create your own!"
             actionLabel={isAuthenticated ? "Create Event" : undefined}
-            onAction={isAuthenticated ? () => router.push('/events/create') : undefined}
+            onAction={isAuthenticated ? () => {
+              if (canCreateContent(user?.role)) {
+                router.push('/events/create');
+              } else {
+                showOrganizerAccessDialog();
+              }
+            } : undefined}
           />
         }
       />

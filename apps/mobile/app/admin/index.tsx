@@ -14,10 +14,21 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { adminService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
-import type { AdminUserSearchResult, AdminPasswordResetResponse, AdminStatsResponse } from '@bhmhockey/shared';
+import type { AdminUserSearchResult, AdminPasswordResetResponse, AdminStatsResponse, UserRole } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../../theme';
 
-const ADMIN_EMAIL = 'a@a.com';
+const ROLE_OPTIONS: UserRole[] = ['Player', 'Organizer', 'Admin'];
+
+const getRoleBadgeStyle = (role: UserRole) => {
+  switch (role) {
+    case 'Admin':
+      return { backgroundColor: colors.primary.purple };
+    case 'Organizer':
+      return { backgroundColor: colors.primary.teal };
+    default:
+      return { backgroundColor: colors.bg.elevated };
+  }
+};
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -27,13 +38,14 @@ export default function AdminScreen() {
   const [searchResults, setSearchResults] = useState<AdminUserSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isResetting, setIsResetting] = useState<string | null>(null);
+  const [isUpdatingRole, setIsUpdatingRole] = useState<string | null>(null);
   const [lastResetResult, setLastResetResult] = useState<AdminPasswordResetResponse | null>(null);
   const [stats, setStats] = useState<AdminStatsResponse | null>(null);
 
   // Redirect if not admin, and fetch stats
   useFocusEffect(
     useCallback(() => {
-      if (user?.email !== ADMIN_EMAIL) {
+      if (user?.role !== 'Admin') {
         router.replace('/(tabs)/profile');
         return;
       }
@@ -54,18 +66,15 @@ export default function AdminScreen() {
     try {
       setIsSearching(true);
       setLastResetResult(null);
-      console.log('🔍 Searching for:', searchEmail);
+      console.log('Searching for:', searchEmail);
       const results = await adminService.searchUsers(searchEmail);
-      console.log('🔍 Results:', results);
+      console.log('Results:', results);
       setSearchResults(results);
       if (results.length === 0) {
         Alert.alert('No Results', 'No users found matching that search');
       }
     } catch (error: any) {
-      console.error('🔍 Search failed - full error:', JSON.stringify(error, null, 2));
-      console.error('🔍 Error message:', error?.message);
-      console.error('🔍 Error statusCode:', error?.statusCode);
-      // The api-client interceptor transforms errors to { message, statusCode, errors }
+      console.error('Search failed:', error?.message);
       const message = error?.message || error?.response?.data?.message || 'Failed to search users';
       Alert.alert('Error', `${message} (Status: ${error?.statusCode || 'unknown'})`);
     } finally {
@@ -112,12 +121,46 @@ export default function AdminScreen() {
     );
   };
 
+  const handleChangeRole = async (userId: string, userName: string, currentRole: UserRole, newRole: UserRole) => {
+    if (currentRole === newRole) return;
+
+    Alert.alert(
+      'Change Role',
+      `Change ${userName} from ${currentRole} to ${newRole}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              setIsUpdatingRole(userId);
+              const result = await adminService.updateUserRole(userId, newRole);
+
+              // Update local state
+              setSearchResults(prev =>
+                prev.map(u => u.id === userId ? { ...u, role: newRole } : u)
+              );
+
+              Alert.alert('Success', result.message);
+            } catch (error: any) {
+              console.error('Role update failed:', error);
+              const message = error?.message || error?.response?.data?.message || 'Failed to update role';
+              Alert.alert('Error', message);
+            } finally {
+              setIsUpdatingRole(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const copyToClipboard = (text: string) => {
     Clipboard.setString(text);
     Alert.alert('Copied', 'Password copied to clipboard');
   };
 
-  if (user?.email !== ADMIN_EMAIL) {
+  if (user?.role !== 'Admin') {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary.teal} />
@@ -191,29 +234,73 @@ export default function AdminScreen() {
             <Text style={styles.sectionTitle}>Results ({searchResults.length})</Text>
             {searchResults.map((result) => (
               <View key={result.id} style={styles.userCard}>
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>
-                    {result.firstName} {result.lastName}
-                  </Text>
-                  <Text style={styles.userEmail}>{result.email}</Text>
-                  {!result.isActive && (
-                    <Text style={styles.inactiveTag}>Inactive</Text>
-                  )}
+                <View style={styles.userHeader}>
+                  <View style={styles.userInfo}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.userName}>
+                        {result.firstName} {result.lastName}
+                      </Text>
+                      <View style={[styles.roleBadge, getRoleBadgeStyle(result.role)]}>
+                        <Text style={styles.roleBadgeText}>{result.role}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.userEmail}>{result.email}</Text>
+                    {!result.isActive && (
+                      <Text style={styles.inactiveTag}>Inactive</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.resetButton,
+                      (!result.isActive || isResetting === result.id) && styles.buttonDisabled,
+                    ]}
+                    onPress={() => handleResetPassword(result.id, result.email)}
+                    disabled={!result.isActive || isResetting === result.id}
+                  >
+                    {isResetting === result.id ? (
+                      <ActivityIndicator size="small" color={colors.text.primary} />
+                    ) : (
+                      <Text style={styles.resetButtonText}>Reset PW</Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={[
-                    styles.resetButton,
-                    (!result.isActive || isResetting === result.id) && styles.buttonDisabled,
-                  ]}
-                  onPress={() => handleResetPassword(result.id, result.email)}
-                  disabled={!result.isActive || isResetting === result.id}
-                >
-                  {isResetting === result.id ? (
-                    <ActivityIndicator size="small" color={colors.text.primary} />
-                  ) : (
-                    <Text style={styles.resetButtonText}>Reset</Text>
-                  )}
-                </TouchableOpacity>
+
+                {/* Role Selector */}
+                {result.isActive && (
+                  <View style={styles.roleSection}>
+                    <Text style={styles.roleLabel}>Change Role:</Text>
+                    <View style={styles.roleButtons}>
+                      {ROLE_OPTIONS.map((role) => (
+                        <TouchableOpacity
+                          key={role}
+                          style={[
+                            styles.roleButton,
+                            result.role === role && styles.roleButtonActive,
+                            isUpdatingRole === result.id && styles.buttonDisabled,
+                          ]}
+                          onPress={() => handleChangeRole(
+                            result.id,
+                            `${result.firstName} ${result.lastName}`,
+                            result.role,
+                            role
+                          )}
+                          disabled={result.role === role || isUpdatingRole === result.id}
+                        >
+                          {isUpdatingRole === result.id ? (
+                            <ActivityIndicator size="small" color={colors.text.primary} />
+                          ) : (
+                            <Text style={[
+                              styles.roleButtonText,
+                              result.role === role && styles.roleButtonTextActive,
+                            ]}>
+                              {role}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
               </View>
             ))}
           </View>
@@ -347,21 +434,40 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
+  },
+  userHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
   userInfo: {
     flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   userName: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
   },
+  roleBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  roleBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
   userEmail: {
     fontSize: 14,
     color: colors.text.muted,
+    marginTop: 2,
   },
   inactiveTag: {
     fontSize: 12,
@@ -378,6 +484,42 @@ const styles = StyleSheet.create({
     color: colors.bg.darkest,
     fontSize: 14,
     fontWeight: '600',
+  },
+  roleSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+  },
+  roleLabel: {
+    fontSize: 12,
+    color: colors.text.muted,
+    marginBottom: spacing.sm,
+  },
+  roleButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  roleButton: {
+    flex: 1,
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  roleButtonActive: {
+    backgroundColor: colors.primary.teal,
+    borderColor: colors.primary.teal,
+  },
+  roleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  roleButtonTextActive: {
+    color: colors.bg.darkest,
   },
   backButton: {
     backgroundColor: 'transparent',

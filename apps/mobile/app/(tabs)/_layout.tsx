@@ -10,11 +10,11 @@ export default function TabLayout() {
   const unreadCount = useNotificationStore((state) => state.unreadCount);
   const fetchUnreadCount = useNotificationStore((state) => state.fetchUnreadCount);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const userEmail = useAuthStore((state) => state.user?.email);
+  const userRole = useAuthStore((state) => state.user?.role);
   const appState = useRef(AppState.currentState);
 
-  // Only show tournaments tab for specific user
-  const showTournamentsTab = userEmail === 'a@a.com';
+  // Only show tournaments tab for Admin users
+  const showTournamentsTab = userRole === 'Admin';
 
   // Fetch unread count on mount and when auth changes
   useEffect(() => {

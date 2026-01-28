@@ -7,17 +7,30 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
 import { OrgCard, SectionHeader, EmptyState } from '../../components';
 import { colors, spacing, radius } from '../../theme';
-import type { Organization } from '@bhmhockey/shared';
+import type { Organization, UserRole } from '@bhmhockey/shared';
+
+const canCreateContent = (role?: UserRole): boolean => {
+  return role === 'Organizer' || role === 'Admin';
+};
+
+const showOrganizerAccessDialog = () => {
+  Alert.alert(
+    'Organizer Access Required',
+    'Creating events and organizations is limited to approved organizers. Please contact Adil Patel to request organizer access.',
+    [{ text: 'OK' }]
+  );
+};
 
 export default function OrganizationsScreen() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const {
     organizations,
     isLoading,
@@ -80,7 +93,13 @@ export default function OrganizationsScreen() {
           {isAuthenticated && (
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => router.push('/organizations/create')}
+              onPress={() => {
+                if (canCreateContent(user?.role)) {
+                  router.push('/organizations/create');
+                } else {
+                  showOrganizerAccessDialog();
+                }
+              }}
             >
               <Text style={styles.createButtonText}>+</Text>
             </TouchableOpacity>
@@ -144,7 +163,13 @@ export default function OrganizationsScreen() {
               title="No Organizations"
               message="Check back later or create your own!"
               actionLabel={isAuthenticated ? "Create Organization" : undefined}
-              onAction={isAuthenticated ? () => router.push('/organizations/create') : undefined}
+              onAction={isAuthenticated ? () => {
+                if (canCreateContent(user?.role)) {
+                  router.push('/organizations/create');
+                } else {
+                  showOrganizerAccessDialog();
+                }
+              } : undefined}
             />
           ) : null}
         </View>
