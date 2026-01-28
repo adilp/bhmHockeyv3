@@ -13,13 +13,11 @@ public class EventsController : ControllerBase
 {
     private readonly IEventService _eventService;
     private readonly IWaitlistService _waitlistService;
-    private readonly IAuthService _authService;
 
-    public EventsController(IEventService eventService, IWaitlistService waitlistService, IAuthService authService)
+    public EventsController(IEventService eventService, IWaitlistService waitlistService)
     {
         _eventService = eventService;
         _waitlistService = waitlistService;
-        _authService = authService;
     }
 
     #region Authentication Helpers
@@ -52,10 +50,9 @@ public class EventsController : ControllerBase
         return userId.Value;
     }
 
-    private async Task<string> GetCurrentUserRoleAsync()
+    private string GetCurrentUserRole()
     {
-        var userId = GetCurrentUserId();
-        return await _authService.GetUserRoleAsync(userId);
+        return User.FindFirst(ClaimTypes.Role)?.Value ?? "Player";
     }
 
     #endregion
@@ -106,8 +103,7 @@ public class EventsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<EventDto>> Create([FromBody] CreateEventRequest request)
     {
-        var role = await GetCurrentUserRoleAsync();
-        if (role == "Player")
+        if (GetCurrentUserRole() == "Player")
         {
             return Forbid();
         }

@@ -41,12 +41,11 @@ dotnet run --project BHMHockey.Api             # Run API directly
 - Event management: creator owns standalone events, org admins own org events
 
 ### Role-Based Access Control
-- **Always check roles from the database, NOT from JWT claims**
-- Use `IAuthService.GetUserRoleAsync(userId)` to get current role
-- JWT tokens contain the role at login time, but roles can change without re-login
+- Roles are read from the JWT claim (`ClaimTypes.Role`) set at login time
 - Valid roles: `"Player"`, `"Organizer"`, `"Admin"`
 - Only Organizer/Admin can create events and organizations
 - Only Admin can access admin panel endpoints (`/auth/admin/*`)
+- If a role is changed, the user must re-login for it to take effect
 
 ### UserDto Updates
 When adding fields to `User` entity, update ALL `UserDto` creation sites:
