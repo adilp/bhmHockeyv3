@@ -271,11 +271,12 @@ public class OrganizationsControllerTests
 
     #region Helper Methods
 
-    private void SetupAuthenticatedUser(Guid userId)
+    private void SetupAuthenticatedUser(Guid userId, string role = "Organizer")
     {
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, userId.ToString())
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, role)
         };
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var principal = new ClaimsPrincipal(identity);

@@ -31,11 +31,12 @@ public class EventsControllerTests
 
     #region Test Helpers
 
-    private void SetupAuthenticatedUser(Guid? userId = null)
+    private void SetupAuthenticatedUser(Guid? userId = null, string role = "Organizer")
     {
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, (userId ?? _testUserId).ToString())
+            new Claim(ClaimTypes.NameIdentifier, (userId ?? _testUserId).ToString()),
+            new Claim(ClaimTypes.Role, role)
         };
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var claimsPrincipal = new ClaimsPrincipal(identity);
