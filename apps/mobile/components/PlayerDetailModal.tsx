@@ -61,12 +61,14 @@ export function PlayerDetailModal({
 }: PlayerDetailModalProps) {
   const [badges, setBadges] = useState<UserBadgeDto[]>([]);
   const [isLoadingBadges, setIsLoadingBadges] = useState(false);
+  const [showAllBadges, setShowAllBadges] = useState(false);
 
   // Reset badge state when modal closes or registration changes
   useEffect(() => {
     if (!visible || !registration) {
       setBadges([]);
       setIsLoadingBadges(false);
+      setShowAllBadges(false);
       return;
     }
 
@@ -190,7 +192,19 @@ export function PlayerDetailModal({
                       <ActivityIndicator size="small" color={colors.primary.teal} />
                     </View>
                   ) : (
-                    <TrophyCase badges={badges} />
+                    <>
+                      <TrophyCase badges={showAllBadges ? badges : badges.slice(0, 2)} />
+                      {badges.length > 2 && (
+                        <TouchableOpacity
+                          style={styles.expandButton}
+                          onPress={() => setShowAllBadges(prev => !prev)}
+                        >
+                          <Text style={styles.expandButtonText} allowFontScaling={false}>
+                            {showAllBadges ? 'Show less' : `View all (${badges.length})`}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
                   )}
                 </View>
 
@@ -358,6 +372,17 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: spacing.lg,
     alignItems: 'center',
+  },
+  expandButton: {
+    alignSelf: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xs,
+  },
+  expandButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary.teal,
   },
   actions: {
     gap: spacing.sm,
