@@ -501,7 +501,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         <View>
           {registrations.length === 0 ? (
             <EmptyState
-              icon="👥"
+              icon="people-outline"
               title="No Registrations"
               message="No one has registered for this event yet"
             />

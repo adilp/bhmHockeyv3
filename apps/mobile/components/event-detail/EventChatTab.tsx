@@ -6,7 +6,7 @@ export function EventChatTab() {
   return (
     <View style={styles.container}>
       <EmptyState
-        icon="💬"
+        icon="chatbubble-outline"
         title="Chat Coming Soon"
         message="Group chat for event participants will be available in a future update."
       />

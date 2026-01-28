@@ -159,7 +159,7 @@ export default function OrganizationsScreen() {
             ))
           ) : myOrganizations.length === 0 ? (
             <EmptyState
-              icon="🏒"
+              icon="people-outline"
               title="No Organizations"
               message="Check back later or create your own!"
               actionLabel={isAuthenticated ? "Create Organization" : undefined}

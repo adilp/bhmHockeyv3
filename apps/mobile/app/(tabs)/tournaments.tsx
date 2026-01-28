@@ -287,7 +287,7 @@ export default function TournamentsScreen() {
         }
         ListEmptyComponent={
           <EmptyState
-            icon="🏆"
+            icon="trophy-outline"
             title="No Tournaments"
             message="No tournaments match your filter. Check back later or create your own!"
             actionLabel={isAuthenticated ? "Create Tournament" : undefined}

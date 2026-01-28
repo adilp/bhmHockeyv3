@@ -157,7 +157,7 @@ export default function NotificationsScreen() {
         }
         ListEmptyComponent={
           <EmptyState
-            icon="🔔"
+            icon="notifications-outline"
             title="No Notifications"
             message="You're all caught up! Notifications about events and updates will appear here."
           />

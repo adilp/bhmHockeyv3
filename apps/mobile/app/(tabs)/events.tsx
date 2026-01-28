@@ -71,7 +71,7 @@ export default function EventsScreen() {
     let filtered: EventDto[];
     switch (activeFilter) {
       case 'available':
-        filtered = events.filter(e => !e.isRegistered && !e.canManage && !e.amIWaitlisted && e.registeredCount < e.maxPlayers);
+        filtered = events.filter(e => !e.isRegistered && !e.canManage && !e.amIWaitlisted);
         break;
       case 'registered':
         filtered = events.filter(e => e.isRegistered);
@@ -187,19 +187,47 @@ export default function EventsScreen() {
           />
         }
         ListEmptyComponent={
-          <EmptyState
-            icon="📅"
-            title="No Upcoming Events"
-            message="Join organizations to see their events, or create your own!"
-            actionLabel={isAuthenticated ? "Create Event" : undefined}
-            onAction={isAuthenticated ? () => {
-              if (canCreateContent(user?.role)) {
-                router.push('/events/create');
-              } else {
-                showOrganizerAccessDialog();
-              }
-            } : undefined}
-          />
+          activeFilter === 'all' ? (
+            <EmptyState
+              icon="calendar-outline"
+              title="No Upcoming Events"
+              message="Join organizations to see their events, or create your own!"
+              actionLabel={isAuthenticated ? "Create Event" : undefined}
+              onAction={isAuthenticated ? () => {
+                if (canCreateContent(user?.role)) {
+                  router.push('/events/create');
+                } else {
+                  showOrganizerAccessDialog();
+                }
+              } : undefined}
+            />
+          ) : activeFilter === 'available' ? (
+            <EmptyState
+              icon="calendar-outline"
+              title="No Available Events"
+              message="All events are full or you're already signed up."
+            />
+          ) : activeFilter === 'registered' ? (
+            <EmptyState
+              icon="calendar-outline"
+              title="No Registered Events"
+              message="Events you've registered for will appear here."
+            />
+          ) : activeFilter === 'waitlisted' ? (
+            <EmptyState
+              icon="calendar-outline"
+              title="Not on Any Waitlists"
+              message="Events you're waitlisted for will appear here."
+            />
+          ) : (
+            <EmptyState
+              icon="calendar-outline"
+              title="No Events to Manage"
+              message={isAuthenticated ? "Events you create or organize will appear here." : "Log in to manage events."}
+              actionLabel={isAuthenticated && canCreateContent(user?.role) ? "Create Event" : undefined}
+              onAction={isAuthenticated && canCreateContent(user?.role) ? () => router.push('/events/create') : undefined}
+            />
+          )
         }
       />
     </View>
