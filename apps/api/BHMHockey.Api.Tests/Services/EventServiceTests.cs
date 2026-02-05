@@ -2671,4 +2671,511 @@ public class EventServiceTests : IDisposable
     }
 
     #endregion
+
+    #region AddUserToWaitlistAsync Tests (Auto-Roster Feature)
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_FreeEvent_RosterHasSpace_AddsToRoster()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var playerToAdd = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,  // Free event
+            isRosterPublished: false
+        );
+
+        // Act
+        var result = await _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater");
+
+        // Assert
+        result.Status.Should().Be("Registered");
+        result.WaitlistPosition.Should().BeNull();
+        result.TeamAssignment.Should().NotBeNull();
+        result.PaymentDeadlineAt.Should().BeNull();  // Free event, no deadline
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_FreeEvent_RosterFull_AddsToWaitlist()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 1,  // Only 1 spot
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        // Fill the single roster spot
+        var existingPlayer = await CreateTestUser("existing@example.com");
+        var existingReg = await CreateRegistration(evt.Id, existingPlayer.Id, "Registered");
+        existingReg.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        // Player to add
+        var playerToAdd = await CreateTestUser("player@example.com");
+
+        // Setup mock for waitlist position
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(evt.Id))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater");
+
+        // Assert
+        result.Status.Should().Be("Waitlisted");
+        result.WaitlistPosition.Should().Be(1);
+        result.TeamAssignment.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_PaidEvent_RosterHasSpace_AddsToRosterWithDeadline()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var playerToAdd = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 25,  // Paid event
+            isRosterPublished: false
+        );
+
+        // Act
+        var result = await _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater");
+
+        // Assert
+        result.Status.Should().Be("Registered");
+        result.WaitlistPosition.Should().BeNull();
+        result.TeamAssignment.Should().NotBeNull();
+        result.PaymentStatus.Should().Be("Pending");
+        result.PaymentDeadlineAt.Should().NotBeNull();
+        result.PaymentDeadlineAt.Should().BeCloseTo(DateTime.UtcNow.AddHours(2), TimeSpan.FromMinutes(5));
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_PaidEvent_RosterFull_AddsToWaitlistWithoutDeadline()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 1,
+            cost: 25,  // Paid event
+            isRosterPublished: false
+        );
+
+        // Fill roster
+        var existingPlayer = await CreateTestUser("existing@example.com");
+        var existingReg = await CreateRegistration(evt.Id, existingPlayer.Id, "Registered");
+        existingReg.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        var playerToAdd = await CreateTestUser("player@example.com");
+
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(evt.Id))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater");
+
+        // Assert
+        result.Status.Should().Be("Waitlisted");
+        result.PaymentStatus.Should().Be("Pending");
+        result.PaymentDeadlineAt.Should().BeNull();  // No deadline while on waitlist
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_ReactivatesCancelledRegistration_ToRoster()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var playerToAdd = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        // Create a cancelled registration
+        var cancelledReg = await CreateRegistration(evt.Id, playerToAdd.Id, "Cancelled");
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater");
+
+        // Assert
+        result.Status.Should().Be("Registered");
+        result.TeamAssignment.Should().NotBeNull();
+
+        // Verify the same registration was reused
+        var regs = await _context.EventRegistrations
+            .Where(r => r.EventId == evt.Id && r.UserId == playerToAdd.Id)
+            .ToListAsync();
+        regs.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_ReactivatesCancelledRegistration_ToWaitlist()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 1,
+            cost: 0,
+            isRosterPublished: false
+        );
+
+        // Fill roster
+        var existingPlayer = await CreateTestUser("existing@example.com");
+        await CreateRegistration(evt.Id, existingPlayer.Id, "Registered");
+
+        // Create cancelled registration for another player
+        var playerToAdd = await CreateTestUser("player@example.com");
+        var cancelledReg = await CreateRegistration(evt.Id, playerToAdd.Id, "Cancelled");
+        await _context.SaveChangesAsync();
+
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(evt.Id))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater");
+
+        // Assert
+        result.Status.Should().Be("Waitlisted");
+        result.WaitlistPosition.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_DraftMode_NoNotificationSent()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var playerToAdd = await CreateTestUser("player@example.com");
+        playerToAdd.PushToken = "ExponentPushToken[test123]";
+        await _context.SaveChangesAsync();
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: false  // Draft mode
+        );
+
+        // Act
+        await _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater");
+
+        // Assert - No notification should be sent in draft mode
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_RosterPublished_SendsNotification()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var playerToAdd = await CreateTestUser("player@example.com");
+        playerToAdd.PushToken = "ExponentPushToken[test123]";
+        await _context.SaveChangesAsync();
+
+        var evt = await CreateTestEvent(
+            organizer.Id,
+            maxPlayers: 10,
+            cost: 0,
+            isRosterPublished: true  // Published
+        );
+
+        // Act
+        await _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater");
+
+        // Assert - Notification should be sent when roster is published
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                playerToAdd.PushToken,
+                "Added to Roster",
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                playerToAdd.Id,
+                "added_to_roster",
+                It.IsAny<Guid?>(),
+                evt.Id),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_AlreadyRegistered_ThrowsException()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var playerToAdd = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        await CreateRegistration(evt.Id, playerToAdd.Id, "Registered");
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, organizer.Id, "Skater")
+        );
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_NonOrganizer_ThrowsUnauthorized()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var nonOrganizer = await CreateTestUser("random@example.com");
+        var playerToAdd = await CreateTestUser("player@example.com");
+
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.AddUserToWaitlistAsync(evt.Id, playerToAdd.Id, nonOrganizer.Id, "Skater")
+        );
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_BalancesTeams_WhenAddingToRoster()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        // Add first player - should go to Black
+        var player1 = await CreateTestUser("player1@example.com");
+        var result1 = await _sut.AddUserToWaitlistAsync(evt.Id, player1.Id, organizer.Id, "Skater");
+        result1.TeamAssignment.Should().Be("Black");
+
+        // Add second player - should go to White to balance
+        var player2 = await CreateTestUser("player2@example.com");
+        var result2 = await _sut.AddUserToWaitlistAsync(evt.Id, player2.Id, organizer.Id, "Skater");
+        result2.TeamAssignment.Should().Be("White");
+
+        // Add third player - should go back to Black (ties go to Black)
+        var player3 = await CreateTestUser("player3@example.com");
+        var result3 = await _sut.AddUserToWaitlistAsync(evt.Id, player3.Id, organizer.Id, "Skater");
+        result3.TeamAssignment.Should().Be("Black");
+    }
+
+    #endregion
+
+    #region CreateGhostPlayerAsync Tests (Auto-Roster Feature)
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_RosterHasSpace_AddsToRoster()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        // Act
+        var result = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Assert
+        result.Status.Should().Be("Registered");
+        result.WaitlistPosition.Should().BeNull();
+        result.TeamAssignment.Should().NotBeNull();
+        result.User.Should().NotBeNull();
+        result.User!.IsGhostPlayer.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_RosterFull_AddsToWaitlist()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 1, cost: 0);
+
+        // Fill roster
+        var existingPlayer = await CreateTestUser("existing@example.com");
+        var existingReg = await CreateRegistration(evt.Id, existingPlayer.Id, "Registered");
+        existingReg.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(evt.Id))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Assert
+        result.Status.Should().Be("Waitlisted");
+        result.WaitlistPosition.Should().Be(1);
+        result.TeamAssignment.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_PaidEvent_RosterHasSpace_AutoVerifiedNoDeadline()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 25);
+
+        // Act
+        var result = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", "Silver");
+
+        // Assert
+        result.Status.Should().Be("Registered");
+        result.PaymentStatus.Should().Be("Verified");  // Ghost players auto-verified
+        result.PaymentDeadlineAt.Should().BeNull();  // No deadline needed when verified
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_PaidEvent_RosterFull_AutoVerifiedOnWaitlist()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 1, cost: 25);
+
+        // Fill roster
+        var existingPlayer = await CreateTestUser("existing@example.com");
+        var existingReg = await CreateRegistration(evt.Id, existingPlayer.Id, "Registered");
+        existingReg.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(evt.Id))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Assert
+        result.Status.Should().Be("Waitlisted");
+        result.PaymentStatus.Should().Be("Verified");  // Still auto-verified
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_CreatesUserWithCorrectProperties()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        // Act
+        var result = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Goalie", "Gold");
+
+        // Assert
+        result.User.Should().NotBeNull();
+        result.User!.FirstName.Should().Be("John");
+        result.User.LastName.Should().Be("Doe");
+        result.User.IsGhostPlayer.Should().BeTrue();
+        result.User.Email.Should().Contain("ghost_");
+        result.User.Email.Should().EndWith("@placeholder.bhmhockey");
+        result.RegisteredPosition.Should().Be("Goalie");
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_InvalidPosition_ThrowsException()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.CreateGhostPlayerAsync(
+                evt.Id, organizer.Id, "John", "Doe", "InvalidPosition", null)
+        );
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_InvalidSkillLevel_ThrowsException()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.CreateGhostPlayerAsync(
+                evt.Id, organizer.Id, "John", "Doe", "Skater", "InvalidLevel")
+        );
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_NonOrganizer_ThrowsUnauthorized()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var nonOrganizer = await CreateTestUser("random@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.CreateGhostPlayerAsync(
+                evt.Id, nonOrganizer.Id, "John", "Doe", "Skater", null)
+        );
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_BalancesTeams_WhenAddingToRoster()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        // Act - Add three ghost players
+        var result1 = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "Ghost", "One", "Skater", null);
+        var result2 = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "Ghost", "Two", "Skater", null);
+        var result3 = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "Ghost", "Three", "Skater", null);
+
+        // Assert - Teams should be balanced
+        result1.TeamAssignment.Should().Be("Black");  // First goes to Black
+        result2.TeamAssignment.Should().Be("White");  // Second goes to White
+        result3.TeamAssignment.Should().Be("Black");  // Third balances back to Black
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_OrgAdmin_CanCreateForOrgEvent()
+    {
+        // Arrange
+        var eventCreator = await CreateTestUser("eventcreator@example.com");
+        var orgAdmin = await CreateTestUser("orgadmin@example.com");
+
+        var org = await CreateTestOrganization(eventCreator.Id, "Test Org");
+        await AddAdminToOrganization(org.Id, orgAdmin.Id, eventCreator.Id);
+
+        var evt = await CreateTestEvent(
+            eventCreator.Id,
+            organizationId: org.Id,
+            maxPlayers: 10,
+            cost: 0
+        );
+
+        // Act - Org admin creates ghost player
+        var result = await _sut.CreateGhostPlayerAsync(
+            evt.Id, orgAdmin.Id, "Ghost", "Player", "Skater", null);
+
+        // Assert
+        result.Status.Should().Be("Registered");
+        result.User!.IsGhostPlayer.Should().BeTrue();
+    }
+
+    #endregion
 }

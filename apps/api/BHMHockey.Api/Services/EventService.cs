@@ -1570,8 +1570,9 @@ public class EventService : IEventService
     }
 
     /// <summary>
-    /// Add a user to an event's waitlist (organizer only).
-    /// Creates a new registration with Status="Waitlisted" and sends a notification to the user.
+    /// Add a user to an event (organizer only).
+    /// If roster has space, adds directly to roster. Otherwise, adds to waitlist.
+    /// Sends appropriate notification to the user.
     /// </summary>
     public async Task<EventRegistrationDto> AddUserToWaitlistAsync(Guid eventId, Guid userId, Guid organizerId, string? position)
     {
@@ -1611,47 +1612,93 @@ public class EventService : IEventService
         // Determine position
         var registeredPosition = DetermineRegistrationPositionForAddedUser(user, position);
 
-        // Get next waitlist position
-        var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
-
         var isPaidEvent = evt.Cost > 0;
+
+        // Check roster capacity - add to roster if space available
+        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
+        var hasRosterSpace = registeredCount < evt.MaxPlayers;
+
         Models.Entities.EventRegistration registration;
 
         if (existingReg != null)
         {
             // Re-activate cancelled registration
-            existingReg.Status = "Waitlisted";
             existingReg.RegisteredAt = DateTime.UtcNow;
             existingReg.RegisteredPosition = registeredPosition;
-            existingReg.WaitlistPosition = waitlistPosition;
-            existingReg.TeamAssignment = null;
-            existingReg.RosterOrder = null;
-            existingReg.PaymentStatus = isPaidEvent ? "Pending" : null;
             existingReg.PaymentMarkedAt = null;
             existingReg.PaymentVerifiedAt = null;
-            existingReg.PromotedAt = null;
-            existingReg.PaymentDeadlineAt = null;
+
+            if (hasRosterSpace)
+            {
+                // Add directly to roster
+                existingReg.Status = "Registered";
+                existingReg.WaitlistPosition = null;
+                existingReg.TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
+                existingReg.PromotedAt = DateTime.UtcNow;
+                existingReg.PaymentStatus = isPaidEvent ? "Pending" : null;
+                existingReg.PaymentDeadlineAt = isPaidEvent ? DateTime.UtcNow.AddHours(2) : null;
+            }
+            else
+            {
+                // Add to waitlist
+                existingReg.Status = "Waitlisted";
+                existingReg.WaitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
+                existingReg.TeamAssignment = null;
+                existingReg.RosterOrder = null;
+                existingReg.PromotedAt = null;
+                existingReg.PaymentStatus = isPaidEvent ? "Pending" : null;
+                existingReg.PaymentDeadlineAt = null;
+            }
             registration = existingReg;
         }
         else
         {
-            // Create new registration with Status="Waitlisted"
-            registration = new Models.Entities.EventRegistration
+            if (hasRosterSpace)
             {
-                EventId = eventId,
-                UserId = userId,
-                Status = "Waitlisted",
-                RegisteredPosition = registeredPosition,
-                WaitlistPosition = waitlistPosition,
-                PaymentStatus = isPaidEvent ? "Pending" : null
-            };
+                // Create new registration directly on roster
+                registration = new Models.Entities.EventRegistration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    Status = "Registered",
+                    RegisteredPosition = registeredPosition,
+                    WaitlistPosition = null,
+                    TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition),
+                    PromotedAt = DateTime.UtcNow,
+                    PaymentStatus = isPaidEvent ? "Pending" : null,
+                    PaymentDeadlineAt = isPaidEvent ? DateTime.UtcNow.AddHours(2) : null
+                };
+            }
+            else
+            {
+                // Create new registration on waitlist
+                registration = new Models.Entities.EventRegistration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    Status = "Waitlisted",
+                    RegisteredPosition = registeredPosition,
+                    WaitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId),
+                    PaymentStatus = isPaidEvent ? "Pending" : null
+                };
+            }
             _context.EventRegistrations.Add(registration);
         }
 
         await _context.SaveChangesAsync();
 
-        // Send notification to user
-        await NotifyUserAddedToWaitlistAsync(evt, user, waitlistPosition);
+        // Send appropriate notification to user (only if roster is published)
+        if (evt.IsRosterPublished)
+        {
+            if (registration.Status == "Registered")
+            {
+                await NotifyUserAddedToRosterAsync(evt, user, registration.TeamAssignment);
+            }
+            else
+            {
+                await NotifyUserAddedToWaitlistAsync(evt, user, registration.WaitlistPosition ?? 1);
+            }
+        }
 
         // Load user for DTO
         await _context.Entry(registration).Reference(r => r.User).LoadAsync();
@@ -1766,19 +1813,43 @@ public class EventService : IEventService
         _context.Users.Add(ghostUser);
         await _context.SaveChangesAsync();
 
-        // Get next waitlist position
-        var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
+        // Check roster capacity - add to roster if space available
+        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
+        var hasRosterSpace = registeredCount < evt.MaxPlayers;
 
-        // Create registration - ghost players go directly to waitlist with auto-verified payment
-        var registration = new EventRegistration
+        EventRegistration registration;
+
+        if (hasRosterSpace)
         {
-            EventId = eventId,
-            UserId = ghostUser.Id,
-            Status = "Waitlisted",
-            RegisteredPosition = registeredPosition,
-            WaitlistPosition = waitlistPosition,
-            PaymentStatus = evt.Cost > 0 ? "Verified" : null // Ghost players are auto-verified (they don't pay through the app)
-        };
+            // Create registration directly on roster - ghost players are auto-verified
+            registration = new EventRegistration
+            {
+                EventId = eventId,
+                UserId = ghostUser.Id,
+                Status = "Registered",
+                RegisteredPosition = registeredPosition,
+                WaitlistPosition = null,
+                TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition),
+                PromotedAt = DateTime.UtcNow,
+                PaymentStatus = evt.Cost > 0 ? "Verified" : null // Ghost players are auto-verified
+            };
+        }
+        else
+        {
+            // Get next waitlist position
+            var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
+
+            // Create registration on waitlist - ghost players are auto-verified
+            registration = new EventRegistration
+            {
+                EventId = eventId,
+                UserId = ghostUser.Id,
+                Status = "Waitlisted",
+                RegisteredPosition = registeredPosition,
+                WaitlistPosition = waitlistPosition,
+                PaymentStatus = evt.Cost > 0 ? "Verified" : null // Ghost players are auto-verified (they don't pay through the app)
+            };
+        }
 
         _context.EventRegistrations.Add(registration);
         await _context.SaveChangesAsync();
@@ -1787,5 +1858,29 @@ public class EventService : IEventService
         registration.User = ghostUser;
 
         return MapRegistrationToDto(registration);
+    }
+
+    /// <summary>
+    /// Notify a user that they have been added directly to an event's roster by an organizer.
+    /// </summary>
+    private async Task NotifyUserAddedToRosterAsync(Models.Entities.Event evt, Models.Entities.User user, string? teamAssignment)
+    {
+        if (string.IsNullOrEmpty(user.PushToken))
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+        var teamInfo = !string.IsNullOrEmpty(teamAssignment) ? $" on Team {teamAssignment}" : "";
+
+        await _notificationService.SendPushNotificationAsync(
+            user.PushToken,
+            "Added to Roster",
+            $"You've been added to the roster{teamInfo} for {eventName}.",
+            new { eventId = evt.Id.ToString(), type = "added_to_roster" },
+            userId: user.Id,
+            type: "added_to_roster",
+            organizationId: evt.OrganizationId,
+            eventId: evt.Id);
     }
 }

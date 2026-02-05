@@ -369,7 +369,7 @@ export function AddPlayerModal({
                             <ActivityIndicator size="small" color={colors.text.primary} />
                           ) : (
                             <Text style={styles.confirmButtonText} allowFontScaling={false}>
-                              Add to Waitlist
+                              Add Player
                             </Text>
                           )}
                         </TouchableOpacity>
