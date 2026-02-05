@@ -1609,80 +1609,54 @@ public class EventService : IEventService
             throw new InvalidOperationException("User is already registered for this event");
         }
 
-        // Determine position
-        var registeredPosition = DetermineRegistrationPositionForAddedUser(user, position);
-
+        // Determine position and check roster capacity
+        var registeredPosition = NormalizePosition(position);
         var isPaidEvent = evt.Cost > 0;
-
-        // Check roster capacity - add to roster if space available
         var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
         var hasRosterSpace = registeredCount < evt.MaxPlayers;
 
-        Models.Entities.EventRegistration registration;
-
+        // Get or create registration
+        EventRegistration registration;
         if (existingReg != null)
         {
             // Re-activate cancelled registration
-            existingReg.RegisteredAt = DateTime.UtcNow;
-            existingReg.RegisteredPosition = registeredPosition;
-            existingReg.PaymentMarkedAt = null;
-            existingReg.PaymentVerifiedAt = null;
-
-            if (hasRosterSpace)
-            {
-                // Add directly to roster
-                existingReg.Status = "Registered";
-                existingReg.WaitlistPosition = null;
-                existingReg.TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
-                existingReg.PromotedAt = DateTime.UtcNow;
-                existingReg.PaymentStatus = isPaidEvent ? "Pending" : null;
-                existingReg.PaymentDeadlineAt = isPaidEvent ? DateTime.UtcNow.AddHours(2) : null;
-            }
-            else
-            {
-                // Add to waitlist
-                existingReg.Status = "Waitlisted";
-                existingReg.WaitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
-                existingReg.TeamAssignment = null;
-                existingReg.RosterOrder = null;
-                existingReg.PromotedAt = null;
-                existingReg.PaymentStatus = isPaidEvent ? "Pending" : null;
-                existingReg.PaymentDeadlineAt = null;
-            }
             registration = existingReg;
+            registration.RegisteredAt = DateTime.UtcNow;
+            registration.RegisteredPosition = registeredPosition;
+            registration.PaymentMarkedAt = null;
+            registration.PaymentVerifiedAt = null;
         }
         else
         {
-            if (hasRosterSpace)
+            // Create new registration
+            registration = new EventRegistration
             {
-                // Create new registration directly on roster
-                registration = new Models.Entities.EventRegistration
-                {
-                    EventId = eventId,
-                    UserId = userId,
-                    Status = "Registered",
-                    RegisteredPosition = registeredPosition,
-                    WaitlistPosition = null,
-                    TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition),
-                    PromotedAt = DateTime.UtcNow,
-                    PaymentStatus = isPaidEvent ? "Pending" : null,
-                    PaymentDeadlineAt = isPaidEvent ? DateTime.UtcNow.AddHours(2) : null
-                };
-            }
-            else
-            {
-                // Create new registration on waitlist
-                registration = new Models.Entities.EventRegistration
-                {
-                    EventId = eventId,
-                    UserId = userId,
-                    Status = "Waitlisted",
-                    RegisteredPosition = registeredPosition,
-                    WaitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId),
-                    PaymentStatus = isPaidEvent ? "Pending" : null
-                };
-            }
+                EventId = eventId,
+                UserId = userId,
+                RegisteredPosition = registeredPosition
+            };
             _context.EventRegistrations.Add(registration);
+        }
+
+        // Set roster or waitlist properties
+        if (hasRosterSpace)
+        {
+            registration.Status = "Registered";
+            registration.WaitlistPosition = null;
+            registration.TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
+            registration.PromotedAt = DateTime.UtcNow;
+            registration.PaymentStatus = isPaidEvent ? "Pending" : null;
+            registration.PaymentDeadlineAt = isPaidEvent ? DateTime.UtcNow.AddHours(2) : null;
+        }
+        else
+        {
+            registration.Status = "Waitlisted";
+            registration.WaitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
+            registration.TeamAssignment = null;
+            registration.RosterOrder = null;
+            registration.PromotedAt = null;
+            registration.PaymentStatus = isPaidEvent ? "Pending" : null;
+            registration.PaymentDeadlineAt = null;
         }
 
         await _context.SaveChangesAsync();
@@ -1707,26 +1681,23 @@ public class EventService : IEventService
     }
 
     /// <summary>
-    /// Determines which position to register with for an added user.
-    /// Similar to DetermineRegistrationPosition but with different error messages.
+    /// Normalizes and validates a position string.
+    /// Organizers can add users as any position, regardless of the user's profile.
     /// </summary>
-    private string DetermineRegistrationPositionForAddedUser(Models.Entities.User user, string? requestedPosition)
+    private static string NormalizePosition(string? position)
     {
-        // Organizers can add users as any position, regardless of user's profile
-        // If position is specified, use it; otherwise default to Skater
-        if (string.IsNullOrEmpty(requestedPosition))
+        if (string.IsNullOrEmpty(position))
         {
             return "Skater";
         }
 
-        // Normalize and validate the requested position
-        var normalizedPosition = requestedPosition.ToLowerInvariant();
-        if (normalizedPosition != "goalie" && normalizedPosition != "skater")
+        var normalized = position.ToLowerInvariant();
+        if (normalized != "goalie" && normalized != "skater")
         {
             throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
         }
 
-        return normalizedPosition == "goalie" ? "Goalie" : "Skater";
+        return normalized == "goalie" ? "Goalie" : "Skater";
     }
 
     /// <summary>
@@ -1780,75 +1751,58 @@ public class EventService : IEventService
             throw new UnauthorizedAccessException("You don't have permission to manage this event");
         }
 
-        // Validate position
-        var normalizedPosition = position.ToLowerInvariant();
-        if (normalizedPosition != "goalie" && normalizedPosition != "skater")
-        {
-            throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
-        }
-        var registeredPosition = normalizedPosition == "goalie" ? "Goalie" : "Skater";
-
-        // Validate skill level if provided
+        // Validate position and skill level
+        var registeredPosition = NormalizePosition(position);
+        var normalizedPositionKey = position.ToLowerInvariant();
         if (!string.IsNullOrEmpty(skillLevel) && !ValidSkillLevels.Contains(skillLevel))
         {
             throw new InvalidOperationException($"Invalid skill level: '{skillLevel}'. Valid values: Gold, Silver, Bronze, D-League");
         }
 
-        // Create ghost user
+        // Create ghost user (cannot log in, placeholder for non-app users)
         var ghostUser = new User
         {
             Id = Guid.NewGuid(),
             Email = $"ghost_{Guid.NewGuid():N}@placeholder.bhmhockey",
-            PasswordHash = "", // Ghost players cannot log in
+            PasswordHash = "",
             FirstName = firstName,
             LastName = lastName,
             IsGhostPlayer = true,
             IsActive = true,
             Role = "Player",
-            Positions = !string.IsNullOrEmpty(skillLevel)
-                ? new Dictionary<string, string> { { normalizedPosition, skillLevel } }
-                : new Dictionary<string, string> { { normalizedPosition, "Bronze" } } // Default to Bronze if not specified
+            Positions = new Dictionary<string, string>
+            {
+                { normalizedPositionKey, skillLevel ?? "Bronze" }
+            }
         };
 
         _context.Users.Add(ghostUser);
         await _context.SaveChangesAsync();
 
-        // Check roster capacity - add to roster if space available
+        // Check roster capacity and create registration
         var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
         var hasRosterSpace = registeredCount < evt.MaxPlayers;
+        var isPaidEvent = evt.Cost > 0;
 
-        EventRegistration registration;
+        // Create registration - ghost players are auto-verified for payment
+        var registration = new EventRegistration
+        {
+            EventId = eventId,
+            UserId = ghostUser.Id,
+            RegisteredPosition = registeredPosition,
+            PaymentStatus = isPaidEvent ? "Verified" : null
+        };
 
         if (hasRosterSpace)
         {
-            // Create registration directly on roster - ghost players are auto-verified
-            registration = new EventRegistration
-            {
-                EventId = eventId,
-                UserId = ghostUser.Id,
-                Status = "Registered",
-                RegisteredPosition = registeredPosition,
-                WaitlistPosition = null,
-                TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition),
-                PromotedAt = DateTime.UtcNow,
-                PaymentStatus = evt.Cost > 0 ? "Verified" : null // Ghost players are auto-verified
-            };
+            registration.Status = "Registered";
+            registration.TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
+            registration.PromotedAt = DateTime.UtcNow;
         }
         else
         {
-            // Get next waitlist position
-            var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
-
-            // Create registration on waitlist - ghost players are auto-verified
-            registration = new EventRegistration
-            {
-                EventId = eventId,
-                UserId = ghostUser.Id,
-                Status = "Waitlisted",
-                RegisteredPosition = registeredPosition,
-                WaitlistPosition = waitlistPosition,
-                PaymentStatus = evt.Cost > 0 ? "Verified" : null // Ghost players are auto-verified (they don't pay through the app)
-            };
+            registration.Status = "Waitlisted";
+            registration.WaitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
         }
 
         _context.EventRegistrations.Add(registration);
