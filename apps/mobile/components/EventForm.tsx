@@ -86,6 +86,10 @@ export function EventForm({
   const [showOrgPicker, setShowOrgPicker] = useState(false);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
 
+  // Track whether user has explicitly made a selection (forces them to choose)
+  const [orgSelectionMade, setOrgSelectionMade] = useState(mode === 'edit');
+  const [visibilitySelectionMade, setVisibilitySelectionMade] = useState(mode === 'edit');
+
   // Track if defaults have been applied (to prevent re-applying on org change)
   const defaultsAppliedRef = useRef(false);
 
@@ -179,6 +183,7 @@ export function EventForm({
     }
     if (org.defaultVisibility != null) {
       setVisibility(org.defaultVisibility);
+      setVisibilitySelectionMade(true);
     }
 
     // Mark defaults as applied and show notification
@@ -200,12 +205,14 @@ export function EventForm({
 
   // Get display names for pickers
   const getOrgDisplayName = () => {
+    if (!orgSelectionMade) return 'Select...';
     if (!selectedOrgId) return 'Myself (Pickup Game)';
     const org = organizations.find(o => o.id === selectedOrgId);
     return org?.name || 'Unknown';
   };
 
   const getVisibilityDisplayName = () => {
+    if (!visibilitySelectionMade) return 'Select...';
     switch (visibility) {
       case 'Public': return 'Public - Anyone can join';
       case 'OrganizationMembers': return 'Members Only';
@@ -252,6 +259,14 @@ export function EventForm({
   };
 
   const validateForm = (): boolean => {
+    if (mode === 'create' && organizations.length > 0 && !orgSelectionMade) {
+      Alert.alert('Error', 'Please select who this event is for');
+      return false;
+    }
+    if (mode === 'create' && !visibilitySelectionMade) {
+      Alert.alert('Error', 'Please select who can see this event');
+      return false;
+    }
     if (mode === 'create' && eventDate <= new Date()) {
       Alert.alert('Error', 'Event date must be in the future');
       return false;
@@ -312,12 +327,12 @@ export function EventForm({
         {/* Organization Selector (only show in create mode if user owns organizations) */}
         {mode === 'create' && organizations.length > 0 && (
           <View style={styles.field}>
-            <Text style={styles.label}>Create for</Text>
+            <Text style={styles.label}>Create for *</Text>
             <TouchableOpacity
               style={styles.pickerButton}
               onPress={() => setShowOrgPicker(true)}
             >
-              <Text style={styles.pickerButtonText}>{getOrgDisplayName()}</Text>
+              <Text style={[styles.pickerButtonText, !orgSelectionMade && styles.pickerPlaceholder]}>{getOrgDisplayName()}</Text>
               <Text style={styles.pickerArrow}>▼</Text>
             </TouchableOpacity>
             {selectedOrgId && (
@@ -330,12 +345,12 @@ export function EventForm({
 
         {/* Visibility */}
         <View style={styles.field}>
-          <Text style={styles.label}>Who can see this event?</Text>
+          <Text style={styles.label}>Who can see this event? *</Text>
           <TouchableOpacity
             style={styles.pickerButton}
             onPress={() => setShowVisibilityPicker(true)}
           >
-            <Text style={styles.pickerButtonText}>{getVisibilityDisplayName()}</Text>
+            <Text style={[styles.pickerButtonText, !visibilitySelectionMade && styles.pickerPlaceholder]}>{getVisibilityDisplayName()}</Text>
             <Text style={styles.pickerArrow}>▼</Text>
           </TouchableOpacity>
           {visibility === 'OrganizationMembers' && (
@@ -533,7 +548,7 @@ export function EventForm({
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Create for</Text>
-                <TouchableOpacity onPress={() => setShowOrgPicker(false)}>
+                <TouchableOpacity onPress={() => { setOrgSelectionMade(true); setShowOrgPicker(false); }}>
                   <Text style={styles.modalDone}>Done</Text>
                 </TouchableOpacity>
               </View>
@@ -563,7 +578,7 @@ export function EventForm({
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Visibility</Text>
-                <TouchableOpacity onPress={() => setShowVisibilityPicker(false)}>
+                <TouchableOpacity onPress={() => { setVisibilitySelectionMade(true); setShowVisibilityPicker(false); }}>
                   <Text style={styles.modalDone}>Done</Text>
                 </TouchableOpacity>
               </View>
@@ -652,6 +667,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.text.muted,
     marginLeft: spacing.sm,
+  },
+  pickerPlaceholder: {
+    color: colors.text.muted,
   },
   orgNote: {
     fontSize: 12,
