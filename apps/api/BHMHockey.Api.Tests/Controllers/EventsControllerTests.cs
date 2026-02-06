@@ -96,7 +96,8 @@ public class EventsControllerTests
             WaitlistCount: 0,            // Phase 5 - Waitlist
             MyWaitlistPosition: null,    // Phase 5 - Waitlist
             MyPaymentDeadline: null,     // Phase 5 - Waitlist
-            AmIWaitlisted: false         // Phase 5 - Waitlist
+            AmIWaitlisted: false,        // Phase 5 - Waitlist
+            SlotPositionLabels: null     // Slot position labels
         );
     }
 

@@ -272,25 +272,22 @@ export function DraggableRoster({
     });
   }, []);
 
-  // Handler for cycling through position labels when slot badge is tapped
+  // Cycle through position labels when slot badge is tapped: number -> LW -> RW -> C -> LD -> RD -> number
   const handleSlotLabelTap = useCallback((slotIndex: number, isGoalie: boolean) => {
-    if (!onSlotLabelChange || isGoalie) return; // Goalie slots always show 'G'
+    if (!onSlotLabelChange || isGoalie) return;
 
     const currentLabel = slotPositionLabels?.[slotIndex];
 
+    // No label yet - start cycle with first position
     if (!currentLabel) {
-      // No label set, start cycle with first position
       onSlotLabelChange(slotIndex, POSITION_CYCLE[0]);
-    } else {
-      const currentIndex = POSITION_CYCLE.indexOf(currentLabel as typeof POSITION_CYCLE[number]);
-      if (currentIndex === -1 || currentIndex === POSITION_CYCLE.length - 1) {
-        // Unknown label or last in cycle, reset to number (null)
-        onSlotLabelChange(slotIndex, null);
-      } else {
-        // Move to next in cycle
-        onSlotLabelChange(slotIndex, POSITION_CYCLE[currentIndex + 1]);
-      }
+      return;
     }
+
+    // Find current position in cycle
+    const currentIndex = POSITION_CYCLE.indexOf(currentLabel as typeof POSITION_CYCLE[number]);
+    const isLastOrUnknown = currentIndex === -1 || currentIndex === POSITION_CYCLE.length - 1;
+    onSlotLabelChange(slotIndex, isLastOrUnknown ? null : POSITION_CYCLE[currentIndex + 1]);
   }, [slotPositionLabels, onSlotLabelChange]);
 
   // Build slots (memoized for performance)

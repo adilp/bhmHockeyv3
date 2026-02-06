@@ -824,7 +824,8 @@ public class EventServiceTests : IDisposable
             RegistrationDeadline: null,
             Status: null,
             Visibility: null,
-            SkillLevels: new List<string> { "Platinum" } // Invalid skill level
+            SkillLevels: new List<string> { "Platinum" }, // Invalid skill level
+            SlotPositionLabels: null
         );
 
         // Act & Assert
