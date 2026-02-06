@@ -447,19 +447,23 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     }
   };
 
-  // Slot position label change handler
+  // Slot position label change handler (optimistic update with rollback)
   const handleSlotLabelChange = useCallback(async (slotIndex: number, newLabel: string | null) => {
-    const currentLabels = event.slotPositionLabels || {};
-    const { [slotIndex]: _, ...labelsWithoutSlot } = currentLabels;
-    const newLabels = newLabel === null ? labelsWithoutSlot : { ...currentLabels, [slotIndex]: newLabel };
+    const previousLabels = event.slotPositionLabels || {};
+    const { [slotIndex]: _, ...labelsWithoutSlot } = previousLabels;
+    const newLabels = newLabel === null ? labelsWithoutSlot : { ...previousLabels, [slotIndex]: newLabel };
+
+    // Optimistic: update UI immediately
+    useEventStore.setState({ selectedEvent: { ...event, slotPositionLabels: newLabels } });
 
     try {
-      const updatedEvent = await eventService.update(eventId, { slotPositionLabels: newLabels });
-      useEventStore.setState({ selectedEvent: updatedEvent });
+      await eventService.update(eventId, { slotPositionLabels: newLabels });
     } catch (error) {
+      // Rollback on failure
+      useEventStore.setState({ selectedEvent: { ...event, slotPositionLabels: previousLabels } });
       Alert.alert('Error', 'Failed to update position label. Please try again.');
     }
-  }, [eventId, event.slotPositionLabels]);
+  }, [eventId, event]);
 
   if (isLoading) {
     return (
