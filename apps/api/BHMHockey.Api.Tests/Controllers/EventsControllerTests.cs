@@ -263,7 +263,8 @@ public class EventsControllerTests
             RegistrationDeadline: null,
             Status: null,
             Visibility: null,
-            SkillLevels: null
+            SkillLevels: null,
+            SlotPositionLabels: null
         );
         var updatedEvent = CreateEventDto();
         _mockEventService.Setup(s => s.UpdateAsync(_testEventId, request, _testUserId))
@@ -282,7 +283,7 @@ public class EventsControllerTests
     {
         // Arrange
         SetupAuthenticatedUser();
-        var request = new UpdateEventRequest("Updated", null, null, null, null, null, null, null, null, null, null);
+        var request = new UpdateEventRequest("Updated", null, null, null, null, null, null, null, null, null, null, null);
         _mockEventService.Setup(s => s.UpdateAsync(_testEventId, request, _testUserId))
             .ReturnsAsync((EventDto?)null);
 

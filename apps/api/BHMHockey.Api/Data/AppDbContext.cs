@@ -169,10 +169,25 @@ public class AppDbContext : DbContext
                 entity.Property(e => e.SkillLevels)
                     .HasConversion(listConverter)
                     .Metadata.SetValueComparer(listComparer);
+
+                // SlotPositionLabels - Dictionary<int, string> for slot position labels
+                var slotLabelsConverter = new ValueConverter<Dictionary<int, string>?, string?>(
+                    v => v == null ? null : JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => v == null ? null : JsonSerializer.Deserialize<Dictionary<int, string>>(v, (JsonSerializerOptions?)null)
+                );
+                var slotLabelsComparer = new ValueComparer<Dictionary<int, string>?>(
+                    (c1, c2) => c1 != null && c2 != null ? c1.SequenceEqual(c2) : c1 == c2,
+                    c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                    c => c == null ? null : new Dictionary<int, string>(c)
+                );
+                entity.Property(e => e.SlotPositionLabels)
+                    .HasConversion(slotLabelsConverter)
+                    .Metadata.SetValueComparer(slotLabelsComparer);
             }
             else
             {
                 entity.Property(e => e.SkillLevels).HasColumnType("jsonb");
+                entity.Property(e => e.SlotPositionLabels).HasColumnType("jsonb");
             }
         });
 

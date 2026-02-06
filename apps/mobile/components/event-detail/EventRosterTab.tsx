@@ -447,6 +447,32 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     }
   };
 
+  // Slot position label change handler
+  const handleSlotLabelChange = useCallback(async (slotIndex: number, newLabel: string | null) => {
+    // Build new labels object
+    const currentLabels = event.slotPositionLabels || {};
+    let newLabels: Record<number, string>;
+
+    if (newLabel === null) {
+      // Remove the label for this slot
+      newLabels = { ...currentLabels };
+      delete newLabels[slotIndex];
+    } else {
+      // Set the new label
+      newLabels = { ...currentLabels, [slotIndex]: newLabel };
+    }
+
+    // API call to update event with new labels
+    try {
+      const updatedEvent = await eventService.update(eventId, { slotPositionLabels: newLabels });
+      // Update the store's selectedEvent directly to avoid a full refetch
+      // This ensures the UI updates immediately
+      useEventStore.setState({ selectedEvent: updatedEvent });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update position label. Please try again.');
+    }
+  }, [eventId, event.slotPositionLabels]);
+
   if (isLoading) {
     return (
       <View style={styles.centered}>
@@ -511,6 +537,8 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
               onPlayerPress={handlePlayerPress}
               onRosterChange={canManage ? handleRosterChange : undefined}
               readOnly={!canManage}
+              slotPositionLabels={event.slotPositionLabels}
+              onSlotLabelChange={canManage ? handleSlotLabelChange : undefined}
             />
           )}
         </View>

@@ -305,6 +305,12 @@ public class EventService : IEventService
             evt.SkillLevels = request.SkillLevels;
         }
 
+        // Handle slot position label changes
+        if (request.SlotPositionLabels != null)
+        {
+            evt.SlotPositionLabels = request.SlotPositionLabels;
+        }
+
         evt.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -839,7 +845,8 @@ public class EventService : IEventService
             waitlistCount,       // Phase 5 - Waitlist
             myWaitlistPosition,  // Phase 5 - Waitlist
             myPaymentDeadline,   // Phase 5 - Waitlist
-            amIWaitlisted        // Phase 5 - Waitlist
+            amIWaitlisted,       // Phase 5 - Waitlist
+            evt.SlotPositionLabels  // Slot position labels
         );
     }
 

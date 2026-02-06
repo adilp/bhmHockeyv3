@@ -213,6 +213,8 @@ export interface EventDto {
   myWaitlistPosition?: number;   // Current user's waitlist position (null if not waitlisted)
   myPaymentDeadline?: string;    // Current user's payment deadline after promotion (ISO date string)
   amIWaitlisted: boolean;        // Convenience flag - true if current user is on waitlist
+  // Slot position labels (organizer feature)
+  slotPositionLabels?: Record<number, string>; // Maps slot index to position label (e.g., {1: "C", 2: "LW"})
 }
 
 // EventRegistrationDto - API response for registration with user details
@@ -266,6 +268,7 @@ export interface UpdateEventRequest {
   status?: EventStatus;
   visibility?: EventVisibility;  // Can change visibility after creation
   skillLevels?: SkillLevel[];    // Can change skill levels after creation
+  slotPositionLabels?: Record<number, string>;  // Slot position labels (e.g., {1: "C", 2: "LW"})
 }
 
 // Payment request types (Phase 4)

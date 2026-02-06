@@ -23,12 +23,19 @@ const SLOT_BADGE_WIDTH = 32;
 const CONTAINER_PADDING = spacing.md; // 16px on each side = 32 total
 const CELL_MARGIN = spacing.xs; // margin between cells and badge
 
+// Position cycle order: number → LW → RW → C → LD → RD → number
+const POSITION_CYCLE = ['LW', 'RW', 'C', 'LD', 'RD'] as const;
+
 interface DraggableRosterProps {
   registrations: EventRegistrationDto[];
   onPlayerPress: (registration: EventRegistrationDto) => void;
   onRosterChange?: (items: RosterOrderItem[]) => void;
   /** When true, disables drag-and-drop reordering (view-only mode) */
   readOnly?: boolean;
+  /** Slot position labels (maps slot index to position label like "C", "LW", etc.) */
+  slotPositionLabels?: Record<number, string>;
+  /** Callback when a slot label is tapped (only called when canManage=true) */
+  onSlotLabelChange?: (slotIndex: number, newLabel: string | null) => void;
 }
 
 type SlotType = 'goalie' | 'skater';
@@ -244,6 +251,8 @@ export function DraggableRoster({
   onPlayerPress,
   onRosterChange,
   readOnly = false,
+  slotPositionLabels,
+  onSlotLabelChange,
 }: DraggableRosterProps) {
   const rosterRef = useRef<View>(null);
   const [rosterTopOffset, setRosterTopOffset] = useState(0);
@@ -262,6 +271,27 @@ export function DraggableRoster({
       setRosterTopOffset(y);
     });
   }, []);
+
+  // Handler for cycling through position labels when slot badge is tapped
+  const handleSlotLabelTap = useCallback((slotIndex: number, isGoalie: boolean) => {
+    if (!onSlotLabelChange || isGoalie) return; // Goalie slots always show 'G'
+
+    const currentLabel = slotPositionLabels?.[slotIndex];
+
+    if (!currentLabel) {
+      // No label set, start cycle with first position
+      onSlotLabelChange(slotIndex, POSITION_CYCLE[0]);
+    } else {
+      const currentIndex = POSITION_CYCLE.indexOf(currentLabel as typeof POSITION_CYCLE[number]);
+      if (currentIndex === -1 || currentIndex === POSITION_CYCLE.length - 1) {
+        // Unknown label or last in cycle, reset to number (null)
+        onSlotLabelChange(slotIndex, null);
+      } else {
+        // Move to next in cycle
+        onSlotLabelChange(slotIndex, POSITION_CYCLE[currentIndex + 1]);
+      }
+    }
+  }, [slotPositionLabels, onSlotLabelChange]);
 
   // Build slots (memoized for performance)
   const slots = useMemo(() => {
@@ -533,11 +563,37 @@ export function DraggableRoster({
                 </View>
 
                 {/* Center Slot Badge */}
-                <View style={[styles.slotBadge, slot.type === 'goalie' && styles.slotBadgeGoalie]}>
-                  <Text style={[styles.slotBadgeText, slot.type === 'goalie' && styles.slotBadgeTextGoalie]} allowFontScaling={false}>
-                    {slot.type === 'goalie' ? 'G' : `${slot.index}`}
-                  </Text>
-                </View>
+                {(() => {
+                  const isGoalie = slot.type === 'goalie';
+                  const positionLabel = isGoalie ? 'G' : (slotPositionLabels?.[slot.index] || `${slot.index}`);
+                  const hasCustomLabel = !isGoalie && slotPositionLabels?.[slot.index];
+                  const isTappable = onSlotLabelChange && !isGoalie && !readOnly;
+
+                  const badge = (
+                    <View style={[
+                      styles.slotBadge,
+                      isGoalie && styles.slotBadgeGoalie,
+                      hasCustomLabel && styles.slotBadgeCustom,
+                    ]}>
+                      <Text
+                        style={[
+                          styles.slotBadgeText,
+                          isGoalie && styles.slotBadgeTextGoalie,
+                          hasCustomLabel && styles.slotBadgeTextCustom,
+                        ]}
+                        allowFontScaling={false}
+                      >
+                        {positionLabel}
+                      </Text>
+                    </View>
+                  );
+
+                  return isTappable ? (
+                    <Pressable onPress={() => handleSlotLabelTap(slot.index, isGoalie)}>
+                      {badge}
+                    </Pressable>
+                  ) : badge;
+                })()}
 
                 {/* White Team (Right) */}
                 <View style={[
@@ -733,6 +789,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.teal,
     borderColor: colors.primary.teal,
   },
+  slotBadgeCustom: {
+    backgroundColor: colors.primary.purple,
+    borderColor: colors.primary.purple,
+  },
   slotBadgeText: {
     fontSize: 12,
     fontWeight: '700',
@@ -740,6 +800,10 @@ const styles = StyleSheet.create({
   },
   slotBadgeTextGoalie: {
     color: colors.bg.darkest,
+  },
+  slotBadgeTextCustom: {
+    color: colors.text.primary,
+    fontSize: 10,
   },
   emptySlot: {
     flexDirection: 'row',

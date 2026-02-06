@@ -33,7 +33,9 @@ public record EventDto(
     int WaitlistCount,            // Number of people on waitlist
     int? MyWaitlistPosition,      // Current user's waitlist position (null if not waitlisted)
     DateTime? MyPaymentDeadline,  // Current user's payment deadline after promotion (null if none)
-    bool AmIWaitlisted            // Convenience flag - true if current user is on waitlist
+    bool AmIWaitlisted,           // Convenience flag - true if current user is on waitlist
+    // Slot position labels (organizer feature)
+    Dictionary<int, string>? SlotPositionLabels  // Maps slot index to position label (e.g., {1: "C", 2: "LW"})
 );
 
 public record CreateEventRequest(
@@ -60,8 +62,9 @@ public record UpdateEventRequest(
     decimal? Cost,
     DateTime? RegistrationDeadline,
     string? Status,
-    string? Visibility,           // Can change visibility after creation
-    List<string>? SkillLevels     // Can change skill levels after creation
+    string? Visibility,                            // Can change visibility after creation
+    List<string>? SkillLevels,                     // Can change skill levels after creation
+    Dictionary<int, string>? SlotPositionLabels   // Slot position labels (e.g., {1: "C", 2: "LW"})
 );
 
 public record EventRegistrationDto(

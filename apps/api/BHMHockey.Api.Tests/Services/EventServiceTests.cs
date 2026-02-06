@@ -798,7 +798,8 @@ public class EventServiceTests : IDisposable
             RegistrationDeadline: null,
             Status: null,
             Visibility: "OrganizationMembers", // Invalid - no org on event
-            SkillLevels: null
+            SkillLevels: null,
+            SlotPositionLabels: null
         );
 
         // Act & Assert
@@ -853,7 +854,8 @@ public class EventServiceTests : IDisposable
             RegistrationDeadline: null,
             Status: null,
             Visibility: null,
-            SkillLevels: null
+            SkillLevels: null,
+            SlotPositionLabels: null
         );
 
         // Act
@@ -883,7 +885,8 @@ public class EventServiceTests : IDisposable
             RegistrationDeadline: null,
             Status: null,
             Visibility: null,
-            SkillLevels: null
+            SkillLevels: null,
+            SlotPositionLabels: null
         );
 
         // Act
@@ -1381,7 +1384,8 @@ public class EventServiceTests : IDisposable
             RegistrationDeadline: null,
             Status: null,
             Visibility: null,
-            SkillLevels: null
+            SkillLevels: null,
+            SlotPositionLabels: null
         );
 
         // Act - Org admin (who is NOT the event creator) updates the event
@@ -1414,7 +1418,8 @@ public class EventServiceTests : IDisposable
             RegistrationDeadline: null,
             Status: null,
             Visibility: null,
-            SkillLevels: null
+            SkillLevels: null,
+            SlotPositionLabels: null
         );
 
         // Act
