@@ -2038,9 +2038,9 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdatePaymentStatusAsync_ResetToPending_BlockedForRegisteredUsers()
+    public async Task UpdatePaymentStatusAsync_ResetToPending_AllowedForRegisteredUsers()
     {
-        // Arrange - Registered user cannot have payment reset to Pending
+        // Arrange - Registered user can have payment reset to Pending
         var creator = await CreateTestUser("creator@example.com");
         var registeredUser = await CreateTestUser("registered@example.com");
         var evt = await CreateTestEvent(creator.Id);
@@ -2054,12 +2054,13 @@ public class EventServiceTests : IDisposable
         var result = await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Pending", creator.Id);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.Message.Should().Be("Cannot reset payment status for users already on the roster");
+        result.Success.Should().BeTrue();
+        result.Message.Should().Be("Payment status reset to pending");
 
-        // Verify payment status unchanged
-        var unchanged = await _context.EventRegistrations.FindAsync(registration.Id);
-        unchanged!.PaymentStatus.Should().Be("Verified");
+        // Verify payment status was reset
+        var updated = await _context.EventRegistrations.FindAsync(registration.Id);
+        updated!.PaymentStatus.Should().Be("Pending");
+        updated.PaymentVerifiedAt.Should().BeNull();
     }
 
     [Fact]

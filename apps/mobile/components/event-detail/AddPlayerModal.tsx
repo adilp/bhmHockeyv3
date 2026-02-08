@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -105,6 +106,7 @@ export function AddPlayerModal({
     setSelectedUser(user);
     // Always require position selection - organizers can add as any position
     setSelectedPosition(null);
+    Keyboard.dismiss();
   }, []);
 
   const handleConfirmAdd = async () => {
@@ -201,7 +203,7 @@ export function AddPlayerModal({
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardView}
           >
-            <TouchableWithoutFeedback>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={styles.modal}>
                 {/* Header */}
                 <View style={styles.header}>

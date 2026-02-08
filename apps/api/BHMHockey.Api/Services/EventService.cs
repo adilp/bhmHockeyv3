@@ -925,12 +925,6 @@ public class EventService : IEventService
             throw new InvalidOperationException("Invalid payment status. Must be 'Verified' or 'Pending'");
         }
 
-        // Block reset-to-Pending for already registered users
-        if (paymentStatus == "Pending" && registration.Status == "Registered")
-        {
-            return new PaymentUpdateResultDto(false, false, "Cannot reset payment status for users already on the roster", null);
-        }
-
         string message;
         bool promoted = false;
 
@@ -997,7 +991,7 @@ public class EventService : IEventService
         }
         else
         {
-            // Reset to Pending (only for waitlisted users at this point due to earlier check)
+            // Reset to Pending
             registration.PaymentStatus = "Pending";
             registration.PaymentVerifiedAt = null;
             message = "Payment status reset to pending";

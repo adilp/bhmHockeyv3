@@ -447,22 +447,37 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     }
   };
 
-  // Slot position label change handler (optimistic update with rollback)
-  const handleSlotLabelChange = useCallback(async (slotIndex: number, newLabel: string | null) => {
-    const previousLabels = event.slotPositionLabels || {};
-    const { [slotIndex]: _, ...labelsWithoutSlot } = previousLabels;
-    const newLabels = newLabel === null ? labelsWithoutSlot : { ...previousLabels, [slotIndex]: newLabel };
+  // Slot position label change handler (optimistic + debounced API call)
+  const slotLabelTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const preChangeLabelsRef = useRef<Record<number, string> | undefined>();
+
+  const handleSlotLabelChange = useCallback((slotIndex: number, newLabel: string | null) => {
+    // Capture the original labels before the first tap in a rapid sequence (for rollback)
+    if (!slotLabelTimerRef.current) {
+      preChangeLabelsRef.current = event.slotPositionLabels;
+    }
+
+    const currentLabels = event.slotPositionLabels || {};
+    const { [slotIndex]: _, ...labelsWithoutSlot } = currentLabels;
+    const newLabels = newLabel === null ? labelsWithoutSlot : { ...currentLabels, [slotIndex]: newLabel };
 
     // Optimistic: update UI immediately
     useEventStore.setState({ selectedEvent: { ...event, slotPositionLabels: newLabels } });
 
-    try {
-      await eventService.update(eventId, { slotPositionLabels: newLabels });
-    } catch (error) {
-      // Rollback on failure
-      useEventStore.setState({ selectedEvent: { ...event, slotPositionLabels: previousLabels } });
-      Alert.alert('Error', 'Failed to update position label. Please try again.');
-    }
+    // Debounce: only send API call after tapping stops
+    clearTimeout(slotLabelTimerRef.current);
+    const rollbackLabels = preChangeLabelsRef.current;
+    const rollbackEvent = { ...event, slotPositionLabels: rollbackLabels };
+    slotLabelTimerRef.current = setTimeout(async () => {
+      slotLabelTimerRef.current = undefined;
+      try {
+        await eventService.update(eventId, { slotPositionLabels: newLabels });
+      } catch (error) {
+        // Rollback to state before rapid tapping started
+        useEventStore.setState({ selectedEvent: rollbackEvent });
+        Alert.alert('Error', 'Failed to update position label. Please try again.');
+      }
+    }, 500);
   }, [eventId, event]);
 
   if (isLoading) {

@@ -272,23 +272,29 @@ export function DraggableRoster({
     });
   }, []);
 
+  // Ref tracks latest labels so rapid taps always cycle correctly (no stale props between renders)
+  const labelsRef = useRef(slotPositionLabels);
+  useEffect(() => { labelsRef.current = slotPositionLabels; }, [slotPositionLabels]);
+
   // Cycle through position labels when slot badge is tapped: number -> LW -> RW -> C -> LD -> RD -> number
   const handleSlotLabelTap = useCallback((slotIndex: number, isGoalie: boolean) => {
     if (!onSlotLabelChange || isGoalie) return;
 
-    const currentLabel = slotPositionLabels?.[slotIndex];
+    const currentLabel = labelsRef.current?.[slotIndex];
+    const nextLabel = (() => {
+      if (!currentLabel) return POSITION_CYCLE[0];
+      const currentIndex = POSITION_CYCLE.indexOf(currentLabel as typeof POSITION_CYCLE[number]);
+      const isLastOrUnknown = currentIndex === -1 || currentIndex === POSITION_CYCLE.length - 1;
+      return isLastOrUnknown ? null : POSITION_CYCLE[currentIndex + 1];
+    })();
 
-    // No label yet - start cycle with first position
-    if (!currentLabel) {
-      onSlotLabelChange(slotIndex, POSITION_CYCLE[0]);
-      return;
-    }
+    // Update ref immediately so the next rapid tap reads the correct value
+    labelsRef.current = nextLabel === null
+      ? (() => { const { [slotIndex]: _, ...rest } = labelsRef.current || {}; return rest; })()
+      : { ...labelsRef.current, [slotIndex]: nextLabel };
 
-    // Find current position in cycle
-    const currentIndex = POSITION_CYCLE.indexOf(currentLabel as typeof POSITION_CYCLE[number]);
-    const isLastOrUnknown = currentIndex === -1 || currentIndex === POSITION_CYCLE.length - 1;
-    onSlotLabelChange(slotIndex, isLastOrUnknown ? null : POSITION_CYCLE[currentIndex + 1]);
-  }, [slotPositionLabels, onSlotLabelChange]);
+    onSlotLabelChange(slotIndex, nextLabel);
+  }, [onSlotLabelChange]);
 
   // Build slots (memoized for performance)
   const slots = useMemo(() => {
