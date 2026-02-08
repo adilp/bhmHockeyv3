@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import { eventService } from '@bhmhockey/api-client';
 import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto, PublishResultDto, UserSearchResultDto, SkillLevel } from '@bhmhockey/shared';
 
+/** Extract message from ApiError objects or Error instances */
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
+    return (error as any).message || fallback;
+  }
+  return fallback;
+}
+
 interface EventState {
   // State
   events: EventDto[];
@@ -69,7 +77,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       set({ events: sortedEvents, isLoading: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to load events',
+        error: getErrorMessage(error, 'Failed to load events'),
         isLoading: false
       });
     }
@@ -83,7 +91,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       set({ selectedEvent: event, isLoading: false });
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to load event',
+        error: getErrorMessage(error, 'Failed to load event'),
         isLoading: false
       });
     }
@@ -118,7 +126,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       return newEvent;
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to create event',
+        error: getErrorMessage(error, 'Failed to create event'),
         isCreating: false
       });
       return null;
@@ -202,12 +210,11 @@ export const useEventStore = create<EventState>((set, get) => ({
       return result;
     } catch (error: any) {
       // Rollback on failure
-      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to register';
       set({
         events,
         selectedEvent,
         processingEventId: null,
-        error: errorMessage
+        error: getErrorMessage(error, 'Failed to register'),
       });
       return null;
     }
@@ -258,7 +265,7 @@ export const useEventStore = create<EventState>((set, get) => ({
         selectedEvent,
         myRegistrations,
         processingEventId: null,
-        error: error instanceof Error ? error.message : 'Failed to cancel registration'
+        error: getErrorMessage(error, 'Failed to cancel registration')
       });
       return false;
     }
@@ -297,7 +304,7 @@ export const useEventStore = create<EventState>((set, get) => ({
         selectedEvent,
         myRegistrations,
         processingEventId: null,
-        error: error instanceof Error ? error.message : 'Failed to mark payment',
+        error: getErrorMessage(error, 'Failed to mark payment'),
       });
       return false;
     }
@@ -313,7 +320,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       return result;
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to update payment status',
+        error: getErrorMessage(error, 'Failed to update payment status'),
       });
       return null;
     }
@@ -330,7 +337,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       return true;
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to update team assignment',
+        error: getErrorMessage(error, 'Failed to update team assignment'),
       });
       return false;
     }
@@ -347,7 +354,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       return true;
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to remove registration',
+        error: getErrorMessage(error, 'Failed to remove registration'),
       });
       return false;
     }
@@ -367,7 +374,7 @@ export const useEventStore = create<EventState>((set, get) => ({
     } catch (error) {
       set({
         processingEventId: null,
-        error: error instanceof Error ? error.message : 'Failed to reorder waitlist',
+        error: getErrorMessage(error, 'Failed to reorder waitlist'),
       });
       throw error;
     }
@@ -391,7 +398,7 @@ export const useEventStore = create<EventState>((set, get) => ({
     } catch (error: any) {
       console.error('🗑️ Delete event failed:', error?.response?.data || error?.message || error);
       set({
-        error: error instanceof Error ? error.message : 'Failed to cancel event',
+        error: getErrorMessage(error, 'Failed to cancel event'),
       });
       return false;
     }
@@ -406,7 +413,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       return result;
     } catch (error) {
       set({
-        error: error instanceof Error ? error.message : 'Failed to publish roster',
+        error: getErrorMessage(error, 'Failed to publish roster'),
       });
       return null;
     }
@@ -430,8 +437,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       await get().fetchEventById(eventId);
       return true;
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to add user';
-      set({ error: errorMessage });
+      set({ error: getErrorMessage(error, 'Failed to add user') });
       return false;
     }
   },
@@ -449,8 +455,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       await get().fetchEventById(eventId);
       return true;
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to create guest player';
-      set({ error: errorMessage });
+      set({ error: getErrorMessage(error, 'Failed to create guest player') });
       return false;
     }
   },

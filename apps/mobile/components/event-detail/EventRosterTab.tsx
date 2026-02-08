@@ -26,6 +26,14 @@ import { DraftModeRoster } from './DraftModeRoster';
 import { AddPlayerModal } from './AddPlayerModal';
 import { colors, spacing, radius } from '../../theme';
 
+/** Extract message from ApiError objects or Error instances */
+function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
+    return (error as any).message || fallback;
+  }
+  return fallback;
+}
+
 interface EventRosterTabProps {
   eventId: string;
   event: EventDto;
@@ -82,7 +90,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
       } catch (error) {
         if (!cancelled) {
           console.error('Failed to load registrations:', error);
-          Alert.alert('Error', 'Failed to load roster data');
+          Alert.alert('Error', getApiErrorMessage(error, 'Failed to load roster data'));
         }
       } finally {
         if (!cancelled) {
@@ -103,7 +111,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
       const data = await eventService.getRegistrations(eventId);
       setAllRegistrations(data);
     } catch (error) {
-      Alert.alert('Error', 'Failed to reload registrations');
+      Alert.alert('Error', getApiErrorMessage(error, 'Failed to reload registrations'));
     }
   }, [eventId]);
 
@@ -144,7 +152,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
                 Alert.alert('Error', result?.message || 'Failed to publish roster');
               }
             } catch (error) {
-              Alert.alert('Error', 'Failed to publish roster. Please try again.');
+              Alert.alert('Error', getApiErrorMessage(error, 'Failed to publish roster. Please try again.'));
             } finally {
               setIsPublishing(false);
             }
@@ -165,7 +173,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
 
     const result = await updatePaymentStatus(eventId, registration.id, 'Verified');
     if (!result) {
-      Alert.alert('Error', 'Failed to verify payment');
+      Alert.alert('Error', useEventStore.getState().error || 'Failed to verify payment');
       await reloadRegistrations();
     } else if (result.promoted) {
       // User was promoted from waitlist - need full refresh to get updated state
@@ -183,7 +191,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
 
     const result = await updatePaymentStatus(eventId, registration.id, 'Verified');
     if (!result) {
-      Alert.alert('Error', 'Failed to verify payment');
+      Alert.alert('Error', useEventStore.getState().error || 'Failed to verify payment');
       await reloadRegistrations();
     } else if (result.promoted) {
       // User was promoted from waitlist - need full refresh to get updated state
@@ -201,7 +209,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
 
     const success = await updatePaymentStatus(eventId, registration.id, 'Pending');
     if (!success) {
-      Alert.alert('Error', 'Failed to reset payment status');
+      Alert.alert('Error', useEventStore.getState().error || 'Failed to reset payment status');
       await reloadRegistrations();
     }
   };
@@ -219,7 +227,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
 
     const success = await updateTeamAssignment(eventId, registration.id, newTeam);
     if (!success) {
-      Alert.alert('Error', 'Failed to swap team');
+      Alert.alert('Error', useEventStore.getState().error || 'Failed to swap team');
       await reloadRegistrations();
     }
   };
@@ -257,7 +265,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
 
             const success = await removeRegistration(eventId, registration.id);
             if (!success) {
-              Alert.alert('Error', 'Failed to remove registration');
+              Alert.alert('Error', useEventStore.getState().error || 'Failed to remove registration');
               await reloadRegistrations();
             } else if (!isWaitlisted) {
               // Rostered player removed - waitlist promotion may have happened
@@ -429,7 +437,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     try {
       await eventService.updateRosterOrder(eventId, items);
     } catch (error) {
-      Alert.alert('Error', 'Failed to save roster order. Please try again.');
+      Alert.alert('Error', getApiErrorMessage(error, 'Failed to save roster order. Please try again.'));
       await reloadRegistrations();
     } finally {
       isUpdatingRoster.current = false;
@@ -441,7 +449,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     try {
       await eventService.reorderWaitlist(eventId, items);
     } catch (error) {
-      Alert.alert('Error', 'Failed to save waitlist order. Please try again.');
+      Alert.alert('Error', getApiErrorMessage(error, 'Failed to save waitlist order. Please try again.'));
       await reloadRegistrations();
       throw error; // Re-throw so DraggableWaitlist can revert optimistic update
     }
@@ -475,7 +483,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
       } catch (error) {
         // Rollback to state before rapid tapping started
         useEventStore.setState({ selectedEvent: rollbackEvent });
-        Alert.alert('Error', 'Failed to update position label. Please try again.');
+        Alert.alert('Error', getApiErrorMessage(error, 'Failed to update position label. Please try again.'));
       }
     }, 500);
   }, [eventId, event]);

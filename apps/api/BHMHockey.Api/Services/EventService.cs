@@ -12,6 +12,7 @@ public class EventService : IEventService
     private readonly INotificationService _notificationService;
     private readonly IOrganizationAdminService _adminService;
     private readonly IWaitlistService _waitlistService;
+    private readonly ILogger<EventService> _logger;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
     // Central Time Zone for displaying times to users (local community app)
@@ -21,12 +22,14 @@ public class EventService : IEventService
         AppDbContext context,
         INotificationService notificationService,
         IOrganizationAdminService adminService,
-        IWaitlistService waitlistService)
+        IWaitlistService waitlistService,
+        ILogger<EventService> logger)
     {
         _context = context;
         _notificationService = notificationService;
         _adminService = adminService;
         _waitlistService = waitlistService;
+        _logger = logger;
     }
 
     private void ValidateSkillLevels(List<string>? skillLevels)
@@ -900,11 +903,13 @@ public class EventService : IEventService
         var evt = await _context.Events.FirstOrDefaultAsync(e => e.Id == eventId);
         if (evt == null)
         {
+            _logger.LogWarning("UpdatePaymentStatus failed: event {EventId} not found", eventId);
             return new PaymentUpdateResultDto(false, false, "Event not found", null);
         }
 
         if (!await CanUserManageEventAsync(evt, organizerId))
         {
+            _logger.LogWarning("UpdatePaymentStatus denied: user {OrganizerId} not authorized for event {EventId}", organizerId, eventId);
             return new PaymentUpdateResultDto(false, false, "You are not authorized to manage this event", null);
         }
 
@@ -916,6 +921,7 @@ public class EventService : IEventService
 
         if (registration == null)
         {
+            _logger.LogWarning("UpdatePaymentStatus failed: registration {RegistrationId} not found for event {EventId}", registrationId, eventId);
             return new PaymentUpdateResultDto(false, false, "Registration not found", null);
         }
 

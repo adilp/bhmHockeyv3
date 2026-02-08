@@ -6,6 +6,7 @@ using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -42,7 +43,7 @@ public class EventServiceTests : IDisposable
         _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(It.IsAny<Guid>()))
             .ReturnsAsync(1);
 
-        _sut = new EventService(_context, _mockNotificationService.Object, _adminService, _mockWaitlistService.Object);
+        _sut = new EventService(_context, _mockNotificationService.Object, _adminService, _mockWaitlistService.Object, Mock.Of<ILogger<EventService>>());
     }
 
     public void Dispose()

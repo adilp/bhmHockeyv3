@@ -13,11 +13,13 @@ public class EventsController : ControllerBase
 {
     private readonly IEventService _eventService;
     private readonly IWaitlistService _waitlistService;
+    private readonly ILogger<EventsController> _logger;
 
-    public EventsController(IEventService eventService, IWaitlistService waitlistService)
+    public EventsController(IEventService eventService, IWaitlistService waitlistService, ILogger<EventsController> logger)
     {
         _eventService = eventService;
         _waitlistService = waitlistService;
+        _logger = logger;
     }
 
     #region Authentication Helpers
@@ -172,10 +174,12 @@ public class EventsController : ControllerBase
         }
         catch (ConcurrentModificationException ex)
         {
+            _logger.LogWarning("Registration conflict for event {EventId}: {Message}", id, ex.Message);
             return Conflict(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
+            _logger.LogWarning("Registration rejected for event {EventId}: {Message}", id, ex.Message);
             return BadRequest(new { message = ex.Message });
         }
     }
@@ -329,6 +333,8 @@ public class EventsController : ControllerBase
 
             if (!result.Success)
             {
+                _logger.LogWarning("Payment status update failed for event {EventId}, registration {RegistrationId}: {Message}",
+                    eventId, registrationId, result.Message);
                 return NotFound(new { message = result.Message });
             }
 
@@ -336,10 +342,14 @@ public class EventsController : ControllerBase
         }
         catch (ConcurrentModificationException ex)
         {
+            _logger.LogWarning("Payment status conflict for event {EventId}, registration {RegistrationId}: {Message}",
+                eventId, registrationId, ex.Message);
             return Conflict(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
+            _logger.LogWarning("Payment status rejected for event {EventId}, registration {RegistrationId}: {Message}",
+                eventId, registrationId, ex.Message);
             return BadRequest(new { message = ex.Message });
         }
     }
@@ -363,6 +373,7 @@ public class EventsController : ControllerBase
 
             if (!success)
             {
+                _logger.LogWarning("Remove registration failed for event {EventId}, registration {RegistrationId}", eventId, registrationId);
                 return NotFound(new { message = "Event or registration not found, or you are not the organizer." });
             }
 
@@ -370,6 +381,8 @@ public class EventsController : ControllerBase
         }
         catch (ConcurrentModificationException ex)
         {
+            _logger.LogWarning("Remove registration conflict for event {EventId}, registration {RegistrationId}: {Message}",
+                eventId, registrationId, ex.Message);
             return Conflict(new { message = ex.Message });
         }
     }
@@ -389,6 +402,8 @@ public class EventsController : ControllerBase
 
             if (!result.Success)
             {
+                _logger.LogWarning("Move to roster failed for event {EventId}, registration {RegistrationId}: {Message}",
+                    eventId, registrationId, result.Message);
                 return BadRequest(new { message = result.Message });
             }
 
@@ -415,6 +430,8 @@ public class EventsController : ControllerBase
 
             if (!result.Success)
             {
+                _logger.LogWarning("Move to waitlist failed for event {EventId}, registration {RegistrationId}: {Message}",
+                    eventId, registrationId, result.Message);
                 return BadRequest(new { message = result.Message });
             }
 

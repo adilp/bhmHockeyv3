@@ -5,6 +5,7 @@ using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -26,7 +27,7 @@ public class EventsControllerTests
     {
         _mockEventService = new Mock<IEventService>();
         _mockWaitlistService = new Mock<IWaitlistService>();
-        _controller = new EventsController(_mockEventService.Object, _mockWaitlistService.Object);
+        _controller = new EventsController(_mockEventService.Object, _mockWaitlistService.Object, Mock.Of<ILogger<EventsController>>());
     }
 
     #region Test Helpers
