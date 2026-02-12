@@ -16,6 +16,8 @@ import Animated, {
 import type { EventRegistrationDto, TeamAssignment, RosterOrderItem, SkillLevel } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../theme';
 import { BadgeIconsRow } from './badges';
+import { Badge } from './Badge';
+import { getPaymentBadgeInfo } from '../utils/payment';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const ROW_HEIGHT = 94; // 88px cell + 6px gap
@@ -36,6 +38,8 @@ interface DraggableRosterProps {
   slotPositionLabels?: Record<number, string>;
   /** Callback when a slot label is tapped (only called when canManage=true) */
   onSlotLabelChange?: (slotIndex: number, newLabel: string | null) => void;
+  /** When true, shows payment status indicators for unpaid players instead of badges */
+  canManage?: boolean;
 }
 
 type SlotType = 'goalie' | 'skater';
@@ -87,15 +91,20 @@ function PlayerCell({
   side,
   onPress,
   onLongPress,
+  canManage,
 }: {
   registration: EventRegistrationDto;
   side: 'left' | 'right';
   onPress: () => void;
   onLongPress: () => void;
+  canManage?: boolean;
 }) {
   const { user } = registration;
   const fullName = `${user.firstName} ${user.lastName}`;
   const skillInfo = getSkillLevelInfo(registration);
+
+  // For organizers: show payment status if not verified
+  const showPaymentStatus = canManage && registration.paymentStatus && registration.paymentStatus !== 'Verified';
 
   return (
     <Pressable
@@ -118,8 +127,12 @@ function PlayerCell({
       >
         {fullName}
       </Text>
-      {/* Line 2: Achievement Badges or Guest label */}
-      {registration.user.isGhostPlayer ? (
+      {/* Line 2: Payment status (organizer only, unpaid) or badges/guest */}
+      {showPaymentStatus ? (
+        <Badge variant={getPaymentBadgeInfo(registration.paymentStatus).variant}>
+          {getPaymentBadgeInfo(registration.paymentStatus).text}
+        </Badge>
+      ) : registration.user.isGhostPlayer ? (
         <Text style={[styles.guestLabel, side === 'left' ? styles.guestLabelLeft : styles.guestLabelRight]} allowFontScaling={false}>
           Guest
         </Text>
@@ -253,6 +266,7 @@ export function DraggableRoster({
   readOnly = false,
   slotPositionLabels,
   onSlotLabelChange,
+  canManage = false,
 }: DraggableRosterProps) {
   const rosterRef = useRef<View>(null);
   const [rosterTopOffset, setRosterTopOffset] = useState(0);
@@ -554,6 +568,7 @@ export function DraggableRoster({
                         side="left"
                         onPress={() => onPlayerPress(slot.blackPlayer!)}
                         onLongPress={readOnly ? () => {} : () => startDrag(slot.blackPlayer!, 'left', slot.index)}
+                        canManage={canManage}
                       />
                     )
                   ) : (
@@ -613,6 +628,7 @@ export function DraggableRoster({
                         side="right"
                         onPress={() => onPlayerPress(slot.whitePlayer!)}
                         onLongPress={readOnly ? () => {} : () => startDrag(slot.whitePlayer!, 'right', slot.index)}
+                        canManage={canManage}
                       />
                     )
                   ) : (

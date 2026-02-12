@@ -84,6 +84,13 @@ When adding fields to `User` entity, update ALL `UserDto` creation sites:
 - Controllers catch and map to `BadRequest`/`Unauthorized`
 - Return `null` from services to hide resource existence (404 vs 403)
 
+### Logging
+- Inject `ILogger<T>` into controllers and services via constructor
+- Log at `Warning` level when returning error responses (NotFound, BadRequest, Conflict)
+- Include structured parameters: `_logger.LogWarning("Action failed for {EventId}: {Message}", eventId, result.Message)`
+- Reference: `NotificationService` and `WaitlistBackgroundService` for existing patterns
+- **Do NOT** skip logging on failure paths — silent failures make debugging impossible
+
 ## Environment Config
 
 Required in `appsettings.Development.json`:
@@ -130,8 +137,9 @@ Production uses `DATABASE_URL` env var (auto-converted from postgres:// format).
 7. Write tests
 
 ### New Endpoint
-1. Add controller method
-2. Add service logic
+1. Add controller method with `ILogger<T>` (if not already injected)
+2. Add service logic with `ILogger<T>` (if not already injected)
 3. Add auth checks
-4. Write tests
-5. Test via Swagger
+4. Add `LogWarning` at all error return paths
+5. Write tests (pass `Mock.Of<ILogger<T>>()` in test constructors)
+6. Test via Swagger

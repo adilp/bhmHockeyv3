@@ -554,6 +554,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
               readOnly={!canManage}
               slotPositionLabels={event.slotPositionLabels}
               onSlotLabelChange={canManage ? handleSlotLabelChange : undefined}
+              canManage={canManage}
             />
           )}
         </View>

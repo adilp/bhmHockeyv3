@@ -4,6 +4,7 @@ import { Badge } from './Badge';
 import { SkillLevelDots } from './SkillLevelDots';
 import { OrgAvatar } from './OrgAvatar';
 import type { EventDto, SkillLevel } from '@bhmhockey/shared';
+import { getPaymentBadgeInfo } from '../utils/payment';
 
 export type EventCardVariant = 'available' | 'registered' | 'waitlisted' | 'organizing';
 
@@ -54,17 +55,6 @@ function formatDateTime(dateString: string): { date: string; time: string } {
   return { date: dateStr, time: timeStr };
 }
 
-function getPaymentBadgeVariant(status?: string): { text: string; variant: 'green' | 'warning' | 'error' } {
-  switch (status) {
-    case 'Verified':
-      return { text: 'Paid', variant: 'green' };
-    case 'MarkedPaid':
-      return { text: 'Awaiting Verification', variant: 'warning' };
-    case 'Pending':
-    default:
-      return { text: 'Unpaid', variant: 'error' };
-  }
-}
 
 export function EventCard({ event, variant, onPress }: EventCardProps) {
   const accentColor = variantColors[variant];
@@ -180,7 +170,7 @@ function WaitlistedBadges({ event }: { event: EventDto }) {
 
   // Roster has space - you're on waitlist because of payment (pay-to-play model)
   // Show payment status instead of position
-  const { text, variant } = getPaymentBadgeVariant(event.myPaymentStatus);
+  const { text, variant } = getPaymentBadgeInfo(event.myPaymentStatus);
   return (
     <View style={styles.waitlistedStats}>
       <Badge variant={variant}>{text}</Badge>
@@ -189,7 +179,7 @@ function WaitlistedBadges({ event }: { event: EventDto }) {
 }
 
 function RegisteredBadges({ event }: { event: EventDto }) {
-  const { text, variant } = getPaymentBadgeVariant(event.myPaymentStatus);
+  const { text, variant } = getPaymentBadgeInfo(event.myPaymentStatus);
   const isBlackTeam = event.myTeamAssignment === 'Black';
 
   return (

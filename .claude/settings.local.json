@@ -18,7 +18,8 @@
       "Bash(dotnet build:*)",
       "Bash(yarn build)",
       "Bash(npx tsc --noEmit)",
-      "Bash(yarn type-check:*)"
+      "Bash(yarn type-check:*)",
+      "Bash(find:*)"
     ]
   }
 }

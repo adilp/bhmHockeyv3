@@ -1,33 +1,9 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { EventDto, PaymentStatus } from '@bhmhockey/shared';
+import type { EventDto } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../../theme';
-import { Badge, BadgeVariant } from '../Badge';
-
-// Helper functions to match EventCard badge styling
-function getPaymentBadgeVariant(status: PaymentStatus): BadgeVariant {
-  switch (status) {
-    case 'Verified':
-      return 'green';
-    case 'MarkedPaid':
-      return 'warning';
-    case 'Pending':
-    default:
-      return 'error';
-  }
-}
-
-function getPaymentBadgeText(status: PaymentStatus): string {
-  switch (status) {
-    case 'Verified':
-      return 'Paid';
-    case 'MarkedPaid':
-      return 'Pending';
-    case 'Pending':
-    default:
-      return 'Unpaid';
-  }
-}
+import { Badge } from '../Badge';
+import { getPaymentBadgeInfo } from '../../utils/payment';
 
 interface DraftModeRosterProps {
   event: EventDto;
@@ -68,8 +44,8 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
           </Text>
           {isPaidEvent && paymentStatus && (
             <View style={styles.paymentRow}>
-              <Badge variant={getPaymentBadgeVariant(paymentStatus)}>
-                {getPaymentBadgeText(paymentStatus)}
+              <Badge variant={getPaymentBadgeInfo(paymentStatus).variant}>
+                {getPaymentBadgeInfo(paymentStatus).text}
               </Badge>
             </View>
           )}
@@ -89,8 +65,8 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
           </Text>
           {isPaidEvent && paymentStatus && (
             <View style={styles.paymentRow}>
-              <Badge variant={getPaymentBadgeVariant(paymentStatus)}>
-                {getPaymentBadgeText(paymentStatus)}
+              <Badge variant={getPaymentBadgeInfo(paymentStatus).variant}>
+                {getPaymentBadgeInfo(paymentStatus).text}
               </Badge>
             </View>
           )}

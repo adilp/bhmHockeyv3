@@ -51,6 +51,23 @@ const { user } = useAuthStore();                       // Bad - re-renders on an
 await eventStore.fetchEvents();  // Store handles loading, errors, alerts
 ```
 
+### API Error Handling
+The Axios interceptor rejects with a plain `ApiError` object (not an `Error` instance).
+```typescript
+// BAD - ApiError is a plain object, not an Error instance
+catch (error) {
+  error instanceof Error ? error.message : 'fallback'  // Always hits fallback!
+}
+
+// GOOD - use getErrorMessage() helper (defined in eventStore.ts)
+catch (error) {
+  getErrorMessage(error, 'Failed to do something')  // Extracts ApiError.message
+}
+```
+- Stores: use `getErrorMessage(error, 'fallback')` in catch blocks
+- Components: after a failed store call, read `useEventStore.getState().error` for the real message
+- Direct API calls in components: use `getApiErrorMessage(error, 'fallback')` (defined in EventRosterTab)
+
 ### Theme Usage
 ```typescript
 import { colors, spacing, radius } from '../../theme';
@@ -207,12 +224,24 @@ import { Badge } from '../../components';
 <Badge variant="error">Unpaid</Badge>
 ```
 
-**Payment Status Badges:**
+**Payment Status Badges — Use Shared Helper:**
+```typescript
+import { getPaymentBadgeInfo } from '../../utils/payment';
+
+const info = getPaymentBadgeInfo(registration.paymentStatus);
+<Badge variant={info.variant}>{info.text}</Badge>
+```
+
+NEVER duplicate payment status → variant/text mapping inline. Always use `getPaymentBadgeInfo()` from `utils/payment.ts`.
+
 | Status | Variant | Text |
 |--------|---------|------|
 | `Verified` | `green` | "Paid" |
-| `MarkedPaid` | `warning` | "Pending" |
+| `MarkedPaid` | `warning` | "Awaiting" |
 | `Pending` | `error` | "Unpaid" |
+
+**Roster Payment Indicators (Organizer Only):**
+In the roster view (`DraggableRoster`), organizers see payment status badges instead of achievement badges for unpaid players. Paid players show their normal achievement badges. Controlled by `canManage` prop.
 
 **Other Common Badges:**
 | Use Case | Variant | Text |

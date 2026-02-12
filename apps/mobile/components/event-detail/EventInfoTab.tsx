@@ -3,6 +3,7 @@ import type { EventDto, SkillLevel } from '@bhmhockey/shared';
 import { SkillLevelBadges } from '../SkillLevelBadges';
 import { Badge } from '../Badge';
 import { colors, spacing, radius } from '../../theme';
+import { getPaymentBadgeInfo } from '../../utils/payment';
 
 interface EventInfoTabProps {
   event: EventDto;
@@ -55,16 +56,7 @@ export function EventInfoTab({
     return `${minutes}m`;
   };
 
-  const getPaymentBadgeInfo = (): { text: string; variant: 'green' | 'warning' | 'error' } => {
-    switch (event.myPaymentStatus) {
-      case 'Verified':
-        return { text: 'Paid', variant: 'green' };
-      case 'MarkedPaid':
-        return { text: 'Awaiting Verification', variant: 'warning' };
-      default:
-        return { text: 'Unpaid', variant: 'error' };
-    }
-  };
+  const paymentBadge = getPaymentBadgeInfo(event.myPaymentStatus);
 
   return (
     <ScrollView
@@ -135,7 +127,7 @@ export function EventInfoTab({
             )}
             {/* Payment status badge for registered/waitlisted users on paid events */}
             {(event.isRegistered || event.amIWaitlisted) && event.cost > 0 && (
-              <Badge variant={getPaymentBadgeInfo().variant}>{getPaymentBadgeInfo().text}</Badge>
+              <Badge variant={paymentBadge.variant}>{paymentBadge.text}</Badge>
             )}
             {event.visibility === 'InviteOnly' && <Badge variant="warning">Invite Only</Badge>}
           </View>
@@ -234,7 +226,7 @@ export function EventInfoTab({
               <View style={styles.paymentRow}>
                 <View style={styles.paymentAmount}>
                   <Text style={styles.amountValue}>${event.cost.toFixed(2)}</Text>
-                  <Badge variant={getPaymentBadgeInfo().variant}>{getPaymentBadgeInfo().text}</Badge>
+                  <Badge variant={paymentBadge.variant}>{paymentBadge.text}</Badge>
                 </View>
 
                 {event.myTeamAssignment && event.isRosterPublished && (
