@@ -332,8 +332,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
                 await reloadRegistrations(); // Revert on failure
               }
             } catch (error: any) {
-              const message = error?.response?.data?.message || 'Failed to move player to roster';
-              Alert.alert('Error', message);
+              Alert.alert('Error', error?.message || 'Failed to move player to roster');
               await reloadRegistrations(); // Revert on error
             }
           },
@@ -389,7 +388,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
                 await reloadRegistrations(); // Revert on failure
               }
             } catch (error: any) {
-              const message = error?.response?.data?.message || 'Failed to move player to waitlist';
+              const message = error?.message || 'Failed to move player to waitlist';
               Alert.alert('Error', message);
               await reloadRegistrations(); // Revert on error
             }

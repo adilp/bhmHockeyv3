@@ -281,7 +281,7 @@ export function EventForm({
     }
     const maxPlayersNum = parseInt(maxPlayers, 10);
     if (isNaN(maxPlayersNum) || maxPlayersNum < 2 || maxPlayersNum > 100) {
-      Alert.alert('Error', 'Max players must be between 2 and 100');
+      Alert.alert('Error', 'Max skaters must be between 2 and 100');
       return false;
     }
     // Cost is required
@@ -473,7 +473,7 @@ export function EventForm({
         {/* Max Players & Cost */}
         <View style={styles.row}>
           <View style={[styles.field, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>Max Players *</Text>
+            <Text style={styles.label}>Max Skaters *</Text>
             <TextInput
               ref={maxPlayersRef}
               style={styles.input}
@@ -486,6 +486,7 @@ export function EventForm({
               onSubmitEditing={() => costRef.current?.focus()}
               inputAccessoryViewID={inputAccessoryViewID}
             />
+            <Text style={styles.skillNote} allowFontScaling={false}>Goalies don't count against this limit</Text>
           </View>
           <View style={[styles.field, { flex: 1, marginLeft: 8 }]}>
             <Text style={styles.label}>Cost ($) *</Text>

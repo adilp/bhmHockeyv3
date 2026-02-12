@@ -374,8 +374,9 @@ public class EventService : IEventService
             throw new InvalidOperationException("Already registered for this event");
         }
 
-        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
-        bool isFull = registeredCount >= evt.MaxPlayers;
+        // Goalies don't count against MaxPlayers - only skaters do
+        var skaterCount = evt.Registrations.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie");
+        bool isFull = registeredPosition == "Goalie" ? false : skaterCount >= evt.MaxPlayers;
         bool isPaidEvent = evt.Cost > 0;
 
         // Paid events: ALWAYS waitlist first (organizer verifies payment before adding to roster)
@@ -952,11 +953,12 @@ public class EventService : IEventService
 
                 try
                 {
-                    // Check roster capacity
-                    var registeredCount = await _context.EventRegistrations
-                        .CountAsync(r => r.EventId == eventId && r.Status == "Registered");
+                    // Check roster capacity (goalies don't count against MaxPlayers)
+                    var isGoalie = registration.RegisteredPosition == "Goalie";
+                    var skaterCount = await _context.EventRegistrations
+                        .CountAsync(r => r.EventId == eventId && r.Status == "Registered" && r.RegisteredPosition != "Goalie");
 
-                    if (registeredCount < evt.MaxPlayers)
+                    if (isGoalie || skaterCount < evt.MaxPlayers)
                     {
                         // Capacity available - promote user
                         registration.Status = "Registered";
@@ -1211,10 +1213,14 @@ public class EventService : IEventService
         if (registration.Status != "Waitlisted")
             return new MoveResultDto(false, "Player is not on the waitlist", null);
 
-        // Check roster capacity
-        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
-        if (registeredCount >= evt.MaxPlayers)
-            return new MoveResultDto(false, "Roster is full", null);
+        // Check roster capacity (goalies don't count against MaxPlayers)
+        var isGoalie = registration.RegisteredPosition == "Goalie";
+        if (!isGoalie)
+        {
+            var skaterCount = evt.Registrations.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie");
+            if (skaterCount >= evt.MaxPlayers)
+                return new MoveResultDto(false, "Roster is full", null);
+        }
 
         // Perform the move
         registration.Status = "Registered";
@@ -1616,11 +1622,12 @@ public class EventService : IEventService
             throw new InvalidOperationException("User is already registered for this event");
         }
 
-        // Determine position and check roster capacity
+        // Determine position and check roster capacity (goalies don't count against MaxPlayers)
         var registeredPosition = NormalizePosition(position);
         var isPaidEvent = evt.Cost > 0;
-        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
-        var hasRosterSpace = registeredCount < evt.MaxPlayers;
+        var isGoalie = registeredPosition == "Goalie";
+        var skaterCount = evt.Registrations.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie");
+        var hasRosterSpace = isGoalie || skaterCount < evt.MaxPlayers;
 
         // Get or create registration
         EventRegistration registration;
@@ -1786,9 +1793,10 @@ public class EventService : IEventService
         _context.Users.Add(ghostUser);
         await _context.SaveChangesAsync();
 
-        // Check roster capacity and create registration
-        var registeredCount = evt.Registrations.Count(r => r.Status == "Registered");
-        var hasRosterSpace = registeredCount < evt.MaxPlayers;
+        // Check roster capacity and create registration (goalies don't count against MaxPlayers)
+        var isGoalie = registeredPosition == "Goalie";
+        var skaterCount = evt.Registrations.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie");
+        var hasRosterSpace = isGoalie || skaterCount < evt.MaxPlayers;
         var isPaidEvent = evt.Cost > 0;
 
         // Create registration - ghost players are auto-verified for payment
