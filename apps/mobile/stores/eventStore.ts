@@ -138,14 +138,16 @@ export const useEventStore = create<EventState>((set, get) => ({
     const { events, selectedEvent, myRegistrations } = get();
     const targetEvent = events.find(e => e.id === eventId) || selectedEvent;
 
-    // Check if there's room for optimistic update
-    const hasRoom = targetEvent ? targetEvent.registeredCount < targetEvent.maxPlayers : false;
+    // Check if there's room for optimistic update (goalies always have room - they don't count against maxPlayers)
+    const isGoalie = position === 'Goalie';
+    const hasRoom = targetEvent ? (isGoalie || targetEvent.registeredCount < targetEvent.maxPlayers) : false;
 
     // Helper to update event for registered status
+    // registeredCount only tracks skaters, so only increment for non-goalies
     const updateEventAsRegistered = (event: EventDto): EventDto => ({
       ...event,
       isRegistered: true,
-      registeredCount: event.registeredCount + 1,
+      registeredCount: isGoalie ? event.registeredCount : event.registeredCount + 1,
       myPaymentStatus: event.cost > 0 ? 'Pending' : undefined,
       amIWaitlisted: false,
       myWaitlistPosition: undefined,

@@ -744,8 +744,9 @@ public class EventService : IEventService
 
     private async Task<EventDto> MapToDto(Event evt, Guid? currentUserId)
     {
-        var registeredCount = evt.Registrations?.Count(r => r.Status == "Registered") ??
-            await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id && r.Status == "Registered");
+        // Count only skaters for capacity display (goalies don't count against MaxPlayers)
+        var registeredCount = evt.Registrations?.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie") ??
+            await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id && r.Status == "Registered" && r.RegisteredPosition != "Goalie");
 
         var isRegistered = currentUserId.HasValue &&
             (evt.Registrations?.Any(r => r.UserId == currentUserId.Value && r.Status == "Registered") ??

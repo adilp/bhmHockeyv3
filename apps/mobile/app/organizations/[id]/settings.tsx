@@ -320,9 +320,9 @@ export default function OrganizationSettingsScreen() {
             />
           </View>
 
-          {/* Max Players */}
+          {/* Max Skaters */}
           <View style={styles.field}>
-            <Text style={styles.label}>Max Players</Text>
+            <Text style={styles.label}>Max Skaters</Text>
             <TextInput
               style={styles.input}
               value={defaultMaxPlayers}
