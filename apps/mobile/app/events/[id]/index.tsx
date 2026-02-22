@@ -233,7 +233,8 @@ export default function EventDetailScreen() {
     await openVenmoPayment(
       selectedEvent.creatorVenmoHandle,
       selectedEvent.cost,
-      selectedEvent.name || 'Hockey'
+      selectedEvent.name || '',
+      selectedEvent.eventDate
     );
   };
 

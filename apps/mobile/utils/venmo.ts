@@ -43,9 +43,16 @@ export function buildVenmoWebUrl(venmoHandle: string): string {
 export async function openVenmoPayment(
   venmoHandle: string,
   amount: number,
-  eventName: string
+  eventName: string,
+  eventDate?: string
 ): Promise<boolean> {
-  const note = `BHM Hockey: ${eventName}`;
+  const formattedDate = eventDate
+    ? new Date(eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '';
+  const detail = eventName
+    ? `${eventName}${formattedDate ? ` (${formattedDate})` : ''}`
+    : formattedDate || 'Hockey';
+  const note = `BHM Hockey: ${detail}`;
   const venmoUrl = buildVenmoPaymentUrl(venmoHandle, amount, note);
   const webUrl = buildVenmoWebUrl(venmoHandle);
 
