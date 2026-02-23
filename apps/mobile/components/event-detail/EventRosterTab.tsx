@@ -7,6 +7,8 @@ import {
   Alert,
   TouchableOpacity,
   Text,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { eventService } from '@bhmhockey/api-client';
 import type {
@@ -25,6 +27,8 @@ import { PlayerDetailModal } from '../PlayerDetailModal';
 import { DraftModeRoster } from './DraftModeRoster';
 import { AddPlayerModal } from './AddPlayerModal';
 import { colors, spacing, radius } from '../../theme';
+import { RosterShareCard } from '../roster/RosterShareCard';
+import { captureRosterCard, shareRosterImage, copyRosterToClipboard } from '../../utils/rosterShare';
 
 /** Extract message from ApiError objects or Error instances */
 function getApiErrorMessage(error: unknown, fallback: string): string {
@@ -49,6 +53,9 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const [isAddPlayerModalVisible, setIsAddPlayerModalVisible] = useState(false);
   const isUpdatingRoster = useRef(false);
   const hasLoadedOnce = useRef(false);
+  const [isShareModalVisible, setIsShareModalVisible] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const shareCardRef = useRef<View>(null);
   const { updatePaymentStatus, updateTeamAssignment, removeRegistration, publishRoster } = useEventStore();
 
   // Filter into registered and waitlisted
@@ -455,8 +462,8 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   };
 
   // Slot position label change handler (optimistic + debounced API call)
-  const slotLabelTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const preChangeLabelsRef = useRef<Record<number, string> | undefined>();
+  const slotLabelTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const preChangeLabelsRef = useRef<Record<number, string> | undefined>(undefined);
 
   const handleSlotLabelChange = useCallback((slotIndex: number, newLabel: string | null) => {
     // Capture the original labels before the first tap in a rapid sequence (for rollback)
@@ -486,6 +493,34 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
       }
     }, 500);
   }, [eventId, event]);
+
+  // Share roster handlers
+  const handleShare = async () => {
+    setIsCapturing(true);
+    try {
+      const uri = await captureRosterCard(shareCardRef);
+      await shareRosterImage(uri);
+      setIsShareModalVisible(false);
+    } catch (error) {
+      Alert.alert('Error', getApiErrorMessage(error, 'Failed to share roster image.'));
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handleCopyToClipboard = async () => {
+    setIsCapturing(true);
+    try {
+      const uri = await captureRosterCard(shareCardRef);
+      await copyRosterToClipboard(uri);
+      setIsShareModalVisible(false);
+      Alert.alert('Copied', 'Roster image copied to clipboard.');
+    } catch (error) {
+      Alert.alert('Error', getApiErrorMessage(error, 'Failed to copy roster image.'));
+    } finally {
+      setIsCapturing(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -532,6 +567,18 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
                     Publish Roster
                   </Text>
                 )}
+              </TouchableOpacity>
+            )}
+
+            {/* Share Roster button (only on published rosters) */}
+            {event.isRosterPublished && (
+              <TouchableOpacity
+                style={styles.shareButton}
+                onPress={() => setIsShareModalVisible(true)}
+              >
+                <Text style={styles.shareButtonText} allowFontScaling={false}>
+                  Share Roster
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -597,6 +644,69 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         onClose={() => setIsAddPlayerModalVisible(false)}
         onPlayerAdded={handlePlayerAdded}
       />
+
+      {/* Off-screen card for capture */}
+      {/* Off-screen card for image capture (distinct from the preview card in the modal) */}
+      <View style={styles.offScreenWrapper} pointerEvents="none" collapsable={false}>
+        <RosterShareCard ref={shareCardRef} event={event} registrations={registrations} />
+      </View>
+
+      {/* Share Preview Modal */}
+      <Modal
+        visible={isShareModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isCapturing && setIsShareModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => !isCapturing && setIsShareModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle} allowFontScaling={false}>Share Roster</Text>
+                <ScrollView
+                  style={styles.modalPreviewScroll}
+                  contentContainerStyle={styles.modalPreviewContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* Preview only — the off-screen card with shareCardRef is used for actual capture */}
+                  <RosterShareCard event={event} registrations={registrations} />
+                </ScrollView>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalShareButton, isCapturing && styles.publishButtonDisabled]}
+                    onPress={handleShare}
+                    disabled={isCapturing}
+                  >
+                    {isCapturing ? (
+                      <ActivityIndicator size="small" color={colors.text.primary} />
+                    ) : (
+                      <Text style={styles.modalShareButtonText} allowFontScaling={false}>Share</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalCopyButton, isCapturing && styles.publishButtonDisabled]}
+                    onPress={handleCopyToClipboard}
+                    disabled={isCapturing}
+                  >
+                    {isCapturing ? (
+                      <ActivityIndicator size="small" color={colors.primary.teal} />
+                    ) : (
+                      <Text style={styles.modalCopyButtonText} allowFontScaling={false}>Copy to Clipboard</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.modalCancelButton}
+                    onPress={() => setIsShareModalVisible(false)}
+                    disabled={isCapturing}
+                  >
+                    <Text style={styles.modalCancelButtonText} allowFontScaling={false}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -665,5 +775,90 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border.default,
+  },
+  offScreenWrapper: {
+    position: 'absolute',
+    top: -9999,
+    left: -9999,
+  },
+  shareButton: {
+    flex: 1,
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 1,
+    borderColor: colors.primary.teal,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+  },
+  shareButtonText: {
+    color: colors.primary.teal,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    maxHeight: '85%',
+    width: '92%',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
+  modalPreviewScroll: {
+    width: '100%',
+    maxHeight: 500,
+  },
+  modalPreviewContent: {
+    alignItems: 'center',
+    paddingBottom: spacing.sm,
+  },
+  modalActions: {
+    width: '100%',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  modalShareButton: {
+    backgroundColor: colors.primary.teal,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+  },
+  modalShareButtonText: {
+    color: colors.bg.darkest,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalCopyButton: {
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 1,
+    borderColor: colors.primary.teal,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+  },
+  modalCopyButtonText: {
+    color: colors.primary.teal,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalCancelButton: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  modalCancelButtonText: {
+    color: colors.text.muted,
+    fontSize: 14,
   },
 });
