@@ -71,9 +71,11 @@ Mobile Component
 - Production: `https://bhmhockey-mb3md.ondigitalocean.app/api`
 
 ### Version Sync (Mobile)
-Update TWO places when bumping versions:
-1. `apps/mobile/app.json` - version, buildNumber, versionCode
-2. `apps/mobile/ios/BHMHockey/Info.plist` - CFBundleShortVersionString, CFBundleVersion
+EAS auto-increments `buildNumber` (iOS) and `versionCode` (Android) on production builds via `eas.json`. Do NOT manually bump those.
+
+Only manually bump `version` (e.g., `1.0.4` → `1.0.5`) in TWO places when the user-visible version changes:
+1. `apps/mobile/app.json` - `version`
+2. `apps/mobile/ios/BHMHockey/Info.plist` - `CFBundleShortVersionString`
 
 ### Environment Variables
 - `.env` at root - database password, JWT secret (gitignored)

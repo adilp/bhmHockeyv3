@@ -14,6 +14,7 @@ const iconMap: Record<string, ReturnType<typeof require>> = {
   android_launch: require('../../assets/badges/android_launch.png'),
   trophy_gold: require('../../assets/badges/trophy_gold_24.png'),
   star_teal: require('../../assets/badges/star_teal_24.png'),
+  amp: require('../../assets/badges/amp.png'),
 };
 
 /**

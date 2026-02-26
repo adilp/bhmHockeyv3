@@ -249,7 +249,7 @@ function RootLayoutContent() {
         <Stack.Screen name="tournaments/[id]/manage/admins" options={{ title: 'Admins' }} />
         <Stack.Screen name="tournaments/[id]/manage/standings" options={{ title: 'Manage Standings' }} />
         <Stack.Screen name="tournaments/[id]/manage/audit" options={{ title: 'Audit Log' }} />
-        <Stack.Screen name="admin/index" options={{ title: 'Admin Panel' }} />
+        <Stack.Screen name="admin" options={{ title: 'Admin Panel' }} />
       </Stack>
     </View>
   );
