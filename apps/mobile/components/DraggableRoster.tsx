@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Dimensions,
   Pressable,
+  LayoutChangeEvent,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -21,6 +22,8 @@ import { getPaymentBadgeInfo } from '../utils/payment';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const ROW_HEIGHT = 94; // 88px cell + 6px gap
+const ROSTER_GAP = 2; // gap between rows in roster container
+const ROW_PITCH = ROW_HEIGHT + ROSTER_GAP; // effective row spacing
 const SLOT_BADGE_WIDTH = 32;
 const CONTAINER_PADDING = spacing.md; // 16px on each side = 32 total
 const CELL_MARGIN = spacing.xs; // margin between cells and badge
@@ -40,6 +43,8 @@ interface DraggableRosterProps {
   onSlotLabelChange?: (slotIndex: number, newLabel: string | null) => void;
   /** When true, shows payment status indicators for unpaid players instead of badges */
   canManage?: boolean;
+  /** Notifies parent when drag starts/ends (used to disable scroll during drag) */
+  onDragStateChange?: (isDragging: boolean) => void;
 }
 
 type SlotType = 'goalie' | 'skater';
@@ -267,8 +272,8 @@ export function DraggableRoster({
   slotPositionLabels,
   onSlotLabelChange,
   canManage = false,
+  onDragStateChange,
 }: DraggableRosterProps) {
-  const rosterRef = useRef<View>(null);
   const [rosterTopOffset, setRosterTopOffset] = useState(0);
 
   // Drag state
@@ -280,10 +285,9 @@ export function DraggableRoster({
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
-  const handleRosterLayout = useCallback(() => {
-    rosterRef.current?.measureInWindow((x, y) => {
-      setRosterTopOffset(y);
-    });
+  // Capture roster offset within the container (stable across scrolling, unlike measureInWindow)
+  const handleRosterLayout = useCallback((e: LayoutChangeEvent) => {
+    setRosterTopOffset(e.nativeEvent.layout.y);
   }, []);
 
   // Ref tracks latest labels so rapid taps always cycle correctly (no stale props between renders)
@@ -345,9 +349,10 @@ export function DraggableRoster({
   }, [registrations]);
 
   // Handlers called from worklet via runOnJS
-  const handleDragMove = useCallback((absY: number, absX: number) => {
-    const relativeY = absY - rosterTopOffset;
-    const rowIndex = Math.floor(relativeY / ROW_HEIGHT);
+  // y is relative to the GestureDetector view (container); subtract rosterTopOffset to get roster-relative
+  const handleDragMove = useCallback((y: number, absX: number) => {
+    const relativeY = y - rosterTopOffset;
+    const rowIndex = Math.floor(relativeY / ROW_PITCH);
     const targetSlotIndex = Math.max(0, Math.min(rowIndex, slots.length - 1));
     const screenCenter = SCREEN_WIDTH / 2;
     const targetTeam: TeamAssignment = absX < screenCenter ? 'Black' : 'White';
@@ -356,11 +361,11 @@ export function DraggableRoster({
     setHoverTeam(targetTeam);
   }, [slots.length, rosterTopOffset]);
 
-  const handleDragEnd = useCallback((absY: number, absX: number) => {
+  const handleDragEnd = useCallback((y: number, absX: number) => {
     if (!dragInfo) return;
 
-    const relativeY = absY - rosterTopOffset;
-    const rowIndex = Math.floor(relativeY / ROW_HEIGHT);
+    const relativeY = y - rosterTopOffset;
+    const rowIndex = Math.floor(relativeY / ROW_PITCH);
     const targetSlotIndex = Math.max(0, Math.min(rowIndex, slots.length - 1));
     const screenCenter = SCREEN_WIDTH / 2;
     const targetTeam: TeamAssignment = absX < screenCenter ? 'Black' : 'White';
@@ -377,6 +382,7 @@ export function DraggableRoster({
       setHoverTeam(null);
       translateX.value = 0;
       translateY.value = 0;
+      onDragStateChange?.(false);
       return;
     }
     if (!isGoalie && targetSlotIndex === 0) {
@@ -386,6 +392,7 @@ export function DraggableRoster({
       setHoverTeam(null);
       translateX.value = 0;
       translateY.value = 0;
+      onDragStateChange?.(false);
       return;
     }
 
@@ -460,10 +467,11 @@ export function DraggableRoster({
     setHoverTeam(null);
     translateX.value = 0;
     translateY.value = 0;
+    onDragStateChange?.(false);
 
     // Update roster (only if callback provided)
     onRosterChange?.(items);
-  }, [dragInfo, slots.length, rosterTopOffset, registrations, onRosterChange, translateX, translateY]);
+  }, [dragInfo, slots.length, rosterTopOffset, registrations, onRosterChange, translateX, translateY, onDragStateChange]);
 
   const handleDragCancel = useCallback(() => {
     setDragInfo(null);
@@ -471,7 +479,8 @@ export function DraggableRoster({
     setHoverTeam(null);
     translateX.value = 0;
     translateY.value = 0;
-  }, [translateX, translateY]);
+    onDragStateChange?.(false);
+  }, [translateX, translateY, onDragStateChange]);
 
   // Shared value to track if drag is active (for worklet access)
   const isDragging = useSharedValue(false);
@@ -497,11 +506,11 @@ export function DraggableRoster({
       'worklet';
       translateX.value = event.translationX;
       translateY.value = event.translationY;
-      runOnJS(handleDragMove)(event.absoluteY, event.absoluteX);
+      runOnJS(handleDragMove)(event.y, event.absoluteX);
     })
     .onEnd((event) => {
       'worklet';
-      runOnJS(handleDragEnd)(event.absoluteY, event.absoluteX);
+      runOnJS(handleDragEnd)(event.y, event.absoluteX);
     })
     .onFinalize(() => {
       'worklet';
@@ -512,14 +521,15 @@ export function DraggableRoster({
 
   // Function to start drag from a player cell
   const startDrag = useCallback((registration: EventRegistrationDto, side: 'left' | 'right', slotIndex: number) => {
-    const startY = slotIndex * ROW_HEIGHT;
+    const startY = slotIndex * ROW_PITCH;
     setDragInfo({
       registration,
       side,
       sourceSlotIndex: slotIndex,
       startY,
     });
-  }, []);
+    onDragStateChange?.(true);
+  }, [onDragStateChange]);
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -537,7 +547,7 @@ export function DraggableRoster({
         </View>
 
         {/* Matchup Rows */}
-        <View ref={rosterRef} style={styles.roster} onLayout={handleRosterLayout}>
+        <View style={styles.roster} onLayout={handleRosterLayout}>
           {slots.map((slot) => {
             // Check if this row is a valid drop target for the dragged player type
             const isValidDropTarget = dragInfo &&

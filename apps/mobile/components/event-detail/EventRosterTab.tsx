@@ -55,6 +55,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const hasLoadedOnce = useRef(false);
   const [isShareModalVisible, setIsShareModalVisible] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
   const shareCardRef = useRef<View>(null);
   const { updatePaymentStatus, updateTeamAssignment, removeRegistration, publishRoster } = useEventStore();
 
@@ -539,7 +540,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} scrollEnabled={!isDragActive}>
         {/* Organizer action buttons */}
         {canManage && (
           <View style={styles.organizerActions}>
@@ -601,6 +602,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
               slotPositionLabels={event.slotPositionLabels}
               onSlotLabelChange={canManage ? handleSlotLabelChange : undefined}
               canManage={canManage}
+              onDragStateChange={setIsDragActive}
             />
           )}
         </View>
