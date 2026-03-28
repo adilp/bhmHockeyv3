@@ -903,6 +903,72 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateAsync_ChangingEventDate_ResetsNotFullReminderSentAt()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id, name: "Test Event");
+        evt.NotFullReminderSentAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        var newDate = DateTime.UtcNow.AddDays(7);
+        var request = new UpdateEventRequest(
+            Name: null,
+            Description: null,
+            EventDate: newDate,
+            Duration: null,
+            Venue: null,
+            MaxPlayers: null,
+            Cost: null,
+            RegistrationDeadline: null,
+            Status: null,
+            Visibility: null,
+            SkillLevels: null,
+            SlotPositionLabels: null
+        );
+
+        // Act
+        await _sut.UpdateAsync(evt.Id, request, creator.Id);
+
+        // Assert
+        var updated = await _context.Events.FindAsync(evt.Id);
+        updated!.NotFullReminderSentAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ChangingVenue_DoesNotResetNotFullReminderSentAt()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id, name: "Test Event");
+        var sentAt = DateTime.UtcNow;
+        evt.NotFullReminderSentAt = sentAt;
+        await _context.SaveChangesAsync();
+
+        var request = new UpdateEventRequest(
+            Name: null,
+            Description: null,
+            EventDate: null,
+            Duration: null,
+            Venue: "New Rink",
+            MaxPlayers: null,
+            Cost: null,
+            RegistrationDeadline: null,
+            Status: null,
+            Visibility: null,
+            SkillLevels: null,
+            SlotPositionLabels: null
+        );
+
+        // Act
+        await _sut.UpdateAsync(evt.Id, request, creator.Id);
+
+        // Assert
+        var updated = await _context.Events.FindAsync(evt.Id);
+        updated!.NotFullReminderSentAt.Should().Be(sentAt);
+    }
+
+    [Fact]
     public async Task DeleteAsync_AsCreator_SoftDeletesEvent()
     {
         // Arrange

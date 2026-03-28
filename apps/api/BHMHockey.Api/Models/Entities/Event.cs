@@ -45,6 +45,7 @@ public class Event
     public DateTime? OrganizerPublishReminder24hSentAt { get; set; }
     public DateTime? OrganizerPublishReminder8hSentAt { get; set; }
     public DateTime? OrganizerPublishReminder5hSentAt { get; set; }
+    public DateTime? NotFullReminderSentAt { get; set; }
 
     // Slot position labels - maps slot index to position label (e.g., {1: "C", 2: "LW"})
     public Dictionary<int, string>? SlotPositionLabels { get; set; }

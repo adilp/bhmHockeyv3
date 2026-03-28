@@ -143,12 +143,14 @@ builder.Services.AddScoped<ITournamentAuditService, TournamentAuditService>();
 builder.Services.AddScoped<ITournamentAnnouncementService, TournamentAnnouncementService>();
 builder.Services.AddScoped<IStandingsService, StandingsService>();
 builder.Services.AddScoped<IRosterPublishService, RosterPublishService>();
+builder.Services.AddScoped<INotFullGameReminderService, NotFullGameReminderService>();
 
 // Background Services
 builder.Services.AddHostedService<WaitlistBackgroundService>();
 builder.Services.AddHostedService<EventReminderBackgroundService>();
 builder.Services.AddHostedService<NotificationCleanupBackgroundService>();
 builder.Services.AddHostedService<RosterPublishBackgroundService>();
+builder.Services.AddHostedService<NotFullGameReminderBackgroundService>();
 
 // Health Checks
 builder.Services.AddHealthChecks()

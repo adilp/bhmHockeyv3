@@ -282,7 +282,14 @@ public class EventService : IEventService
 
         if (request.Name != null) evt.Name = request.Name;
         if (request.Description != null) evt.Description = request.Description;
-        if (request.EventDate.HasValue) evt.EventDate = request.EventDate.Value;
+        if (request.EventDate.HasValue)
+        {
+            if (evt.EventDate != request.EventDate.Value)
+            {
+                evt.NotFullReminderSentAt = null; // Reset so reminder fires for new date
+            }
+            evt.EventDate = request.EventDate.Value;
+        }
         if (request.Duration.HasValue) evt.Duration = request.Duration.Value;
         if (request.Venue != null) evt.Venue = request.Venue;
         if (request.MaxPlayers.HasValue) evt.MaxPlayers = request.MaxPlayers.Value;

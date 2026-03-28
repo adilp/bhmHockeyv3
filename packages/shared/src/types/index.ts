@@ -384,7 +384,8 @@ export type NotificationType =
   | 'waitlist_promotion'
   | 'payment_reminder'
   | 'game_reminder'
-  | 'organizer_payment_reminder';
+  | 'organizer_payment_reminder'
+  | 'not_full_reminder';
 
 export interface Notification {
   id: string;
