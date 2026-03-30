@@ -18,6 +18,7 @@ import type { EventRegistrationDto, TeamAssignment, RosterOrderItem, SkillLevel 
 import { colors, spacing, radius } from '../theme';
 import { BadgeIconsRow } from './badges';
 import { Badge } from './Badge';
+import { buildRosterSlots, buildRosterOrderItems, type RosterSlot } from './DraggableRoster.utils';
 import { getPaymentBadgeInfo } from '../utils/payment';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -47,14 +48,6 @@ interface DraggableRosterProps {
   onDragStateChange?: (isDragging: boolean) => void;
 }
 
-type SlotType = 'goalie' | 'skater';
-
-interface RosterSlot {
-  type: SlotType;
-  index: number;
-  blackPlayer: EventRegistrationDto | null;
-  whitePlayer: EventRegistrationDto | null;
-}
 
 interface DragInfo {
   registration: EventRegistrationDto;
@@ -315,38 +308,8 @@ export function DraggableRoster({
   }, [onSlotLabelChange]);
 
   // Build slots (memoized for performance)
-  const slots = useMemo(() => {
-    const blackGoalies = registrations
-      .filter(r => r.teamAssignment === 'Black' && r.registeredPosition === 'Goalie')
-      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-    const whiteGoalies = registrations
-      .filter(r => r.teamAssignment === 'White' && r.registeredPosition === 'Goalie')
-      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-    const blackSkaters = registrations
-      .filter(r => r.teamAssignment === 'Black' && r.registeredPosition !== 'Goalie')
-      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-    const whiteSkaters = registrations
-      .filter(r => r.teamAssignment === 'White' && r.registeredPosition !== 'Goalie')
-      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-
-    const result: RosterSlot[] = [];
-    result.push({
-      type: 'goalie',
-      index: 0,
-      blackPlayer: blackGoalies[0] || null,
-      whitePlayer: whiteGoalies[0] || null,
-    });
-    const maxSkaters = Math.max(blackSkaters.length, whiteSkaters.length, 1);
-    for (let i = 0; i < maxSkaters; i++) {
-      result.push({
-        type: 'skater',
-        index: i + 1,
-        blackPlayer: blackSkaters[i] || null,
-        whitePlayer: whiteSkaters[i] || null,
-      });
-    }
-    return result;
-  }, [registrations]);
+  const slots = useMemo(() => buildRosterSlots(registrations), [registrations]);
+  const goalieRowCount = useMemo(() => slots.filter(s => s.type === 'goalie').length, [slots]);
 
   // Handlers called from worklet via runOnJS
   // y is relative to the GestureDetector view (container); subtract rosterTopOffset to get roster-relative
@@ -370,96 +333,7 @@ export function DraggableRoster({
     const screenCenter = SCREEN_WIDTH / 2;
     const targetTeam: TeamAssignment = absX < screenCenter ? 'Black' : 'White';
 
-    const reg = dragInfo.registration;
-    const isGoalie = reg.registeredPosition === 'Goalie';
-    const currentTeam = reg.teamAssignment as TeamAssignment;
-
-    // Validate drop target
-    if (isGoalie && targetSlotIndex !== 0) {
-      // Invalid drop for goalie
-      setDragInfo(null);
-      setHoverSlotIndex(-1);
-      setHoverTeam(null);
-      translateX.value = 0;
-      translateY.value = 0;
-      onDragStateChange?.(false);
-      return;
-    }
-    if (!isGoalie && targetSlotIndex === 0) {
-      // Invalid drop for skater
-      setDragInfo(null);
-      setHoverSlotIndex(-1);
-      setHoverTeam(null);
-      translateX.value = 0;
-      translateY.value = 0;
-      onDragStateChange?.(false);
-      return;
-    }
-
-    // Build fresh arrays
-    const allBlackGoalies = registrations
-      .filter(r => r.teamAssignment === 'Black' && r.registeredPosition === 'Goalie')
-      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-    const allWhiteGoalies = registrations
-      .filter(r => r.teamAssignment === 'White' && r.registeredPosition === 'Goalie')
-      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-    const allBlackSkaters = registrations
-      .filter(r => r.teamAssignment === 'Black' && r.registeredPosition !== 'Goalie')
-      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-    const allWhiteSkaters = registrations
-      .filter(r => r.teamAssignment === 'White' && r.registeredPosition !== 'Goalie')
-      .sort((a, b) => (a.rosterOrder ?? 999) - (b.rosterOrder ?? 999));
-
-    // Remove from current position
-    if (isGoalie) {
-      if (currentTeam === 'Black') {
-        const idx = allBlackGoalies.findIndex(r => r.id === reg.id);
-        if (idx >= 0) allBlackGoalies.splice(idx, 1);
-      } else {
-        const idx = allWhiteGoalies.findIndex(r => r.id === reg.id);
-        if (idx >= 0) allWhiteGoalies.splice(idx, 1);
-      }
-    } else {
-      if (currentTeam === 'Black') {
-        const idx = allBlackSkaters.findIndex(r => r.id === reg.id);
-        if (idx >= 0) allBlackSkaters.splice(idx, 1);
-      } else {
-        const idx = allWhiteSkaters.findIndex(r => r.id === reg.id);
-        if (idx >= 0) allWhiteSkaters.splice(idx, 1);
-      }
-    }
-
-    // Add to new position
-    if (isGoalie) {
-      if (targetTeam === 'Black') {
-        allBlackGoalies.unshift(reg);
-      } else {
-        allWhiteGoalies.unshift(reg);
-      }
-    } else {
-      const insertIndex = targetSlotIndex - 1;
-      if (targetTeam === 'Black') {
-        allBlackSkaters.splice(Math.min(insertIndex, allBlackSkaters.length), 0, reg);
-      } else {
-        allWhiteSkaters.splice(Math.min(insertIndex, allWhiteSkaters.length), 0, reg);
-      }
-    }
-
-    // Build roster order items
-    const items: RosterOrderItem[] = [];
-    allBlackGoalies.forEach((r, i) => {
-      items.push({ registrationId: r.id, teamAssignment: 'Black', rosterOrder: i });
-    });
-    allWhiteGoalies.forEach((r, i) => {
-      items.push({ registrationId: r.id, teamAssignment: 'White', rosterOrder: i });
-    });
-    const goalieOffset = Math.max(allBlackGoalies.length, allWhiteGoalies.length, 1);
-    allBlackSkaters.forEach((r, i) => {
-      items.push({ registrationId: r.id, teamAssignment: 'Black', rosterOrder: goalieOffset + i });
-    });
-    allWhiteSkaters.forEach((r, i) => {
-      items.push({ registrationId: r.id, teamAssignment: 'White', rosterOrder: goalieOffset + i });
-    });
+    const items = buildRosterOrderItems(registrations, dragInfo.registration, targetTeam, targetSlotIndex);
 
     // Clear drag state
     setDragInfo(null);
@@ -469,8 +343,10 @@ export function DraggableRoster({
     translateY.value = 0;
     onDragStateChange?.(false);
 
-    // Update roster (only if callback provided)
-    onRosterChange?.(items);
+    // Update roster if valid drop
+    if (items) {
+      onRosterChange?.(items);
+    }
   }, [dragInfo, slots.length, rosterTopOffset, registrations, onRosterChange, translateX, translateY, onDragStateChange]);
 
   const handleDragCancel = useCallback(() => {
@@ -560,7 +436,7 @@ export function DraggableRoster({
 
             return (
               <View
-                key={slot.type === 'goalie' ? 'goalie' : `skater-${slot.index}`}
+                key={`${slot.type}-${slot.index}`}
                 style={styles.matchupRow}
               >
                 {/* Black Team (Left) */}
@@ -593,7 +469,8 @@ export function DraggableRoster({
                 {/* Center Slot Badge */}
                 {(() => {
                   const isGoalie = slot.type === 'goalie';
-                  const positionLabel = isGoalie ? 'G' : (slotPositionLabels?.[slot.index] || `${slot.index}`);
+                  const skaterNumber = slot.index - goalieRowCount + 1;
+                  const positionLabel = isGoalie ? 'G' : (slotPositionLabels?.[slot.index] || `${skaterNumber}`);
                   const hasCustomLabel = !isGoalie && slotPositionLabels?.[slot.index];
                   const isTappable = onSlotLabelChange && !isGoalie && !readOnly;
 
