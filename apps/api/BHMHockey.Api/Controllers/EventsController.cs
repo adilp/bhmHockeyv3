@@ -602,7 +602,7 @@ public class EventsController : ControllerBase
         try
         {
             var success = await _eventService.UpdateRosterOrderAsync(
-                eventId, request.Items, userId);
+                eventId, request.Items, userId, request.SlotPositionLabels);
 
             if (!success)
             {

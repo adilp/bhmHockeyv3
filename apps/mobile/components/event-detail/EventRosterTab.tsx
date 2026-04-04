@@ -15,7 +15,7 @@ import type {
   EventRegistrationDto,
   EventDto,
   TeamAssignment,
-  RosterOrderItem,
+  RosterOrderResult,
   WaitlistOrderItem,
 } from '@bhmhockey/shared';
 import { useEventStore } from '../../stores/eventStore';
@@ -412,19 +412,21 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   };
 
   // Roster order change handler
-  const handleRosterChange = async (items: RosterOrderItem[]) => {
+  const handleRosterChange = async (result: RosterOrderResult) => {
     if (isUpdatingRoster.current) return;
     isUpdatingRoster.current = true;
 
-    // Optimistic update
+    const { items, shiftedLabels } = result;
+
+    // Snapshot for rollback
+    const prevLabels = event.slotPositionLabels;
+
+    // Optimistic update: registrations
     setAllRegistrations((prev) => {
       const updateMap = new Map(
         items.map((item) => [
           item.registrationId,
-          {
-            teamAssignment: item.teamAssignment,
-            rosterOrder: item.rosterOrder,
-          },
+          item,
         ])
       );
 
@@ -435,16 +437,26 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
             ...reg,
             teamAssignment: update.teamAssignment,
             rosterOrder: update.rosterOrder,
+            ...(update.registeredPosition ? { registeredPosition: update.registeredPosition } : {}),
           };
         }
         return reg;
       });
     });
 
+    // Optimistic update: shifted labels
+    if (shiftedLabels) {
+      useEventStore.setState({ selectedEvent: { ...event, slotPositionLabels: shiftedLabels } });
+    }
+
     try {
-      await eventService.updateRosterOrder(eventId, items);
+      await eventService.updateRosterOrder(eventId, items, shiftedLabels);
     } catch (error) {
       Alert.alert('Error', getApiErrorMessage(error, 'Failed to save roster order. Please try again.'));
+      // Rollback labels if they were shifted
+      if (shiftedLabels) {
+        useEventStore.setState({ selectedEvent: { ...event, slotPositionLabels: prevLabels } });
+      }
       await reloadRegistrations();
     } finally {
       isUpdatingRoster.current = false;

@@ -196,10 +196,10 @@ export const eventService = {
    * Update roster order for all registrations (organizer only)
    * Allows reordering players and changing teams in a single batch update
    */
-  async updateRosterOrder(eventId: string, items: RosterOrderItem[]): Promise<void> {
+  async updateRosterOrder(eventId: string, items: RosterOrderItem[], slotPositionLabels?: Record<number, string>): Promise<void> {
     await apiClient.instance.put(
       `/events/${eventId}/roster-order`,
-      { items }
+      { items, ...(slotPositionLabels ? { slotPositionLabels } : {}) }
     );
   },
 

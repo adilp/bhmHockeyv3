@@ -108,11 +108,13 @@ public record UpdateTeamAssignmentRequest(
 public record RosterOrderItem(
     Guid RegistrationId,
     string TeamAssignment,       // "Black" or "White"
-    int RosterOrder              // Order within team (0 = first)
+    int RosterOrder,             // Order within team (0 = first)
+    string? RegisteredPosition = null  // "Goalie" or "Skater" when position changes
 );
 
 public record UpdateRosterOrderRequest(
-    List<RosterOrderItem> Items  // All registrations with their new order
+    List<RosterOrderItem> Items,  // All registrations with their new order
+    Dictionary<int, string>? SlotPositionLabels = null  // Shifted labels when maxGoalies changes
 );
 
 // Registration request DTO

@@ -6,6 +6,7 @@ import {
   Dimensions,
   Pressable,
   LayoutChangeEvent,
+  Alert,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -14,7 +15,7 @@ import Animated, {
   runOnJS,
   SharedValue,
 } from 'react-native-reanimated';
-import type { EventRegistrationDto, TeamAssignment, RosterOrderItem, SkillLevel } from '@bhmhockey/shared';
+import type { EventRegistrationDto, TeamAssignment, RosterOrderResult, SkillLevel } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../theme';
 import { BadgeIconsRow } from './badges';
 import { Badge } from './Badge';
@@ -35,7 +36,7 @@ const POSITION_CYCLE = ['LW', 'RW', 'C', 'LD', 'RD'] as const;
 interface DraggableRosterProps {
   registrations: EventRegistrationDto[];
   onPlayerPress: (registration: EventRegistrationDto) => void;
-  onRosterChange?: (items: RosterOrderItem[]) => void;
+  onRosterChange?: (result: RosterOrderResult) => void;
   /** When true, disables drag-and-drop reordering (view-only mode) */
   readOnly?: boolean;
   /** Slot position labels (maps slot index to position label like "C", "LW", etc.) */
@@ -333,9 +334,9 @@ export function DraggableRoster({
     const screenCenter = SCREEN_WIDTH / 2;
     const targetTeam: TeamAssignment = absX < screenCenter ? 'Black' : 'White';
 
-    const items = buildRosterOrderItems(registrations, dragInfo.registration, targetTeam, targetSlotIndex);
+    const result = buildRosterOrderItems(registrations, dragInfo.registration, targetTeam, targetSlotIndex, labelsRef.current);
 
-    // Clear drag state
+    // Clear drag state first (player snaps back visually)
     setDragInfo(null);
     setHoverSlotIndex(-1);
     setHoverTeam(null);
@@ -343,9 +344,21 @@ export function DraggableRoster({
     translateY.value = 0;
     onDragStateChange?.(false);
 
-    // Update roster if valid drop
-    if (items) {
-      onRosterChange?.(items);
+    if (!result) return;
+
+    if (result.positionChange) {
+      const { playerName, newPosition } = result.positionChange;
+      const posLabel = newPosition === 'Goalie' ? 'goalie' : 'skater';
+      Alert.alert(
+        `Move ${playerName} to ${posLabel}?`,
+        'This will change their position for this game.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Confirm', onPress: () => onRosterChange?.(result) },
+        ],
+      );
+    } else {
+      onRosterChange?.(result);
     }
   }, [dragInfo, slots.length, rosterTopOffset, registrations, onRosterChange, translateX, translateY, onDragStateChange]);
 
@@ -426,8 +439,12 @@ export function DraggableRoster({
         <View style={styles.roster} onLayout={handleRosterLayout}>
           {slots.map((slot) => {
             // Check if this row is a valid drop target for the dragged player type
-            const isValidDropTarget = dragInfo &&
-              (slot.type === 'goalie' ? dragInfo.registration.registeredPosition === 'Goalie' : dragInfo.registration.registeredPosition !== 'Goalie');
+            const isValidDropTarget = dragInfo && (
+              canManage ||
+              (slot.type === 'goalie'
+                ? dragInfo.registration.registeredPosition === 'Goalie'
+                : dragInfo.registration.registeredPosition !== 'Goalie')
+            );
             const isHoverRow = hoverSlotIndex === slot.index && isValidDropTarget;
 
             // Determine which specific SIDE is being hovered (not the whole row)

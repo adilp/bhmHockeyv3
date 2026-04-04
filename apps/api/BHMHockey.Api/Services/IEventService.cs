@@ -23,7 +23,7 @@ public interface IEventService
     Task<bool> UpdateTeamAssignmentAsync(Guid eventId, Guid registrationId, string teamAssignment, Guid organizerId);
 
     // Roster order methods
-    Task<bool> UpdateRosterOrderAsync(Guid eventId, List<RosterOrderItem> items, Guid organizerId);
+    Task<bool> UpdateRosterOrderAsync(Guid eventId, List<RosterOrderItem> items, Guid organizerId, Dictionary<int, string>? slotPositionLabels = null);
 
     // Organizer registration management
     Task<bool> RemoveRegistrationAsync(Guid eventId, Guid registrationId, Guid organizerId);

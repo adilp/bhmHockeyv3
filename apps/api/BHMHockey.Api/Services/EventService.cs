@@ -695,7 +695,7 @@ public class EventService : IEventService
     }
 
     // Update roster order for multiple registrations (batch update)
-    public async Task<bool> UpdateRosterOrderAsync(Guid eventId, List<RosterOrderItem> items, Guid organizerId)
+    public async Task<bool> UpdateRosterOrderAsync(Guid eventId, List<RosterOrderItem> items, Guid organizerId, Dictionary<int, string>? slotPositionLabels = null)
     {
         // Verify user can manage this event
         var canManage = await CanUserManageEventAsync(eventId, organizerId);
@@ -722,6 +722,26 @@ public class EventService : IEventService
                 }
                 registration.TeamAssignment = item.TeamAssignment;
                 registration.RosterOrder = item.RosterOrder;
+
+                // Update registered position if provided (cross-position drag)
+                if (item.RegisteredPosition != null)
+                {
+                    if (item.RegisteredPosition != "Goalie" && item.RegisteredPosition != "Skater")
+                    {
+                        throw new InvalidOperationException($"Invalid registered position: {item.RegisteredPosition}");
+                    }
+                    registration.RegisteredPosition = item.RegisteredPosition;
+                }
+            }
+        }
+
+        // Update slot position labels if provided (label shifting from cross-position moves)
+        if (slotPositionLabels != null)
+        {
+            var ev = await _context.Events.FindAsync(eventId);
+            if (ev != null)
+            {
+                ev.SlotPositionLabels = slotPositionLabels;
             }
         }
 

@@ -1,4 +1,4 @@
-import type { EventRegistrationDto, RosterOrderItem, TeamAssignment } from '@bhmhockey/shared';
+import type { EventRegistrationDto, RosterOrderItem, RosterOrderResult, TeamAssignment } from '@bhmhockey/shared';
 
 type SlotType = 'goalie' | 'skater';
 
@@ -61,21 +61,20 @@ export function buildRosterOrderItems(
   draggedReg: EventRegistrationDto,
   targetTeam: TeamAssignment,
   targetSlotIndex: number,
-): RosterOrderItem[] | null {
+  currentLabels?: Record<number, string>,
+): RosterOrderResult | null {
   const isGoalie = draggedReg.registeredPosition === 'Goalie';
   const currentTeam = draggedReg.teamAssignment as TeamAssignment;
 
-  // Compute number of goalie slots to validate drop targets
+  // Compute pre-move maxGoalies
   const blackGoalieCount = registrations.filter(r => r.teamAssignment === 'Black' && r.registeredPosition === 'Goalie').length;
   const whiteGoalieCount = registrations.filter(r => r.teamAssignment === 'White' && r.registeredPosition === 'Goalie').length;
-  const maxGoalies = Math.max(blackGoalieCount, whiteGoalieCount, 1);
+  const maxGoaliesBefore = Math.max(blackGoalieCount, whiteGoalieCount, 1);
 
-  if (isGoalie && targetSlotIndex >= maxGoalies) {
-    return null;
-  }
-  if (!isGoalie && targetSlotIndex < maxGoalies) {
-    return null;
-  }
+  // Determine target position type based on pre-move boundary
+  const targetIsGoalieSlot = targetSlotIndex < maxGoaliesBefore;
+  const isCrossPosition = (isGoalie && !targetIsGoalieSlot) || (!isGoalie && targetIsGoalieSlot);
+  const newPosition = targetIsGoalieSlot ? 'Goalie' : 'Skater';
 
   // Build fresh arrays
   const allBlackGoalies = registrations
@@ -111,14 +110,15 @@ export function buildRosterOrderItems(
   }
 
   // Add to new position
-  if (isGoalie) {
+  if (newPosition === 'Goalie') {
+    // Goalies always unshift (insert at position 0)
     if (targetTeam === 'Black') {
       allBlackGoalies.unshift(draggedReg);
     } else {
       allWhiteGoalies.unshift(draggedReg);
     }
   } else {
-    const insertIndex = targetSlotIndex - maxGoalies;
+    const insertIndex = targetSlotIndex - maxGoaliesBefore;
     if (targetTeam === 'Black') {
       allBlackSkaters.splice(Math.min(insertIndex, allBlackSkaters.length), 0, draggedReg);
     } else {
@@ -126,21 +126,58 @@ export function buildRosterOrderItems(
     }
   }
 
+  // Compute post-move maxGoalies
+  const maxGoaliesAfter = Math.max(allBlackGoalies.length, allWhiteGoalies.length, 1);
+
   // Build roster order items
   const items: RosterOrderItem[] = [];
   allBlackGoalies.forEach((r, i) => {
-    items.push({ registrationId: r.id, teamAssignment: 'Black', rosterOrder: i });
+    const item: RosterOrderItem = { registrationId: r.id, teamAssignment: 'Black', rosterOrder: i };
+    if (isCrossPosition && r.id === draggedReg.id) item.registeredPosition = 'Goalie';
+    items.push(item);
   });
   allWhiteGoalies.forEach((r, i) => {
-    items.push({ registrationId: r.id, teamAssignment: 'White', rosterOrder: i });
+    const item: RosterOrderItem = { registrationId: r.id, teamAssignment: 'White', rosterOrder: i };
+    if (isCrossPosition && r.id === draggedReg.id) item.registeredPosition = 'Goalie';
+    items.push(item);
   });
   const goalieOffset = Math.max(allBlackGoalies.length, allWhiteGoalies.length, 1);
   allBlackSkaters.forEach((r, i) => {
-    items.push({ registrationId: r.id, teamAssignment: 'Black', rosterOrder: goalieOffset + i });
+    const item: RosterOrderItem = { registrationId: r.id, teamAssignment: 'Black', rosterOrder: goalieOffset + i };
+    if (isCrossPosition && r.id === draggedReg.id) item.registeredPosition = 'Skater';
+    items.push(item);
   });
   allWhiteSkaters.forEach((r, i) => {
-    items.push({ registrationId: r.id, teamAssignment: 'White', rosterOrder: goalieOffset + i });
+    const item: RosterOrderItem = { registrationId: r.id, teamAssignment: 'White', rosterOrder: goalieOffset + i };
+    if (isCrossPosition && r.id === draggedReg.id) item.registeredPosition = 'Skater';
+    items.push(item);
   });
 
-  return items;
+  // Build result
+  const result: RosterOrderResult = { items };
+
+  // Set positionChange for cross-position drops
+  if (isCrossPosition) {
+    result.positionChange = {
+      registrationId: draggedReg.id,
+      newPosition,
+      playerName: `${draggedReg.user.firstName} ${draggedReg.user.lastName}`.trim(),
+    };
+  }
+
+  // Compute shifted labels if maxGoalies changed
+  if (currentLabels && Object.keys(currentLabels).length > 0 && maxGoaliesAfter !== maxGoaliesBefore) {
+    const shift = maxGoaliesAfter - maxGoaliesBefore;
+    const shifted: Record<number, string> = {};
+    for (const [key, value] of Object.entries(currentLabels)) {
+      const numKey = Number(key);
+      // Only shift labels at skater indices (>= old maxGoalies boundary)
+      if (numKey >= maxGoaliesBefore) {
+        shifted[numKey + shift] = value;
+      }
+    }
+    result.shiftedLabels = shifted;
+  }
+
+  return result;
 }

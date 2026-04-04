@@ -128,7 +128,7 @@ export const RosterShareCard = forwardRef<View, RosterShareCardProps>(
           {Array.from({ length: skaterRowCount }).map((_, i) => {
             const blackSkater = blackSkaters[i];
             const whiteSkater = whiteSkaters[i];
-            const posLabel = event.slotPositionLabels?.[i + 1] ?? `${i + 1}`;
+            const posLabel = event.slotPositionLabels?.[goalieRowCount + i] ?? `${i + 1}`;
             return (
               <View key={`skater-${i}`} style={styles.playerRow}>
                 <View style={styles.leftColumn}>

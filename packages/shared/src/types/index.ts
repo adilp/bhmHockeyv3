@@ -322,10 +322,22 @@ export interface RosterOrderItem {
   registrationId: string;
   teamAssignment: TeamAssignment;
   rosterOrder: number;
+  registeredPosition?: Position;
+}
+
+export interface RosterOrderResult {
+  items: RosterOrderItem[];
+  positionChange?: {
+    registrationId: string;
+    newPosition: Position;
+    playerName: string;
+  };
+  shiftedLabels?: Record<number, string>;
 }
 
 export interface UpdateRosterOrderRequest {
   items: RosterOrderItem[];
+  slotPositionLabels?: Record<number, string>;
 }
 
 // Auth types
