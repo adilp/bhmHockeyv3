@@ -485,8 +485,9 @@ public class TournamentAnnouncementServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateAnnouncementAsync_ScorekeeperCanCreateAnnouncement()
+    public async Task CreateAnnouncementAsync_ScorekeeperCannotCreateAnnouncement()
     {
+        // Scorekeepers can only enter scores (TRN-028) - announcements are admin-only
         // Arrange
         var owner = await CreateTestUser("owner@example.com");
         var scorekeeper = await CreateTestUser("scorekeeper@example.com");
@@ -500,17 +501,15 @@ public class TournamentAnnouncementServiceTests : IDisposable
             TargetTeamIds: null
         );
 
-        // Act
-        var result = await _sut.CreateAnnouncementAsync(tournament.Id, request, scorekeeper.Id);
-
-        // Assert
-        result.Should().NotBeNull();
-        result.Title.Should().Be("Score Update");
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.CreateAnnouncementAsync(tournament.Id, request, scorekeeper.Id));
     }
 
     [Fact]
-    public async Task CreateAnnouncementAsync_SetsCreatedAtAndUpdatedAt()
+    public async Task CreateAnnouncementAsync_SetsCreatedAtAndLeavesUpdatedAtNull()
     {
+        // UpdatedAt stays null until the announcement is edited (set by UpdateAnnouncementAsync)
         // Arrange
         var admin = await CreateTestUser("admin@example.com");
         var tournament = await CreateTestTournament(admin.Id);
@@ -529,7 +528,7 @@ public class TournamentAnnouncementServiceTests : IDisposable
 
         // Assert
         result.CreatedAt.Should().BeAfter(beforeCreate.AddSeconds(-1));
-        result.UpdatedAt.Should().BeAfter(beforeCreate.AddSeconds(-1));
+        result.UpdatedAt.Should().BeNull();
     }
 
     #endregion
@@ -783,21 +782,20 @@ public class TournamentAnnouncementServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteAnnouncementAsync_ScorekeeperCanDeleteAnnouncement()
+    public async Task DeleteAnnouncementAsync_ScorekeeperCannotDeleteAnnouncement()
     {
+        // Scorekeepers can only enter scores (TRN-028) - announcements are admin-only
         // Arrange
         var owner = await CreateTestUser("owner@example.com");
         var scorekeeper = await CreateTestUser("scorekeeper@example.com");
         var tournament = await CreateTestTournament(owner.Id);
         await AddTournamentAdmin(tournament.Id, scorekeeper.Id, "Scorekeeper", owner.Id);
 
-        var announcement = await CreateTestAnnouncement(tournament.Id, scorekeeper.Id, "Title", "Body");
+        var announcement = await CreateTestAnnouncement(tournament.Id, owner.Id, "Title", "Body");
 
-        // Act
-        var result = await _sut.DeleteAnnouncementAsync(tournament.Id, announcement.Id, scorekeeper.Id);
-
-        // Assert
-        result.Should().BeTrue();
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.DeleteAnnouncementAsync(tournament.Id, announcement.Id, scorekeeper.Id));
     }
 
     [Fact]
