@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  api:
+    name: API tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Run API tests
+        run: dotnet test apps/api/BHMHockey.Api.Tests
+
+  mobile:
+    name: Mobile typecheck and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Typecheck
+        run: yarn workspace @bhmhockey/mobile type-check
+
+      - name: Frontend tests
+        run: yarn test:frontend
