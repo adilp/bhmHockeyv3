@@ -87,10 +87,7 @@ export const RosterShareCard = forwardRef<View, RosterShareCardProps>(
             const whiteGoalie = whiteGoalies[i];
             return (
               <View key={`goalie-${i}`} style={styles.playerRow}>
-                <View style={styles.leftColumn}>
-                  <Text allowFontScaling={false} style={styles.positionLabel}>
-                    G:{' '}
-                  </Text>
+                <View style={styles.nameColumnLeft}>
                   <Text
                     allowFontScaling={false}
                     style={styles.playerName}
@@ -101,10 +98,12 @@ export const RosterShareCard = forwardRef<View, RosterShareCardProps>(
                       : '\u2014'}
                   </Text>
                 </View>
-                <View style={styles.rightColumn}>
+                <View style={styles.positionColumn}>
                   <Text allowFontScaling={false} style={styles.positionLabel}>
-                    G:{' '}
+                    G
                   </Text>
+                </View>
+                <View style={styles.nameColumnRight}>
                   <Text
                     allowFontScaling={false}
                     style={styles.playerName}
@@ -131,47 +130,32 @@ export const RosterShareCard = forwardRef<View, RosterShareCardProps>(
             const posLabel = event.slotPositionLabels?.[goalieRowCount + i] ?? `${i + 1}`;
             return (
               <View key={`skater-${i}`} style={styles.playerRow}>
-                <View style={styles.leftColumn}>
-                  {blackSkater ? (
-                    <>
-                      <Text
-                        allowFontScaling={false}
-                        style={styles.positionLabel}
-                      >
-                        {posLabel}{' '}
-                      </Text>
-                      <Text
-                        allowFontScaling={false}
-                        style={styles.playerName}
-                        numberOfLines={1}
-                      >
-                        {blackSkater.user.firstName} {blackSkater.user.lastName}
-                      </Text>
-                    </>
-                  ) : (
-                    <Text allowFontScaling={false} style={styles.playerName} />
-                  )}
+                <View style={styles.nameColumnLeft}>
+                  <Text
+                    allowFontScaling={false}
+                    style={styles.playerName}
+                    numberOfLines={1}
+                  >
+                    {blackSkater
+                      ? `${blackSkater.user.firstName} ${blackSkater.user.lastName}`
+                      : ''}
+                  </Text>
                 </View>
-                <View style={styles.rightColumn}>
-                  {whiteSkater ? (
-                    <>
-                      <Text
-                        allowFontScaling={false}
-                        style={styles.positionLabel}
-                      >
-                        {posLabel}{' '}
-                      </Text>
-                      <Text
-                        allowFontScaling={false}
-                        style={styles.playerName}
-                        numberOfLines={1}
-                      >
-                        {whiteSkater.user.firstName} {whiteSkater.user.lastName}
-                      </Text>
-                    </>
-                  ) : (
-                    <Text allowFontScaling={false} style={styles.playerName} />
-                  )}
+                <View style={styles.positionColumn}>
+                  <Text allowFontScaling={false} style={styles.positionLabel}>
+                    {posLabel}
+                  </Text>
+                </View>
+                <View style={styles.nameColumnRight}>
+                  <Text
+                    allowFontScaling={false}
+                    style={styles.playerName}
+                    numberOfLines={1}
+                  >
+                    {whiteSkater
+                      ? `${whiteSkater.user.firstName} ${whiteSkater.user.lastName}`
+                      : ''}
+                  </Text>
                 </View>
               </View>
             );
@@ -289,19 +273,22 @@ const styles = StyleSheet.create({
     height: 30,
     alignItems: 'center',
   },
-  leftColumn: {
+  nameColumnLeft: {
     flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingRight: spacing.md,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingRight: spacing.sm,
   },
-  rightColumn: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
+  positionColumn: {
+    width: 32,
     alignItems: 'center',
-    paddingLeft: spacing.md,
+    justifyContent: 'center',
+  },
+  nameColumnRight: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingLeft: spacing.sm,
   },
   positionLabel: {
     fontSize: 13,
