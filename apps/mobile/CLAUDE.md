@@ -132,11 +132,13 @@ export default function MyScreen() {
 
 ## Common Gotchas
 
-### API URL Hardcoded
-`config/api.ts` is currently hardcoded to production. For local dev:
+### API URL (env-driven)
+`config/api.ts` reads `EXPO_PUBLIC_API_URL` from `apps/mobile/.env` (gitignored) and defaults to production when unset. For local dev, `cp .env.example .env` and uncomment the line for your platform:
 - iOS Simulator: `http://localhost:5001/api`
 - Android Emulator: `http://10.0.2.2:5001/api`
 - Physical device: `http://{YOUR_IP}:5001/api`
+
+Env vars are inlined at bundle time — restart Metro (`npx expo start --clear`) after changing `.env`. The `EnvBanner` component shows which API a dev build is pointed at.
 
 ### TextInput Placeholder Color
 Always set on TextInputs or they'll be invisible:
