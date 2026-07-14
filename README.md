@@ -1,280 +1,220 @@
-# 🏒 BHM Hockey App
+# BHM Hockey
 
-A React Native mobile app and C# .NET API for managing hockey organizations, pickup games, and tournaments.
+A mobile app for organizing hockey pickup games, organizations, and tournaments. Players discover and register for events; organizers manage rosters, payments, waitlists, and push notifications. This repo is a Yarn-workspaces monorepo containing the React Native app, the .NET API, and shared TypeScript packages.
 
-## Quick Start
+**Tech stack**
+
+| Layer | Tech |
+|---|---|
+| Mobile | React Native 0.81 (Expo SDK 54), Expo Router 6, Zustand 5, TypeScript |
+| API | .NET 8 (ASP.NET Core Web API), Entity Framework Core 8, PostgreSQL (Npgsql) |
+| Shared | `@bhmhockey/shared` (types/constants), `@bhmhockey/api-client` (Axios client with auth) |
+| Deploy | DigitalOcean App Platform (API), EAS Build/Update (mobile) |
+
+## Prerequisites
+
+- **Node.js >= 18** and **Yarn** (classic; this repo uses Yarn workspaces)
+- **.NET 8 SDK** (`dotnet --version` should show 8.x)
+- **PostgreSQL** — any of:
+  - **OrbStack / Docker** (recommended — matches the checked-in config with zero edits). Local dev config expects Postgres on port **5433**, not the standard 5432.
+  - **Homebrew Postgres** (runs on **5432** — you must override the connection string, see First-Time Setup step 3 Option B, or the API fails with "connection refused")
+- **Xcode** (iOS Simulator) and/or **Android Studio** (emulator), or the **Expo Go** app on a physical device
+
+## First-Time Setup
+
+### 1. Clone and install
 
 ```bash
-# Install dependencies
+git clone <repo-url> bhmhockey2
+cd bhmhockey2
 yarn install
-
-# Start both API and mobile app
-yarn dev
-
-# Or run separately:
-yarn api      # Start API on http://0.0.0.0:5001 have to run from the api folder
-yarn mobile   # Start Expo dev server, have to run in the root foldr
-
-# to run non dev simulator, have to run in the mobile folder:
-npx expo run:ios
-
-#Submitting OTA:
-cd apps/mobile
-
-# Publish the update (use "production" to match your live app)
-eas update --branch production --message "Add account deletion and privacy policy"
-
 ```
 
-## Project Structure
+### 2. Understand how local config is loaded (30 seconds, saves an hour)
 
-This is a **monorepo** using Yarn workspaces:
+The API does **not** read the root `.env` file — nothing loads it locally (there is no dotenv loader in `Program.cs`). `.env.example` is a reference for the environment variables set in the DigitalOcean console for production. You do **not** need to create a `.env` to run locally.
+
+Local API config comes from `apps/api/BHMHockey.Api/appsettings.Development.json`, which expects:
+
+```
+Host=localhost;Port=5433;Database=bhmhockey;Username=bhmhockey;Password=password
+```
+
+Resolution order (see `Program.cs`): if a `DATABASE_URL` env var is set it wins; otherwise `ConnectionStrings:DefaultConnection` is used (env var `ConnectionStrings__DefaultConnection` overrides the JSON file). The JWT secret is auto-defaulted in development — no config needed.
+
+### 3. Start a local Postgres
+
+**Option A — OrbStack or Docker (matches defaults, no config edits):**
+
+```bash
+docker run -d --name bhmhockey-postgres \
+  -e POSTGRES_DB=bhmhockey \
+  -e POSTGRES_USER=bhmhockey \
+  -e POSTGRES_PASSWORD=password \
+  -p 5433:5432 \
+  postgres:16
+```
+
+Note the port mapping: host **5433** → container 5432, so it lines up with `appsettings.Development.json` as-is.
+
+**Option B — Homebrew Postgres (runs on 5432):**
+
+```bash
+brew services start postgresql@16   # or your installed version
+psql -d postgres -c "CREATE USER bhmhockey WITH PASSWORD 'password';"
+psql -d postgres -c "CREATE DATABASE bhmhockey OWNER bhmhockey;"
+```
+
+Then point the API at port 5432 — either export an override in the shell where you run the API (keeps the checked-in file untouched):
+
+```bash
+export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=bhmhockey;Username=bhmhockey;Password=password"
+```
+
+or edit `Port=5433` → `Port=5432` in `apps/api/BHMHockey.Api/appsettings.Development.json` (just don't commit that change).
+
+### 4. Run it
+
+```bash
+yarn dev        # API + Metro bundler together
+# or in two terminals:
+yarn api        # .NET API on http://localhost:5001 (binds 0.0.0.0:5001)
+yarn mobile     # Expo/Metro bundler on port 8081
+```
+
+EF Core **migrations apply automatically on API startup** — no `dotnet ef database update` needed. First startup is slower because of this.
+
+### 5. Verify
+
+```bash
+curl http://localhost:5001/health     # → Healthy
+open http://localhost:5001/swagger    # interactive API docs
+```
+
+Then press `i` (iOS simulator) or `a` (Android emulator) in the Metro terminal, or scan the QR code with Expo Go.
+
+## Mobile App → API Connection
+
+The API base URL comes from the `EXPO_PUBLIC_API_URL` env var, read from `apps/mobile/.env` (gitignored). When unset — e.g. in release builds — the app defaults to the **production** API. To develop against your local API:
+
+```bash
+cd apps/mobile
+cp .env.example .env    # then uncomment the line for your platform
+```
+
+| Where the app runs | EXPO_PUBLIC_API_URL |
+|---|---|
+| iOS Simulator | `http://localhost:5001/api` |
+| Android Emulator | `http://10.0.2.2:5001/api` |
+| Physical device | `http://<your-Mac-LAN-IP>:5001/api` (find it: `ipconfig getifaddr en0`) |
+
+Env values are inlined when the JS bundle is built — restart Metro (`npx expo start --clear`) after changing `.env`. In dev builds, the in-app `EnvBanner` shows which API you're connected to.
+
+## Running Tests
+
+```bash
+yarn test              # everything: API tests, then frontend tests
+yarn test:api          # .NET unit tests (xUnit) — uses EF Core InMemory, no Postgres required
+yarn test:frontend     # Jest in @bhmhockey/shared, @bhmhockey/api-client, and mobile
+yarn test:shared       # just packages/shared
+yarn test:api-client   # just packages/api-client
+yarn test:mobile       # just apps/mobile
+yarn test:watch        # mobile Jest in watch mode
+```
+
+Type-checking and linting:
+
+```bash
+yarn workspace @bhmhockey/mobile type-check   # tsc --noEmit
+yarn lint                                     # ESLint on the mobile app
+```
+
+More detail in [docs/TESTING.md](./docs/TESTING.md).
+
+## Monorepo Structure
 
 ```
 bhmhockey2/
 ├── apps/
-│   ├── mobile/     # React Native Expo app
-│   └── api/        # C# .NET 8 API
+│   ├── api/                  # .NET 8 API
+│   │   ├── BHMHockey.Api/        # Controllers, Services, Models, Data (EF Core)
+│   │   └── BHMHockey.Api.Tests/  # xUnit tests
+│   └── mobile/               # React Native Expo app
+│       ├── app/                  # Expo Router screens
+│       ├── components/           # Shared UI components
+│       ├── stores/               # Zustand stores (all API calls go through stores)
+│       └── config/               # API URL config
 ├── packages/
-│   ├── shared/     # Shared TypeScript types
-│   └── api-client/ # API client for mobile
-└── .do/
-    └── app.yaml    # Digital Ocean deployment config
+│   ├── shared/               # TS types mirroring backend DTOs + constants
+│   └── api-client/           # Axios client, auth interceptors, per-domain services
+├── docs/                     # Guides, plans, PRD, deployment docs
+└── .do/app.yaml              # DigitalOcean App Platform spec
 ```
 
-## Tech Stack
+## Documentation Index
 
-- **Mobile**: React Native (Expo 52), TypeScript, Expo Router
-- **Backend**: C# .NET 8, ASP.NET Core Web API, PostgreSQL
-- **State**: Zustand
-- **API Client**: Axios with AsyncStorage
-- **Deployment**: Digital Ocean App Platform (API), Expo Application Services (Mobile)
+| Doc | What's in it |
+|---|---|
+| [CLAUDE.md](./CLAUDE.md) | Working notes for the repo: data flow, cross-cutting gotchas, version-bump rules, current project status |
+| [apps/api/CLAUDE.md](./apps/api/CLAUDE.md) | API patterns: auth/roles, migrations, validation rules, error handling, gotchas |
+| [apps/mobile/CLAUDE.md](./apps/mobile/CLAUDE.md) | Mobile patterns: Zustand usage, theme/design system, navigation, gotchas |
+| [docs/MONOREPO_GUIDE.md](./docs/MONOREPO_GUIDE.md) | Deeper monorepo setup and workspace mechanics |
+| [docs/APP_DEPLOYMENT.md](./docs/APP_DEPLOYMENT.md) | Mobile app deployment (EAS builds, OTA updates, store submission) |
+| [docs/DIGITALOCEAN_DEPLOYMENT.md](./docs/DIGITALOCEAN_DEPLOYMENT.md) | API + database deployment on DigitalOcean |
+| [docs/TESTING.md](./docs/TESTING.md) | Testing strategy and how to write tests |
+| [docs/PRD.md](./docs/PRD.md) | Product requirements |
+| [docs/plans/](./docs/plans/) | Feature design docs |
+| [docs/tasks/](./docs/tasks/) | Phase task breakdowns |
+| [docs/jira-tickets/](./docs/jira-tickets/) | Ticket-style work items |
 
-## Prerequisites
+## Git Workflow
 
-- Node.js 18+ and Yarn
-- .NET 8 SDK
-- PostgreSQL 15+
-- Expo Go app (for mobile testing)
+1. Branch off `main`: `git checkout -b your-feature main`
+2. Open a PR into `main`
+3. CI must pass before merge — a GitHub Actions workflow runs the API test suite and the mobile typecheck/tests
+4. Keep backend DTOs and `packages/shared` types in sync in the same PR (see [CLAUDE.md](./CLAUDE.md) → Type Consistency)
 
-## Setup
-
-### 1. Install Dependencies
-
-```bash
-yarn install
-```
-
-### 2. Set Up Database
-
-```bash
-# Create PostgreSQL database
-createdb bhmhockey
-
-# Run migrations
-cd apps/api/BHMHockey.Api
-dotnet ef database update
-cd ../../..
-```
-
-### 3. Configure Environment
-
-```bash
-cp .env.example .env
-# Edit .env with your database credentials
-```
-
-### 4. Start Development
-
-```bash
-# Start both API and mobile app
-yarn dev
-```
-
-## Available Commands
-
-### Development
-
-```bash
-yarn dev              # Run API + mobile together
-yarn api              # Run API only (http://0.0.0.0:5001)
-yarn mobile           # Run mobile only (Expo)
-yarn mobile:ios       # Run on iOS simulator
-yarn mobile:android   # Run on Android emulator
-```
-
-### API
-
-```bash
-yarn api:build          # Build API
-yarn api:migrations     # Create new migration
-yarn api:update-db      # Apply migrations
-```
-
-### Testing
-
-```bash
-yarn lint               # Lint mobile app
-yarn type-check         # TypeScript type checking
-```
-
-## Documentation
-
-- **[MONOREPO_GUIDE.md](./MONOREPO_GUIDE.md)** - Complete monorepo setup and development guide
-- **[BHM.md](./BHM.md)** - Product requirements and specifications
-- **[Phase1.md](./Phase1.md)** - Phase 1 MVP implementation plan (8 weeks)
-- **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Digital Ocean deployment instructions
-- **[GETTING_STARTED.md](./GETTING_STARTED.md)** - Quick start guide
-- **[apps/api/README.md](./apps/api/README.md)** - Backend API documentation
-
-## API Access
-
-The API is configured for network access to support React Native development:
-
-- **iOS Simulator**: `http://localhost:5001/api`
-- **Android Emulator**: `http://10.0.2.2:5001/api`
-- **Physical Device**: `http://YOUR_COMPUTER_IP:5001/api`
-
-API URLs are automatically configured in `apps/mobile/config/api.ts`.
-
-## Features (Phase 1 MVP)
-
-- ✅ User authentication (register/login)
-- ✅ Organization creation and management
-- ✅ Event creation and publishing
-- ✅ Organization subscriptions
-- ✅ Event registration
-- ✅ Push notifications
-- ✅ Mobile app with bottom tab navigation
+Note: pushes to `main` auto-deploy the API to DigitalOcean, so don't merge anything you wouldn't ship.
 
 ## Deployment
 
-### API (Digital Ocean App Platform)
+- **API**: auto-deploys from `main` via DigitalOcean App Platform (`.do/app.yaml`). Details: [docs/DIGITALOCEAN_DEPLOYMENT.md](./docs/DIGITALOCEAN_DEPLOYMENT.md)
+- **Mobile**: EAS builds and store submission. Details: [docs/APP_DEPLOYMENT.md](./docs/APP_DEPLOYMENT.md)
+- **OTA update** (JS/styles/assets only — native changes need a new build):
 
 ```bash
-# Push to GitHub - auto-deploys
-git push origin main
+cd apps/mobile
+npx eas-cli update --branch production --message "Description"
 ```
 
-Configuration in `.do/app.yaml`
+## Troubleshooting
 
-### Mobile (Expo Application Services)
+**API fails at startup with database "connection refused"**
+Almost always the 5432-vs-5433 port mismatch. The checked-in config expects Postgres on **5433** (OrbStack/Docker mapping); Homebrew Postgres listens on **5432**. Fix per First-Time Setup step 3 Option B. Check what's actually listening: `lsof -iTCP -sTCP:LISTEN | grep 543`.
+
+**Android emulator can't reach the API**
+`localhost` inside the emulator is the emulator itself. Set `EXPO_PUBLIC_API_URL=http://10.0.2.2:5001/api` in `apps/mobile/.env` and restart Metro.
+
+**Physical device can't reach the API**
+Set `EXPO_PUBLIC_API_URL` to your Mac's LAN IP (`ipconfig getifaddr en0`) in `apps/mobile/.env` and restart Metro, make sure phone and Mac are on the same Wi-Fi, and allow incoming connections through the macOS firewall. The API already binds `0.0.0.0:5001` in development.
+
+**Push notifications don't work**
+They require a physical device — simulators/emulators can't receive Expo push notifications.
+
+**Port already in use**
+Something is still holding 5001 (API) or 8081 (Metro):
 
 ```bash
-# Build for app stores
-cd apps/mobile
-eas build --platform all
+lsof -ti:5001 | xargs kill   # API
+lsof -ti:8081 | xargs kill   # Metro
+```
 
-# Submit to stores
-eas submit --platform ios
-eas submit --platform android
+**Metro acting weird after dependency or asset changes**
+
+```bash
+cd apps/mobile && npx expo start --clear
 ```
 
 ## Project Status
 
-### Completed ✓
-- [x] Monorepo structure with Yarn workspaces
-- [x] API configured for network access (0.0.0.0:5001)
-- [x] React Native Expo app with Expo Router
-- [x] Shared packages (types and API client)
-- [x] Database models (Users, Organizations, Events)
-- [x] Authentication service (JWT)
-- [x] CORS configuration for development
-- [x] Health checks and auto-migrations
-- [x] Digital Ocean App Platform configuration
-
-### In Progress 🚧
-- [ ] Complete API controllers (Organizations, Events, Users)
-- [ ] Mobile app screens and components
-- [ ] API integration in mobile app
-- [ ] Push notification setup
-
-### Upcoming (Phase 1)
-- [ ] Event registration flow
-- [ ] Organization discovery
-- [ ] User profile management
-- [ ] Payment tracking
-
-## Development Workflow
-
-1. **Make changes** to mobile app or API
-2. **Test locally** with `yarn dev`
-3. **Commit and push** to GitHub
-4. **API auto-deploys** to Digital Ocean
-5. **Mobile app** deployed via EAS when ready
-
-## Common Issues
-
-### API Not Accessible
-
-- Ensure API binds to `0.0.0.0` (not `localhost`)
-- Check firewall allows incoming connections
-- Verify device is on same WiFi network
-
-### CORS Errors
-
-- Development mode automatically allows all origins
-- For production, set `Cors__AllowedOrigins` in environment
-
-### Migration Errors
-
-```bash
-# Reset database (development only)
-cd apps/api/BHMHockey.Api
-dotnet ef database drop
-dotnet ef database update
-```
-
-See [MONOREPO_GUIDE.md](./MONOREPO_GUIDE.md) for detailed troubleshooting.
-
-## Architecture
-
-### Backend (apps/api/)
-
-```
-BHMHockey.Api/
-├── Controllers/    # API endpoints
-├── Services/       # Business logic
-├── Models/
-│   ├── Entities/   # Database models
-│   └── DTOs/       # Data transfer objects
-└── Data/           # DbContext & migrations
-```
-
-### Mobile (apps/mobile/)
-
-```
-mobile/
-├── app/            # Expo Router screens
-│   ├── (tabs)/     # Tab navigation screens
-│   └── (auth)/     # Auth screens
-└── config/         # App configuration (API URLs, etc.)
-```
-
-### Shared (packages/)
-
-- **shared**: TypeScript types, constants, utilities
-- **api-client**: API client with auth, storage, and services
-
-## Contributing
-
-1. Follow the Phase 1 implementation plan
-2. Use TypeScript for all new code
-3. Follow existing code structure and patterns
-4. Test locally before pushing
-5. Update documentation as needed
-
-## License
-
-Private project - All rights reserved
-
-## Support
-
-For questions or issues:
-1. Check [MONOREPO_GUIDE.md](./MONOREPO_GUIDE.md)
-2. Review [Phase1.md](./Phase1.md) for implementation details
-3. See [GETTING_STARTED.md](./GETTING_STARTED.md) for setup help
-
----
-
-**Ready to start?** Run `yarn dev` and start building! 🏒
+Phases 1–4 are complete (auth, organizations, events, registrations, payments, push notifications, multi-admin, notification center); next up is Phase 5 (waitlist). The canonical, always-current status line lives at the top of [CLAUDE.md](./CLAUDE.md) — trust that over anything else, including this paragraph.
