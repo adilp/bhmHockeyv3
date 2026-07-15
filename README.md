@@ -147,7 +147,7 @@ bhmhockey2/
 ├── packages/
 │   ├── shared/               # TS types mirroring backend DTOs + constants
 │   └── api-client/           # Axios client, auth interceptors, per-domain services
-├── docs/                     # Guides, plans, PRD, deployment docs
+├── docs/                     # Guides, PRD, deployment docs
 └── .do/app.yaml              # DigitalOcean App Platform spec
 ```
 
@@ -163,9 +163,6 @@ bhmhockey2/
 | [docs/DIGITALOCEAN_DEPLOYMENT.md](./docs/DIGITALOCEAN_DEPLOYMENT.md) | API + database deployment on DigitalOcean |
 | [docs/TESTING.md](./docs/TESTING.md) | Testing strategy and how to write tests |
 | [docs/PRD.md](./docs/PRD.md) | Product requirements |
-| [docs/plans/](./docs/plans/) | Feature design docs |
-| [docs/tasks/](./docs/tasks/) | Phase task breakdowns |
-| [docs/jira-tickets/](./docs/jira-tickets/) | Ticket-style work items |
 
 ## Git Workflow
 
