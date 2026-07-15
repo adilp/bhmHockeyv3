@@ -49,6 +49,9 @@ dist/
 # IDE
 .vscode/
 .idea/
+
+# Claude Code local settings (machine-specific)
+**/.claude/settings.local.json
 *.swp
 *.swo
 *~
