@@ -123,6 +123,13 @@ public class EventService : IEventService
         {
             evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
 
+            // Auto-add the org's regulars before subscribers are notified,
+            // so they're placed before anyone else can register
+            if (request.ApplyAutoRoster)
+            {
+                await ApplyAutoRosterAsync(evt);
+            }
+
             // Notify organization subscribers about the new game
             var orgName = evt.Organization?.Name ?? "An organization";
             var venueText = !string.IsNullOrWhiteSpace(evt.Venue) ? $" - {evt.Venue}" : "";
@@ -139,6 +146,96 @@ public class EventService : IEventService
         }
 
         return await MapToDto(evt, creatorId);
+    }
+
+    /// <summary>
+    /// Auto-adds the organization's auto-roster members to a newly created org event.
+    /// Mirrors organizer manual adds (AddUserToWaitlistAsync): positions are not validated
+    /// against user profiles, paid events do NOT force waitlisting, and no payment deadline is set.
+    /// Goalies always go direct to roster (they never count against MaxPlayers); skaters fill
+    /// the roster in list order and overflow to the waitlist.
+    /// </summary>
+    private async Task ApplyAutoRosterAsync(Event evt)
+    {
+        var autoRosterMembers = await _context.OrganizationAutoRosterMembers
+            .Include(m => m.User)
+            .Where(m => m.OrganizationId == evt.OrganizationId!.Value)
+            .OrderBy(m => m.SortOrder)
+            .ToListAsync();
+
+        if (autoRosterMembers.Count == 0)
+        {
+            return;
+        }
+
+        var subscriberIds = (await _context.OrganizationSubscriptions
+            .Where(s => s.OrganizationId == evt.OrganizationId!.Value)
+            .Select(s => s.UserId)
+            .ToListAsync()).ToHashSet();
+
+        var isPaidEvent = evt.Cost > 0;
+        var skaterCount = await _context.EventRegistrations
+            .CountAsync(r => r.EventId == evt.Id && r.Status == "Registered" && r.RegisteredPosition != "Goalie");
+
+        foreach (var member in autoRosterMembers)
+        {
+            if (!member.User.IsActive || !subscriberIds.Contains(member.UserId))
+            {
+                _logger.LogInformation(
+                    "Auto-roster: skipped user {UserId} for event {EventId} (inactive or no longer subscribed)",
+                    member.UserId, evt.Id);
+                continue;
+            }
+
+            var alreadyRegistered = await _context.EventRegistrations
+                .AnyAsync(r => r.EventId == evt.Id && r.UserId == member.UserId
+                    && (r.Status == "Registered" || r.Status == "Waitlisted"));
+            if (alreadyRegistered)
+            {
+                continue;
+            }
+
+            var isGoalie = member.Position == "Goalie";
+            var registration = new EventRegistration
+            {
+                EventId = evt.Id,
+                UserId = member.UserId,
+                RegisteredPosition = member.Position,
+                PaymentStatus = isPaidEvent ? "Pending" : null
+            };
+
+            if (isGoalie || skaterCount < evt.MaxPlayers)
+            {
+                registration.Status = "Registered";
+                registration.TeamAssignment = await DetermineTeamAssignmentAsync(evt.Id, member.Position);
+                if (!isGoalie)
+                {
+                    skaterCount++;
+                }
+            }
+            else
+            {
+                registration.Status = "Waitlisted";
+                registration.WaitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(evt.Id);
+            }
+
+            _context.EventRegistrations.Add(registration);
+            // Save per member so team balancing and waitlist positions see prior rows
+            await _context.SaveChangesAsync();
+
+            // Same notification gating as manual organizer adds
+            if (evt.IsRosterPublished)
+            {
+                if (registration.Status == "Registered")
+                {
+                    await NotifyUserAddedToRosterAsync(evt, member.User, registration.TeamAssignment);
+                }
+                else
+                {
+                    await NotifyUserAddedToWaitlistAsync(evt, member.User, registration.WaitlistPosition ?? 1);
+                }
+            }
+        }
     }
 
     public async Task<List<EventDto>> GetAllAsync(Guid? currentUserId = null)

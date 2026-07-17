@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<Organization> Organizations { get; set; }
     public DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
     public DbSet<OrganizationAdmin> OrganizationAdmins { get; set; }
+    public DbSet<OrganizationAutoRosterMember> OrganizationAutoRosterMembers { get; set; }
     public DbSet<Event> Events { get; set; }
     public DbSet<EventRegistration> EventRegistrations { get; set; }
     public DbSet<Notification> Notifications { get; set; }
@@ -127,6 +128,26 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => new { e.OrganizationId, e.UserId }).IsUnique();
             entity.HasOne(e => e.Organization)
                 .WithMany(o => o.Admins)
+                .HasForeignKey(e => e.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.AddedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.AddedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // OrganizationAutoRosterMember configuration
+        modelBuilder.Entity<OrganizationAutoRosterMember>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.OrganizationId, e.UserId }).IsUnique();
+            entity.Property(e => e.Position).IsRequired().HasMaxLength(50);
+            entity.HasOne(e => e.Organization)
+                .WithMany()
                 .HasForeignKey(e => e.OrganizationId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(e => e.User)

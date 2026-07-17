@@ -49,7 +49,8 @@ public record CreateEventRequest(
     string? Venue = null,
     DateTime? RegistrationDeadline = null,
     string? Visibility = "Public",       // Default to public if not specified
-    List<string>? SkillLevels = null     // Optional - overrides org's skill levels if set
+    List<string>? SkillLevels = null,    // Optional - overrides org's skill levels if set
+    bool ApplyAutoRoster = true          // Auto-add the org's auto-roster members (ignored for standalone events)
 );
 
 public record UpdateEventRequest(
