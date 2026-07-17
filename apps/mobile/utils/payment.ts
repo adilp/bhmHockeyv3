@@ -24,3 +24,13 @@ export function getPaymentBadgeInfo(status?: PaymentStatus | null): PaymentBadge
       return { text: 'Unpaid', variant: 'error' };
   }
 }
+
+/**
+ * Same mapping, but addressed to the viewer about their OWN registration:
+ * "Unpaid" becomes the action prompt "Send Payment". Organizer views of
+ * other players keep getPaymentBadgeInfo's "Unpaid".
+ */
+export function getSelfPaymentBadgeInfo(status?: PaymentStatus | null): PaymentBadgeInfo {
+  const info = getPaymentBadgeInfo(status);
+  return info.text === 'Unpaid' ? { text: 'Send Payment', variant: 'error' } : info;
+}
