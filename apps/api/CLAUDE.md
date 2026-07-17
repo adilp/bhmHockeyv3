@@ -118,7 +118,7 @@ Production uses `DATABASE_URL` env var (auto-converted from postgres:// format).
 
 ## Common Gotchas
 
-- PostgreSQL runs on port **5433** (not 5432) in OrbStack
+- PostgreSQL runs on port **5433** (not 5432); `yarn dev`/`yarn db` starts it via `docker-compose.yml`
 - First startup is slow due to auto-migrations
 - Tests use InMemory DB with different JSON handling than PostgreSQL
 - JWT tokens expire in 60 minutes (configurable via `Jwt:ExpiryMinutes`)

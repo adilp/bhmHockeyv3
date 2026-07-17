@@ -15,9 +15,10 @@ Phase 4 Complete + Multi-Admin + Notification Center | Ready for Phase 5 (Waitli
 ## Quick Start
 
 ```bash
-yarn install && yarn dev    # Install + start API + Metro simultaneously
+yarn install && yarn dev    # Install + auto-start Postgres (Docker) + API + Metro
 
 # Or separately:
+yarn db                     # Postgres 16 via docker compose (port 5433)
 yarn api                    # API on port 5001 (auto-migrations)
 yarn mobile                 # Metro bundler on port 8081
 

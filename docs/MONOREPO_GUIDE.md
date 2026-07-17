@@ -83,17 +83,19 @@ yarn install
 
 #### 2. Set Up Database
 
-Create a local PostgreSQL database:
+The easiest path is Docker — `yarn dev` auto-starts a Postgres 16 container from the repo's `docker-compose.yml` (port 5433, matching `appsettings.Development.json`). To start it on its own: `yarn db`. No manual database creation needed.
+
+To use a Homebrew Postgres instead (listens on 5432 — override the connection string per the root README):
 
 ```bash
 # macOS (using Homebrew)
-brew install postgresql@15
-brew services start postgresql@15
+brew install postgresql@16
+brew services start postgresql@16
 
 # Create database and user
 psql postgres
 CREATE DATABASE bhmhockey;
-CREATE USER bhmhockey WITH PASSWORD 'your-password';
+CREATE USER bhmhockey WITH PASSWORD 'password';
 GRANT ALL PRIVILEGES ON DATABASE bhmhockey TO bhmhockey;
 \q
 ```
