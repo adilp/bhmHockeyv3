@@ -44,10 +44,12 @@ export default function HomeScreen() {
   const sortByDate = (a: typeof events[0], b: typeof events[0]) =>
     new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
 
-  // Derived data - all sorted by event date
+  // Derived data - all sorted by event date.
+  // Events the user organizes appear ONLY in "Games I'm Organizing" -
+  // excluded from Available and My Upcoming so nothing shows twice.
   const availableGames = useMemo(() =>
     events
-      .filter(e => !e.isRegistered && !e.amIWaitlisted && e.status === 'Published')
+      .filter(e => !e.isRegistered && !e.amIWaitlisted && !e.canManage && e.status === 'Published')
       .sort(sortByDate),
     [events]
   );
@@ -67,7 +69,9 @@ export default function HomeScreen() {
           myWaitlistedGames.map(event => [event.id, event])
         ))
         .values()
-    ).sort(sortByDate),
+    )
+      .filter(e => !e.canManage)
+      .sort(sortByDate),
     [myRegistrations, myWaitlistedGames]
   );
 
