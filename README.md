@@ -15,6 +15,7 @@ A mobile app for organizing hockey pickup games, organizations, and tournaments.
 
 - **Node.js >= 18** and **Yarn** (classic; this repo uses Yarn workspaces)
 - **.NET 8 SDK** (`dotnet --version` should show 8.x)
+- **EF Core CLI** — `dotnet tool install --global dotnet-ef` (one-time; needed to *create* database migrations — running the API applies them automatically)
 - **PostgreSQL** — any of:
   - **OrbStack / Docker** (recommended — matches the checked-in config with zero edits). Local dev config expects Postgres on port **5433**, not the standard 5432.
   - **Homebrew Postgres** (runs on **5432** — you must override the connection string, see First-Time Setup step 3 Option B, or the API fails with "connection refused")
@@ -163,15 +164,28 @@ bhmhockey2/
 | [docs/DIGITALOCEAN_DEPLOYMENT.md](./docs/DIGITALOCEAN_DEPLOYMENT.md) | API + database deployment on DigitalOcean |
 | [docs/TESTING.md](./docs/TESTING.md) | Testing strategy and how to write tests |
 | [docs/PRD.md](./docs/PRD.md) | Product requirements |
+| [docs/Implementation.md](./docs/Implementation.md) | Original phased implementation plan (historical reference) |
+| [docs/design-reference-rows.html](./docs/design-reference-rows.html) | Design-system reference (open in a browser) — the mobile theme mirrors it |
 
 ## Git Workflow
 
 1. Branch off `main`: `git checkout -b your-feature main`
 2. Open a PR into `main`
-3. CI must pass before merge — a GitHub Actions workflow runs the API test suite and the mobile typecheck/tests
-4. Keep backend DTOs and `packages/shared` types in sync in the same PR (see [CLAUDE.md](./CLAUDE.md) → Type Consistency)
+3. CI must pass before merge — GitHub Actions ([.github/workflows/ci.yml](./.github/workflows/ci.yml)) runs the API test suite and the mobile typecheck/tests
+4. Keep backend DTOs and `packages/shared` types in sync in the same PR (see "Making a Backend Change" below)
 
 Note: pushes to `main` auto-deploy the API to DigitalOcean, so don't merge anything you wouldn't ship.
+
+## Making a Backend Change
+
+There is no codegen — the C# DTO ↔ TypeScript type contract is maintained **by hand**. Any API change that touches data shapes should land in one PR containing all of:
+
+1. **Entity** — add/update in `apps/api/BHMHockey.Api/Models/Entities/`
+2. **Migration** — `yarn api:migrations AddMyField` (needs the EF Core CLI from Prerequisites). Migrations are **additive-only — never drop columns**. They apply automatically the next time the API starts.
+3. **DTO** — update in `Models/DTOs/`. Careful with `UserDto`: it is constructed in several services and every site must be updated, or fields come back null (see [apps/api/CLAUDE.md](./apps/api/CLAUDE.md) → UserDto Updates).
+4. **Shared types** — mirror the DTO change in `packages/shared/src/types/` so the mobile app sees the same shape.
+5. **Service + controller logic**, with tests (patterns in [docs/TESTING.md](./docs/TESTING.md) and existing test files).
+6. **Verify** via Swagger (`http://localhost:5001/swagger`), then run `yarn test`.
 
 ## Deployment
 
@@ -199,11 +213,11 @@ Set `EXPO_PUBLIC_API_URL` to your Mac's LAN IP (`ipconfig getifaddr en0`) in `ap
 They require a physical device — simulators/emulators can't receive Expo push notifications.
 
 **Port already in use**
-Something is still holding 5001 (API) or 8081 (Metro):
+Something is holding 5001 (API) or 8081 (Metro). Identify it before killing — unrelated apps sometimes squat these ports:
 
 ```bash
-lsof -ti:5001 | xargs kill   # API
-lsof -ti:8081 | xargs kill   # Metro
+lsof -nP -iTCP:5001 -iTCP:8081 -sTCP:LISTEN   # see what's listening
+kill <PID>                                     # only if it's yours
 ```
 
 **Metro acting weird after dependency or asset changes**

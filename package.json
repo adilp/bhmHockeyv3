@@ -29,8 +29,7 @@
     "ios": "expo run:ios"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "lerna": "^8.0.1"
+    "concurrently": "^8.2.2"
   },
   "description": "BHM Hockey - Monorepo for mobile app and API",
   "engines": {
