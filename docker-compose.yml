@@ -1,0 +1,21 @@
+# Local development services. The app itself (API + Metro) runs on the host —
+# see README First-Time Setup. Postgres is the only piece that belongs in Docker.
+#
+# Started automatically by `yarn dev` (predev hook), or explicitly: `yarn db`
+services:
+  db:
+    image: postgres:16
+    container_name: bhmhockey-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bhmhockey
+      POSTGRES_USER: bhmhockey
+      POSTGRES_PASSWORD: password
+    ports:
+      # host 5433 -> container 5432, matching appsettings.Development.json
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

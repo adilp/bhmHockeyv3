@@ -45,18 +45,15 @@ Resolution order (see `Program.cs`): if a `DATABASE_URL` env var is set it wins;
 
 ### 3. Start a local Postgres
 
-**Option A — OrbStack or Docker (matches defaults, no config edits):**
+**Option A — Docker / OrbStack (default, zero config):**
+
+Nothing to do — `yarn dev` auto-starts a Postgres 16 container from the checked-in `docker-compose.yml` (the `predev` hook skips this when something is already listening on 5433). To start it explicitly:
 
 ```bash
-docker run -d --name bhmhockey-postgres \
-  -e POSTGRES_DB=bhmhockey \
-  -e POSTGRES_USER=bhmhockey \
-  -e POSTGRES_PASSWORD=password \
-  -p 5433:5432 \
-  postgres:16
+yarn db    # = docker compose up -d db → Postgres 16 on port 5433, survives reboots
 ```
 
-Note the port mapping: host **5433** → container 5432, so it lines up with `appsettings.Development.json` as-is.
+The compose file maps host **5433** → container 5432, so it lines up with `appsettings.Development.json` as-is, and data persists in a named volume.
 
 **Option B — Homebrew Postgres (runs on 5432):**
 
@@ -77,7 +74,7 @@ or edit `Port=5433` → `Port=5432` in `apps/api/BHMHockey.Api/appsettings.Devel
 ### 4. Run it
 
 ```bash
-yarn dev        # API + Metro bundler together
+yarn dev        # DB container (if needed) + API + Metro together
 # or in two terminals:
 yarn api        # .NET API on http://localhost:5001 (binds 0.0.0.0:5001)
 yarn mobile     # Expo/Metro bundler on port 8081
@@ -164,6 +161,7 @@ bhmhockey2/
 │   ├── shared/               # TS types mirroring backend DTOs + constants
 │   └── api-client/           # Axios client, auth interceptors, per-domain services
 ├── docs/                     # Guides, PRD, deployment docs
+├── docker-compose.yml        # Local dev Postgres (auto-started by yarn dev)
 └── .do/app.yaml              # DigitalOcean App Platform spec
 ```
 
@@ -216,7 +214,7 @@ npx eas-cli update --branch production --message "Description"
 ## Troubleshooting
 
 **API fails at startup with database "connection refused"**
-Almost always the 5432-vs-5433 port mismatch. The checked-in config expects Postgres on **5433** (OrbStack/Docker mapping); Homebrew Postgres listens on **5432**. Fix per First-Time Setup step 3 Option B. Check what's actually listening: `lsof -iTCP -sTCP:LISTEN | grep 543`.
+First try `yarn db` — it starts (or restarts) the Docker Postgres container. If you're not using Docker, it's almost always the 5432-vs-5433 port mismatch: the checked-in config expects Postgres on **5433**; Homebrew Postgres listens on **5432**. Fix per First-Time Setup step 3 Option B. Check what's actually listening: `lsof -iTCP -sTCP:LISTEN | grep 543`.
 
 **Android emulator can't reach the API**
 `localhost` inside the emulator is the emulator itself. Set `EXPO_PUBLIC_API_URL=http://10.0.2.2:5001/api` in `apps/mobile/.env` and restart Metro.

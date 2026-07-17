@@ -7,7 +7,9 @@
     "packages/*"
   ],
   "scripts": {
+    "predev": "nc -z localhost 5433 2>/dev/null || docker compose up -d db || echo '⚠️  Could not start Postgres via Docker — start one on port 5433 manually (see README)'",
     "dev": "concurrently \"npm run api\" \"npm run mobile\"",
+    "db": "docker compose up -d db",
     "api": "cd apps/api/BHMHockey.Api && dotnet watch run",
     "mobile": "cd apps/mobile && expo start",
     "api:build": "cd apps/api/BHMHockey.Api && dotnet build",
