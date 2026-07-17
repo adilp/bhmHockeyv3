@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
-import type { Organization, OrganizationSubscription, CreateOrganizationRequest, OrganizationMember, AutoRosterMember, Position } from '@bhmhockey/shared';
+import type { Organization, OrganizationSubscription, CreateOrganizationRequest, OrganizationMember, AutoRosterMember, Position, OrganizationWaiver } from '@bhmhockey/shared';
 
 /** Extract message from ApiError objects or Error instances */
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -17,6 +17,8 @@ interface OrganizationState {
   members: OrganizationMember[]; // Members of the org being viewed (admin flows)
   autoRoster: AutoRosterMember[]; // Auto-roster of the org being viewed (admin only)
   autoRosterOrgId: string | null; // Which org the loaded autoRoster belongs to
+  waiver: OrganizationWaiver | null; // Active waiver of the org being viewed (null = none)
+  waiverOrgId: string | null; // Which org the loaded waiver belongs to
   isLoading: boolean;
   error: string | null;
 
@@ -38,6 +40,10 @@ interface OrganizationState {
   addAutoRosterMember: (organizationId: string, userId: string, position: Position) => Promise<boolean>;
   removeAutoRosterMember: (organizationId: string, userId: string) => Promise<boolean>;
   reorderAutoRoster: (organizationId: string, orderedUserIds: string[]) => Promise<boolean>;
+
+  // Waiver actions (fetch for anyone; save is admin only)
+  fetchWaiver: (organizationId: string) => Promise<OrganizationWaiver | null>;
+  saveWaiver: (organizationId: string, text: string) => Promise<boolean>;
 }
 
 export const useOrganizationStore = create<OrganizationState>((set, get) => ({
@@ -47,6 +53,8 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   members: [],
   autoRoster: [],
   autoRosterOrgId: null,
+  waiver: null,
+  waiverOrgId: null,
   isLoading: false,
   error: null,
 
@@ -222,6 +230,34 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
         autoRoster,
         error: getErrorMessage(error, 'Failed to remove player from auto-roster'),
       });
+      return false;
+    }
+  },
+
+  fetchWaiver: async (organizationId: string) => {
+    try {
+      const waiver = await organizationService.getWaiver(organizationId);
+      set({ waiver, waiverOrgId: organizationId });
+      return waiver;
+    } catch (error) {
+      // 404 = no active waiver; a normal state, not an error
+      if (error && typeof error === 'object' && (error as any).statusCode === 404) {
+        set({ waiver: null, waiverOrgId: organizationId });
+        return null;
+      }
+      set({ error: getErrorMessage(error, 'Failed to load waiver') });
+      return null;
+    }
+  },
+
+  saveWaiver: async (organizationId: string, text: string) => {
+    try {
+      // Returns the new active waiver, or null when cleared/deactivated
+      const waiver = await organizationService.setWaiver(organizationId, text);
+      set({ waiver, waiverOrgId: organizationId });
+      return true;
+    } catch (error) {
+      set({ error: getErrorMessage(error, 'Failed to save waiver') });
       return false;
     }
   },

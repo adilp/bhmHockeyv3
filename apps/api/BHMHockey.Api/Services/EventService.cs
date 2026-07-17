@@ -12,6 +12,7 @@ public class EventService : IEventService
     private readonly INotificationService _notificationService;
     private readonly IOrganizationAdminService _adminService;
     private readonly IWaitlistService _waitlistService;
+    private readonly IOrganizationWaiverService _waiverService;
     private readonly ILogger<EventService> _logger;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
@@ -23,12 +24,14 @@ public class EventService : IEventService
         INotificationService notificationService,
         IOrganizationAdminService adminService,
         IWaitlistService waitlistService,
+        IOrganizationWaiverService waiverService,
         ILogger<EventService> logger)
     {
         _context = context;
         _notificationService = notificationService;
         _adminService = adminService;
         _waitlistService = waitlistService;
+        _waiverService = waiverService;
         _logger = logger;
     }
 
@@ -491,6 +494,17 @@ public class EventService : IEventService
             throw new InvalidOperationException("Already registered for this event");
         }
 
+        // Self-registration waiver gate: org events with an active waiver require the
+        // CURRENT version to be accepted first. Organizer-driven paths (auto-roster,
+        // manual add, ghost creation) are intentionally NOT gated - the blocking
+        // accept-or-leave gate catches those users in the app. Ghosts are exempt.
+        if (evt.OrganizationId.HasValue && !user.IsGhostPlayer &&
+            await _waiverService.IsAcceptanceRequiredAsync(evt.OrganizationId.Value, userId))
+        {
+            _logger.LogWarning("Registration blocked for event {EventId}: user {UserId} has not accepted the organization's current waiver", eventId, userId);
+            throw new InvalidOperationException("Waiver acceptance required: you must accept this organization's current waiver before registering for this event.");
+        }
+
         // Goalies don't count against MaxPlayers - only skaters do
         var skaterCount = evt.Registrations.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie");
         bool isFull = registeredPosition == "Goalie" ? false : skaterCount >= evt.MaxPlayers;
@@ -743,6 +757,9 @@ public class EventService : IEventService
         var userIds = registrations.Select(r => r.User.Id).Distinct();
         var badgesByUser = await GetBadgesForUsersAsync(userIds);
 
+        // Batch compute which real users still need to accept the org's active waiver
+        var waiverUnaccepted = await GetWaiverUnacceptedUserIdsAsync(eventId, registrations);
+
         return registrations.Select(r => {
             var (topBadges, totalCount) = badgesByUser.TryGetValue(r.User.Id, out var badges)
                 ? badges
@@ -776,7 +793,8 @@ public class EventService : IEventService
                 r.WaitlistPosition,     // Phase 5 - Waitlist
                 r.PromotedAt,           // Phase 5 - Waitlist
                 r.PaymentDeadlineAt,    // Phase 5 - Waitlist
-                r.IsWaitlisted          // Phase 5 - Waitlist
+                r.IsWaitlisted,         // Phase 5 - Waitlist
+                waiverUnaccepted.Contains(r.UserId)  // Waiver indicator (real users only)
             );
         }).ToList();
     }
@@ -788,6 +806,9 @@ public class EventService : IEventService
         // Batch load badges for all users to prevent N+1 queries
         var userIds = waitlist.Select(r => r.User.Id).Distinct();
         var badgesByUser = await GetBadgesForUsersAsync(userIds);
+
+        // Batch compute which real users still need to accept the org's active waiver
+        var waiverUnaccepted = await GetWaiverUnacceptedUserIdsAsync(eventId, waitlist);
 
         return waitlist.Select(r => {
             var (topBadges, totalCount) = badgesByUser.TryGetValue(r.User.Id, out var badges)
@@ -822,9 +843,50 @@ public class EventService : IEventService
                 r.WaitlistPosition,
                 r.PromotedAt,
                 r.PaymentDeadlineAt,
-                r.IsWaitlisted
+                r.IsWaitlisted,
+                waiverUnaccepted.Contains(r.UserId)  // Waiver indicator (real users only)
             );
         }).ToList();
+    }
+
+    /// <summary>
+    /// User ids on this event that should show the "has not accepted waiver" flag:
+    /// real (non-ghost) users without an acceptance of the org's ACTIVE waiver.
+    /// Empty when the event is standalone or the org has no active waiver.
+    /// </summary>
+    private async Task<HashSet<Guid>> GetWaiverUnacceptedUserIdsAsync(Guid eventId, IEnumerable<EventRegistration> registrations)
+    {
+        var organizationId = await _context.Events
+            .Where(e => e.Id == eventId)
+            .Select(e => e.OrganizationId)
+            .FirstOrDefaultAsync();
+        if (!organizationId.HasValue)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var activeWaiverId = await _waiverService.GetActiveWaiverIdAsync(organizationId.Value);
+        if (!activeWaiverId.HasValue)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var realUserIds = registrations
+            .Where(r => !r.User.IsGhostPlayer)
+            .Select(r => r.UserId)
+            .Distinct()
+            .ToList();
+        if (realUserIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var acceptedIds = await _context.WaiverAcceptances
+            .Where(a => a.WaiverId == activeWaiverId.Value && realUserIds.Contains(a.UserId))
+            .Select(a => a.UserId)
+            .ToListAsync();
+
+        return realUserIds.Except(acceptedIds).ToHashSet();
     }
 
     /// <summary>
@@ -1006,6 +1068,14 @@ public class EventService : IEventService
             }
         }
 
+        // Waiver gate flag for the current user: org event + active waiver + not
+        // accepted. Same rule for everyone with a real account, managers included.
+        var requiresWaiverAcceptance = false;
+        if (currentUserId.HasValue && evt.OrganizationId.HasValue)
+        {
+            requiresWaiverAcceptance = await _waiverService.IsAcceptanceRequiredAsync(evt.OrganizationId.Value, currentUserId.Value);
+        }
+
         // Resolve chat link at read time: event override wins, else the org's link (live fallback,
         // so rotating the org link updates all inheriting events instantly)
         string? groupMeLink = null;
@@ -1058,7 +1128,8 @@ public class EventService : IEventService
             groupMeLink,         // Resolved GroupMe chat link
             groupMeLinkSource,   // "event" | "organization" | null
             evt.ShowWaitlistBeforePublish,  // Waitlist visibility (pre-publish)
-            myWaitlistPaymentEligible       // Pay-eligibility for current user's waitlisted spot
+            myWaitlistPaymentEligible,      // Pay-eligibility for current user's waitlisted spot
+            requiresWaiverAcceptance        // Waiver gate for the current user
         );
     }
 

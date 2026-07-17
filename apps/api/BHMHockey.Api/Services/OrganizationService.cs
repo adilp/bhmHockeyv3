@@ -9,12 +9,20 @@ public class OrganizationService : IOrganizationService
 {
     private readonly AppDbContext _context;
     private readonly IOrganizationAdminService _adminService;
+    private readonly IOrganizationWaiverService _waiverService;
+    private readonly IEventService _eventService;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
-    public OrganizationService(AppDbContext context, IOrganizationAdminService adminService)
+    public OrganizationService(
+        AppDbContext context,
+        IOrganizationAdminService adminService,
+        IOrganizationWaiverService waiverService,
+        IEventService eventService)
     {
         _context = context;
         _adminService = adminService;
+        _waiverService = waiverService;
+        _eventService = eventService;
     }
 
     private void ValidateSkillLevels(List<string>? skillLevels)
@@ -263,6 +271,34 @@ public class OrganizationService : IOrganizationService
         return true;
     }
 
+    /// <summary>
+    /// Leave an organization: unsubscribe AND cancel the user's upcoming
+    /// Registered/Waitlisted registrations in that org's events. Cancellation
+    /// reuses the standard path (CancelRegistrationAsync) so its waitlist
+    /// promotion side effects fire. Past events are untouched. Idempotent.
+    /// </summary>
+    public async Task<bool> LeaveAsync(Guid organizationId, Guid userId)
+    {
+        var now = DateTime.UtcNow;
+
+        var upcomingEventIds = await _context.EventRegistrations
+            .Where(r => r.UserId == userId
+                && (r.Status == "Registered" || r.Status == "Waitlisted")
+                && r.Event.OrganizationId == organizationId
+                && r.Event.EventDate > now
+                && r.Event.Status != "Cancelled")
+            .Select(r => r.EventId)
+            .ToListAsync();
+
+        foreach (var eventId in upcomingEventIds)
+        {
+            await _eventService.CancelRegistrationAsync(eventId, userId);
+        }
+
+        await UnsubscribeAsync(organizationId, userId);
+        return true;
+    }
+
     public async Task<List<OrganizationSubscriptionDto>> GetUserSubscriptionsAsync(Guid userId)
     {
         var subscriptions = await _context.OrganizationSubscriptions
@@ -366,6 +402,18 @@ public class OrganizationService : IOrganizationService
             .GroupBy(ub => ub.UserId)
             .ToDictionary(g => g.Key, g => g.Count());
 
+        // Waiver status per member - only meaningful when an active waiver exists
+        // (flags stay null otherwise so clients hide the waiver UI entirely)
+        var activeWaiverId = await _waiverService.GetActiveWaiverIdAsync(organizationId);
+        HashSet<Guid>? acceptedUserIds = null;
+        if (activeWaiverId.HasValue)
+        {
+            acceptedUserIds = (await _context.WaiverAcceptances
+                .Where(a => a.WaiverId == activeWaiverId.Value && memberUserIds.Contains(a.UserId))
+                .Select(a => a.UserId)
+                .ToListAsync()).ToHashSet();
+        }
+
         // Build member DTOs
         var members = subscriptions.Select(s => new OrganizationMemberDto(
             s.User.Id,
@@ -376,7 +424,8 @@ public class OrganizationService : IOrganizationService
             s.SubscribedAt,
             adminUserIds.Contains(s.User.Id),
             badgesByUser.GetValueOrDefault(s.User.Id, new List<UserBadgeDto>()),
-            badgeCountsByUser.GetValueOrDefault(s.User.Id, 0)
+            badgeCountsByUser.GetValueOrDefault(s.User.Id, 0),
+            acceptedUserIds == null ? null : acceptedUserIds.Contains(s.User.Id)
         )).ToList();
 
         return members;

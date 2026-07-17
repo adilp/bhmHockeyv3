@@ -20,6 +20,7 @@ public class OrganizationsControllerTests
     private readonly Mock<IOrganizationService> _mockOrgService;
     private readonly Mock<IOrganizationAdminService> _mockAdminService;
     private readonly Mock<IOrganizationAutoRosterService> _mockAutoRosterService;
+    private readonly Mock<IOrganizationWaiverService> _mockWaiverService;
     private readonly OrganizationsController _controller;
     private readonly Guid _testUserId = Guid.NewGuid();
 
@@ -28,10 +29,12 @@ public class OrganizationsControllerTests
         _mockOrgService = new Mock<IOrganizationService>();
         _mockAdminService = new Mock<IOrganizationAdminService>();
         _mockAutoRosterService = new Mock<IOrganizationAutoRosterService>();
+        _mockWaiverService = new Mock<IOrganizationWaiverService>();
         _controller = new OrganizationsController(
             _mockOrgService.Object,
             _mockAdminService.Object,
             _mockAutoRosterService.Object,
+            _mockWaiverService.Object,
             Mock.Of<ILogger<OrganizationsController>>());
     }
 
@@ -469,6 +472,169 @@ public class OrganizationsControllerTests
 
         // Assert
         result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    #endregion
+
+    #region Waiver Endpoint Tests
+
+    private static OrganizationWaiverDto CreateWaiverDto(Guid? orgId = null, int version = 1, string text = "Waiver text")
+    {
+        return new OrganizationWaiverDto(
+            Guid.NewGuid(),
+            orgId ?? Guid.NewGuid(),
+            text,
+            version,
+            DateTime.UtcNow);
+    }
+
+    [Fact]
+    public async Task GetWaiver_WithActiveWaiver_ReturnsOk()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var waiver = CreateWaiverDto(orgId);
+        _mockWaiverService.Setup(s => s.GetCurrentWaiverAsync(orgId)).ReturnsAsync(waiver);
+
+        // Act
+        var result = await _controller.GetWaiver(orgId);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        okResult.Value.Should().Be(waiver);
+    }
+
+    [Fact]
+    public async Task GetWaiver_WithNoActiveWaiver_Returns404()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockWaiverService.Setup(s => s.GetCurrentWaiverAsync(orgId)).ReturnsAsync((OrganizationWaiverDto?)null);
+
+        // Act
+        var result = await _controller.GetWaiver(orgId);
+
+        // Assert
+        result.Result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task SetWaiver_AsAdmin_ReturnsOkWithNewVersion()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var waiver = CreateWaiverDto(orgId, version: 2);
+        _mockWaiverService.Setup(s => s.SetWaiverAsync(orgId, "New text", _testUserId)).ReturnsAsync(waiver);
+
+        // Act
+        var result = await _controller.SetWaiver(orgId, new SetOrganizationWaiverRequest("New text"));
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = okResult.Value.Should().BeOfType<SetOrganizationWaiverResponse>().Subject;
+        response.Waiver.Should().Be(waiver);
+    }
+
+    [Fact]
+    public async Task SetWaiver_AsNonAdmin_Returns403()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockWaiverService.Setup(s => s.SetWaiverAsync(orgId, It.IsAny<string?>(), _testUserId))
+            .ThrowsAsync(new UnauthorizedAccessException("Only organization admins can update the waiver"));
+
+        // Act
+        var result = await _controller.SetWaiver(orgId, new SetOrganizationWaiverRequest("New text"));
+
+        // Assert
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    [Fact]
+    public async Task GetWaiverPdf_WithActiveWaiver_ReturnsPdfFile()
+    {
+        // Arrange - endpoint is anonymous by design, no auth setup
+        var orgId = Guid.NewGuid();
+        var pdfBytes = new byte[] { 0x25, 0x50, 0x44, 0x46 }; // %PDF
+        _mockWaiverService.Setup(s => s.GetCurrentWaiverPdfAsync(orgId))
+            .ReturnsAsync((pdfBytes, "test-org-waiver-v1.pdf"));
+
+        // Act
+        var result = await _controller.GetWaiverPdf(orgId);
+
+        // Assert
+        var fileResult = result.Should().BeOfType<FileContentResult>().Subject;
+        fileResult.ContentType.Should().Be("application/pdf");
+        fileResult.FileDownloadName.Should().Be("test-org-waiver-v1.pdf");
+        fileResult.FileContents.Should().Equal(pdfBytes);
+    }
+
+    [Fact]
+    public async Task GetWaiverPdf_WithNoActiveWaiver_Returns404()
+    {
+        // Arrange
+        var orgId = Guid.NewGuid();
+        _mockWaiverService.Setup(s => s.GetCurrentWaiverPdfAsync(orgId))
+            .ReturnsAsync(((byte[], string)?)null);
+
+        // Act
+        var result = await _controller.GetWaiverPdf(orgId);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task AcceptWaiver_WithCurrentVersion_ReturnsOk()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var waiverId = Guid.NewGuid();
+
+        // Act
+        var result = await _controller.AcceptWaiver(orgId, new AcceptWaiverRequest(waiverId));
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        _mockWaiverService.Verify(s => s.AcceptWaiverAsync(orgId, waiverId, _testUserId), Times.Once);
+    }
+
+    [Fact]
+    public async Task AcceptWaiver_WithStaleVersion_Returns400()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var staleWaiverId = Guid.NewGuid();
+        _mockWaiverService.Setup(s => s.AcceptWaiverAsync(orgId, staleWaiverId, _testUserId))
+            .ThrowsAsync(new InvalidOperationException("This waiver version is no longer current."));
+
+        // Act
+        var result = await _controller.AcceptWaiver(orgId, new AcceptWaiverRequest(staleWaiverId));
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task Leave_DelegatesToServiceAndReturnsOk()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockOrgService.Setup(s => s.LeaveAsync(orgId, _testUserId)).ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.Leave(orgId);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        _mockOrgService.Verify(s => s.LeaveAsync(orgId, _testUserId), Times.Once);
     }
 
     #endregion

@@ -42,7 +42,10 @@ public record EventDto(
     // Waitlist visibility (pre-publish)
     bool ShowWaitlistBeforePublish = false,  // Registered/waitlisted viewers can see the ordered waitlist before publish
     // Pay-eligibility for the current user's waitlisted registration on paid events
-    bool? MyWaitlistPaymentEligible = null   // null when not applicable (not waitlisted or free event)
+    bool? MyWaitlistPaymentEligible = null,  // null when not applicable (not waitlisted or free event)
+    // Waiver gate for the current user: org event + active waiver + not accepted
+    // (same rule for everyone with a real account, including managers)
+    bool RequiresWaiverAcceptance = false
 );
 
 public record CreateEventRequest(
@@ -99,7 +102,9 @@ public record EventRegistrationDto(
     int? WaitlistPosition,       // Position in waitlist (1 = first, null = not waitlisted)
     DateTime? PromotedAt,        // When user was promoted from waitlist
     DateTime? PaymentDeadlineAt, // Deadline to pay after promotion
-    bool IsWaitlisted            // True if Status == "Waitlisted"
+    bool IsWaitlisted,           // True if Status == "Waitlisted"
+    // True ONLY when: org event + active waiver + real user (not ghost) + no current acceptance
+    bool HasNotAcceptedWaiver = false
 );
 
 // Payment request DTOs (Phase 4)

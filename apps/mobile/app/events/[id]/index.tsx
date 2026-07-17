@@ -13,6 +13,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-router';
 import { useEventStore } from '../../../stores/eventStore';
 import { useAuthStore } from '../../../stores/authStore';
+import { useOrganizationStore } from '../../../stores/organizationStore';
+import { useWaiverStore } from '../../../stores/waiverStore';
 import { openVenmoPayment } from '../../../utils/venmo';
 import {
   SegmentedControl,
@@ -20,6 +22,7 @@ import {
   EventRosterTab,
   EventChatTab,
   RegistrationFooter,
+  WaiverAcceptanceModal,
 } from '../../../components';
 import type { TabKey } from '../../../components';
 import { colors, spacing } from '../../../theme';
@@ -32,6 +35,9 @@ export default function EventDetailScreen() {
   const [selectedTab, setSelectedTab] = useState<TabKey>('info');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [waiverModalVisible, setWaiverModalVisible] = useState(false);
+  const orgWaiver = useOrganizationStore((state) => state.waiver);
+  const fetchWaiver = useOrganizationStore((state) => state.fetchWaiver);
 
   const {
     selectedEvent,
@@ -92,25 +98,15 @@ export default function EventDetailScreen() {
     }
   };
 
-  const handleRegister = async () => {
-    if (!id || !isAuthenticated || !user) return;
+  // The existing registration flow (position picker etc.). Runs after the
+  // waiver gate (when required) has been satisfied.
+  const proceedWithRegistration = async () => {
+    if (!id || !user) return;
 
     const positions = user.positions;
     const positionCount = positions
       ? Object.keys(positions).filter((k) => positions[k as keyof typeof positions]).length
       : 0;
-
-    if (positionCount === 0) {
-      Alert.alert(
-        'Set Up Profile',
-        'Please set up your positions in your profile before registering for events.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Go to Profile', onPress: () => router.push('/(tabs)/profile') },
-        ]
-      );
-      return;
-    }
 
     const showResultMessage = (
       result: RegistrationResultDto | null,
@@ -190,6 +186,64 @@ export default function EventDetailScreen() {
         },
       ]);
     }
+  };
+
+  const handleRegister = async () => {
+    if (!id || !isAuthenticated || !user) return;
+
+    const positions = user.positions;
+    const positionCount = positions
+      ? Object.keys(positions).filter((k) => positions[k as keyof typeof positions]).length
+      : 0;
+
+    if (positionCount === 0) {
+      Alert.alert(
+        'Set Up Profile',
+        'Please set up your positions in your profile before registering for events.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Go to Profile', onPress: () => router.push('/(tabs)/profile') },
+        ]
+      );
+      return;
+    }
+
+    // Waiver gate: org events with an active waiver the user hasn't accepted
+    // show the acceptance modal BEFORE registering
+    if (selectedEvent?.requiresWaiverAcceptance && selectedEvent.organizationId) {
+      const waiver = await fetchWaiver(selectedEvent.organizationId);
+      if (waiver) {
+        setWaiverModalVisible(true);
+        return;
+      }
+      // Waiver deactivated since the event was fetched - fall through
+    }
+
+    await proceedWithRegistration();
+  };
+
+  // Agree in the registration-flow waiver modal: accept, then continue straight
+  // into the registration flow (position picker etc.) in the same gesture
+  const handleWaiverAgree = async () => {
+    if (!selectedEvent?.organizationId || !orgWaiver) return;
+
+    const ok = await useWaiverStore
+      .getState()
+      .acceptWaiver(selectedEvent.organizationId, orgWaiver.id);
+
+    if (!ok) {
+      setWaiverModalVisible(false);
+      Alert.alert(
+        'Error',
+        useWaiverStore.getState().error || 'Failed to accept waiver. Please try again.'
+      );
+      // Refresh so a stale waiver version is replaced by the latest state
+      if (id) fetchEventById(id);
+      return;
+    }
+
+    setWaiverModalVisible(false);
+    await proceedWithRegistration();
   };
 
   const handleCancelRegistration = async () => {
@@ -379,6 +433,17 @@ export default function EventDetailScreen() {
             isProcessing={isProcessing}
             onRegister={handleRegister}
           />
+
+          {/* Waiver acceptance modal (registration flow) - decline returns to the event */}
+          {orgWaiver && (
+            <WaiverAcceptanceModal
+              visible={waiverModalVisible}
+              organizationName={selectedEvent.organizationName || 'Organization'}
+              waiver={orgWaiver}
+              onAgree={handleWaiverAgree}
+              onClose={() => setWaiverModalVisible(false)}
+            />
+          )}
         </View>
       )}
     </GestureHandlerRootView>

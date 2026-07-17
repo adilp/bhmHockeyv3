@@ -17,6 +17,7 @@ public class UsersController : ControllerBase
     private readonly IBadgeService _badgeService;
     private readonly ITournamentTeamMemberService _tournamentTeamMemberService;
     private readonly ITournamentService _tournamentService;
+    private readonly IOrganizationWaiverService _waiverService;
 
     public UsersController(
         IUserService userService,
@@ -24,7 +25,8 @@ public class UsersController : ControllerBase
         IEventService eventService,
         IBadgeService badgeService,
         ITournamentTeamMemberService tournamentTeamMemberService,
-        ITournamentService tournamentService)
+        ITournamentService tournamentService,
+        IOrganizationWaiverService waiverService)
     {
         _userService = userService;
         _organizationService = organizationService;
@@ -32,6 +34,7 @@ public class UsersController : ControllerBase
         _badgeService = badgeService;
         _tournamentTeamMemberService = tournamentTeamMemberService;
         _tournamentService = tournamentService;
+        _waiverService = waiverService;
     }
 
     private Guid GetCurrentUserId()
@@ -167,6 +170,26 @@ public class UsersController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Orgs where the current user holds an active registration on an upcoming
+    /// event but has not accepted the org's current waiver. Powers the blocking
+    /// accept-or-leave gate shown on app open/foreground.
+    /// </summary>
+    [HttpGet("me/pending-waivers")]
+    public async Task<ActionResult<List<PendingWaiverDto>>> GetMyPendingWaivers()
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var pending = await _waiverService.GetPendingWaiversAsync(userId);
+            return Ok(pending);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
         }
     }
 

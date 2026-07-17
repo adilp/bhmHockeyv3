@@ -13,17 +13,20 @@ public class OrganizationsController : ControllerBase
     private readonly IOrganizationService _organizationService;
     private readonly IOrganizationAdminService _adminService;
     private readonly IOrganizationAutoRosterService _autoRosterService;
+    private readonly IOrganizationWaiverService _waiverService;
     private readonly ILogger<OrganizationsController> _logger;
 
     public OrganizationsController(
         IOrganizationService organizationService,
         IOrganizationAdminService adminService,
         IOrganizationAutoRosterService autoRosterService,
+        IOrganizationWaiverService waiverService,
         ILogger<OrganizationsController> logger)
     {
         _organizationService = organizationService;
         _adminService = adminService;
         _autoRosterService = autoRosterService;
+        _waiverService = waiverService;
         _logger = logger;
     }
 
@@ -221,6 +224,107 @@ public class OrganizationsController : ControllerBase
         }
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Leave an organization: unsubscribe AND cancel upcoming registrations in the
+    /// org's events (waitlist promotions fire as usual). Requires authentication.
+    /// </summary>
+    [HttpPost("{id:guid}/leave")]
+    [Authorize]
+    public async Task<IActionResult> Leave(Guid id)
+    {
+        var userId = GetCurrentUserId();
+        await _organizationService.LeaveAsync(id, userId);
+        return Ok(new { message = "You have left the organization" });
+    }
+
+    // Waiver endpoints
+
+    /// <summary>
+    /// Get the organization's current active waiver. 404 when no active waiver.
+    /// </summary>
+    [HttpGet("{id:guid}/waiver")]
+    [Authorize]
+    public async Task<ActionResult<OrganizationWaiverDto>> GetWaiver(Guid id)
+    {
+        var waiver = await _waiverService.GetCurrentWaiverAsync(id);
+
+        if (waiver == null)
+        {
+            return NotFound(new { message = "This organization has no active waiver" });
+        }
+
+        return Ok(waiver);
+    }
+
+    /// <summary>
+    /// Set the organization's waiver (admin only). Creates the next immutable
+    /// version from the submitted text; empty text deactivates the waiver.
+    /// </summary>
+    [HttpPut("{id:guid}/waiver")]
+    [Authorize]
+    public async Task<ActionResult<SetOrganizationWaiverResponse>> SetWaiver(Guid id, [FromBody] SetOrganizationWaiverRequest request)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var waiver = await _waiverService.SetWaiverAsync(id, request.Text, userId);
+            return Ok(new SetOrganizationWaiverResponse(waiver));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Set waiver denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Set waiver rejected for organization {OrganizationId}: {Message}", id, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Render the organization's current waiver as a PDF. Public by design -
+    /// waivers aren't secrets and users save/share them outside the app.
+    /// 404 when no active waiver.
+    /// </summary>
+    [HttpGet("{id:guid}/waiver/pdf")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetWaiverPdf(Guid id)
+    {
+        var pdf = await _waiverService.GetCurrentWaiverPdfAsync(id);
+
+        if (pdf == null)
+        {
+            _logger.LogWarning("Waiver PDF requested for organization {OrganizationId} with no active waiver", id);
+            return NotFound(new { message = "This organization has no active waiver" });
+        }
+
+        return File(pdf.Value.Content, "application/pdf", pdf.Value.FileName);
+    }
+
+    /// <summary>
+    /// Accept a SPECIFIC waiver version. 400 when the id is not the org's current
+    /// active version (stale-version protection). Idempotent when already accepted.
+    /// </summary>
+    [HttpPost("{id:guid}/waiver/accept")]
+    [Authorize]
+    public async Task<IActionResult> AcceptWaiver(Guid id, [FromBody] AcceptWaiverRequest request)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            await _waiverService.AcceptWaiverAsync(id, request.WaiverId, userId);
+            return Ok(new { message = "Waiver accepted" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Waiver acceptance rejected for organization {OrganizationId}: {Message}", id, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     // Admin management endpoints

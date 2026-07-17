@@ -33,7 +33,8 @@ public record OrganizationMemberDto(
     DateTime SubscribedAt,
     bool IsAdmin,  // True if this member is an admin of the organization
     List<UserBadgeDto>? Badges = null,  // Top 3 badges by displayOrder
-    int TotalBadgeCount = 0  // Total badges user has earned
+    int TotalBadgeCount = 0,  // Total badges user has earned
+    bool? HasAcceptedCurrentWaiver = null  // null when the org has no active waiver
 );
 
 public record CreateOrganizationRequest(

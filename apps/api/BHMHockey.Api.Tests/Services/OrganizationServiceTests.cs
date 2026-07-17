@@ -4,6 +4,9 @@ using BHMHockey.Api.Models.Entities;
 using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Moq;
 using Xunit;
 
 namespace BHMHockey.Api.Tests.Services;
@@ -17,16 +20,34 @@ public class OrganizationServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
     private readonly OrganizationAdminService _adminService;
+    private readonly OrganizationWaiverService _waiverService;
+    private readonly Mock<IWaitlistService> _mockWaitlistService;
+    private readonly EventService _eventService;
     private readonly OrganizationService _sut;
 
     public OrganizationServiceTests()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         _context = new AppDbContext(options);
         _adminService = new OrganizationAdminService(_context);
-        _sut = new OrganizationService(_context, _adminService);
+        _waiverService = new OrganizationWaiverService(_context, _adminService, Mock.Of<ILogger<OrganizationWaiverService>>());
+        _mockWaitlistService = new Mock<IWaitlistService>();
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(1);
+        _mockWaitlistService.Setup(w => w.PromoteFromWaitlistAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<bool>()))
+            .ReturnsAsync(new PromotionResult());
+        // Real EventService so LeaveAsync composes the standard cancellation path
+        _eventService = new EventService(
+            _context,
+            Mock.Of<INotificationService>(),
+            _adminService,
+            _mockWaitlistService.Object,
+            _waiverService,
+            Mock.Of<ILogger<EventService>>());
+        _sut = new OrganizationService(_context, _adminService, _waiverService, _eventService);
     }
 
     public void Dispose()
@@ -1030,6 +1051,237 @@ public class OrganizationServiceTests : IDisposable
 
         // Assert
         result!.DefaultShowWaitlistBeforePublish.Should().BeTrue();
+    }
+
+    #endregion
+
+    #region Leave Organization Tests
+
+    private async Task<Event> CreateOrgEvent(Guid creatorId, Guid orgId, DateTime? eventDate = null, string status = "Published")
+    {
+        var evt = new Event
+        {
+            Id = Guid.NewGuid(),
+            CreatorId = creatorId,
+            OrganizationId = orgId,
+            Name = "Org Event",
+            EventDate = eventDate ?? DateTime.UtcNow.AddDays(7),
+            MaxPlayers = 10,
+            Cost = 0,
+            Status = status,
+            Visibility = "Public"
+        };
+        _context.Events.Add(evt);
+        await _context.SaveChangesAsync();
+        return evt;
+    }
+
+    private async Task<EventRegistration> CreateEventRegistration(Guid eventId, Guid userId, string status = "Registered")
+    {
+        var registration = new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId,
+            UserId = userId,
+            Status = status,
+            RegisteredPosition = "Skater",
+            WaitlistPosition = status == "Waitlisted" ? 1 : null,
+            RegisteredAt = DateTime.UtcNow
+        };
+        _context.EventRegistrations.Add(registration);
+        await _context.SaveChangesAsync();
+        return registration;
+    }
+
+    [Fact]
+    public async Task LeaveAsync_UnsubscribesAndCancelsUpcomingRegistrations()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var upcoming1 = await CreateOrgEvent(creator.Id, org.Id);
+        var upcoming2 = await CreateOrgEvent(creator.Id, org.Id);
+        var reg1 = await CreateEventRegistration(upcoming1.Id, member.Id, "Registered");
+        var reg2 = await CreateEventRegistration(upcoming2.Id, member.Id, "Waitlisted");
+
+        // Act
+        var result = await _sut.LeaveAsync(org.Id, member.Id);
+
+        // Assert
+        result.Should().BeTrue();
+        (await _context.OrganizationSubscriptions
+            .AnyAsync(s => s.OrganizationId == org.Id && s.UserId == member.Id)).Should().BeFalse();
+        (await _context.EventRegistrations.FindAsync(reg1.Id))!.Status.Should().Be("Cancelled");
+        (await _context.EventRegistrations.FindAsync(reg2.Id))!.Status.Should().Be("Cancelled");
+    }
+
+    [Fact]
+    public async Task LeaveAsync_ReusesCancellationPath_FiresPromotionForRegisteredCancellations()
+    {
+        // Arrange - cancelling a REGISTERED spot must go through the standard
+        // promotion side effect (PromoteFromWaitlistAsync), same as a manual cancel
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var evt = await CreateOrgEvent(creator.Id, org.Id);
+        await CreateEventRegistration(evt.Id, member.Id, "Registered");
+
+        // Act
+        await _sut.LeaveAsync(org.Id, member.Id);
+
+        // Assert
+        _mockWaitlistService.Verify(
+            w => w.PromoteFromWaitlistAsync(evt.Id, 1, true),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task LeaveAsync_PastAndCancelledEventRegistrations_Untouched()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var pastEvent = await CreateOrgEvent(creator.Id, org.Id, eventDate: DateTime.UtcNow.AddDays(-3));
+        var cancelledEvent = await CreateOrgEvent(creator.Id, org.Id, status: "Cancelled");
+        var pastReg = await CreateEventRegistration(pastEvent.Id, member.Id, "Registered");
+        var cancelledEventReg = await CreateEventRegistration(cancelledEvent.Id, member.Id, "Registered");
+
+        // Act
+        await _sut.LeaveAsync(org.Id, member.Id);
+
+        // Assert - historical/cancelled-event registrations preserved
+        (await _context.EventRegistrations.FindAsync(pastReg.Id))!.Status.Should().Be("Registered");
+        (await _context.EventRegistrations.FindAsync(cancelledEventReg.Id))!.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task LeaveAsync_OtherOrgRegistrations_Untouched()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id, "Org A");
+        var otherOrg = await CreateTestOrganization(creator.Id, "Org B");
+        await CreateSubscription(org.Id, member.Id);
+        await CreateSubscription(otherOrg.Id, member.Id);
+        var otherEvent = await CreateOrgEvent(creator.Id, otherOrg.Id);
+        var otherReg = await CreateEventRegistration(otherEvent.Id, member.Id, "Registered");
+
+        // Act
+        await _sut.LeaveAsync(org.Id, member.Id);
+
+        // Assert
+        (await _context.EventRegistrations.FindAsync(otherReg.Id))!.Status.Should().Be("Registered");
+        (await _context.OrganizationSubscriptions
+            .AnyAsync(s => s.OrganizationId == otherOrg.Id && s.UserId == member.Id)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task LeaveAsync_NotSubscribedButRegistered_StillCancelsRegistrations()
+    {
+        // Arrange - the blocking gate lists orgs by registration, not subscription,
+        // so leave must work for registered-but-unsubscribed users too
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateOrgEvent(creator.Id, org.Id);
+        var reg = await CreateEventRegistration(evt.Id, member.Id, "Registered");
+
+        // Act
+        var result = await _sut.LeaveAsync(org.Id, member.Id);
+
+        // Assert
+        result.Should().BeTrue();
+        (await _context.EventRegistrations.FindAsync(reg.Id))!.Status.Should().Be("Cancelled");
+    }
+
+    #endregion
+
+    #region Member Waiver Status Tests
+
+    [Fact]
+    public async Task GetMembersAsync_NoActiveWaiver_WaiverFlagsAreNull()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+
+        // Act
+        var members = await _sut.GetMembersAsync(org.Id, creator.Id);
+
+        // Assert
+        members.Should().OnlyContain(m => m.HasAcceptedCurrentWaiver == null);
+    }
+
+    [Fact]
+    public async Task GetMembersAsync_ActiveWaiver_FlagsAcceptedAndUnaccepted()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var acceptedMember = await CreateTestUser("accepted@example.com");
+        var unacceptedMember = await CreateTestUser("unaccepted@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, creator.Id);
+        await CreateSubscription(org.Id, acceptedMember.Id);
+        await CreateSubscription(org.Id, unacceptedMember.Id);
+        var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, waiver!.Id, acceptedMember.Id);
+
+        // Act
+        var members = await _sut.GetMembersAsync(org.Id, creator.Id);
+
+        // Assert
+        members.Single(m => m.Id == acceptedMember.Id).HasAcceptedCurrentWaiver.Should().BeTrue();
+        members.Single(m => m.Id == unacceptedMember.Id).HasAcceptedCurrentWaiver.Should().BeFalse();
+        members.Single(m => m.Id == creator.Id).HasAcceptedCurrentWaiver.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetMembersAsync_ClearedWaiver_WaiverFlagsBackToNull()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, waiver!.Id, member.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "", creator.Id);
+
+        // Act
+        var members = await _sut.GetMembersAsync(org.Id, creator.Id);
+
+        // Assert - gating and indicators fully off after clearing
+        members.Should().OnlyContain(m => m.HasAcceptedCurrentWaiver == null);
+    }
+
+    [Fact]
+    public async Task GetMembersAsync_NewVersion_ResetsAcceptanceFlags()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var v1 = await _waiverService.SetWaiverAsync(org.Id, "v1", creator.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, v1!.Id, member.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "v2", creator.Id);
+
+        // Act
+        var members = await _sut.GetMembersAsync(org.Id, creator.Id);
+
+        // Assert - v1 acceptance does not carry over to v2
+        members.Single(m => m.Id == member.Id).HasAcceptedCurrentWaiver.Should().BeFalse();
     }
 
     #endregion

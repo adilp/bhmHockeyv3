@@ -26,6 +26,7 @@ public class EventServiceTests : IDisposable
     private readonly Mock<INotificationService> _mockNotificationService;
     private readonly Mock<IWaitlistService> _mockWaitlistService;
     private readonly OrganizationAdminService _adminService;
+    private readonly OrganizationWaiverService _waiverService;
     private readonly EventService _sut;
 
     public EventServiceTests()
@@ -38,12 +39,14 @@ public class EventServiceTests : IDisposable
         _mockNotificationService = new Mock<INotificationService>();
         _mockWaitlistService = new Mock<IWaitlistService>();
         _adminService = new OrganizationAdminService(_context);
+        // Real waiver service so gate tests exercise real active-waiver semantics
+        _waiverService = new OrganizationWaiverService(_context, _adminService, Mock.Of<ILogger<OrganizationWaiverService>>());
 
         // Default mock setup for waitlist service
         _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(It.IsAny<Guid>()))
             .ReturnsAsync(1);
 
-        _sut = new EventService(_context, _mockNotificationService.Object, _adminService, _mockWaitlistService.Object, Mock.Of<ILogger<EventService>>());
+        _sut = new EventService(_context, _mockNotificationService.Object, _adminService, _mockWaitlistService.Object, _waiverService, Mock.Of<ILogger<EventService>>());
     }
 
     public void Dispose()
@@ -4521,6 +4524,307 @@ public class EventServiceTests : IDisposable
             && r.PaymentVerifiedAt == null
             && r.PaymentDeadlineAt == null);
         result.Should().NotContain(r => r.User.Id == registered.Id);
+    }
+
+    #endregion
+
+    #region Waiver Gate Tests
+
+    private async Task<User> CreateGhostUser(string firstName = "Ghost", string lastName = "Player")
+    {
+        var ghost = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = $"ghost_{Guid.NewGuid():N}@placeholder.bhmhockey",
+            PasswordHash = "",
+            FirstName = firstName,
+            LastName = lastName,
+            IsGhostPlayer = true,
+            IsActive = true,
+            Role = "Player",
+            Positions = new Dictionary<string, string> { { "skater", "Bronze" } }
+        };
+        _context.Users.Add(ghost);
+        await _context.SaveChangesAsync();
+        return ghost;
+    }
+
+    [Fact]
+    public async Task RegisterAsync_OrgEventWithUnacceptedWaiver_ThrowsWithDistinctiveMessage()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+
+        // Act
+        var act = () => _sut.RegisterAsync(evt.Id, player.Id);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Waiver acceptance required*");
+        (await _context.EventRegistrations.CountAsync(r => r.EventId == evt.Id)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_AfterAcceptingCurrentWaiver_Succeeds()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+        await _waiverService.AcceptWaiverAsync(org.Id, waiver!.Id, player.Id);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, player.Id);
+
+        // Assert
+        result.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_OrgEventWithoutWaiver_NotGated()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, player.Id);
+
+        // Assert
+        result.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ClearedWaiver_NotGated()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "", creator.Id); // Deactivate
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, player.Id);
+
+        // Assert
+        result.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_OnlyStaleAcceptance_StillGated()
+    {
+        // Arrange - player accepted v1, admin published v2
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var v1 = await _waiverService.SetWaiverAsync(org.Id, "v1", creator.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, v1!.Id, player.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "v2", creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+
+        // Act
+        var act = () => _sut.RegisterAsync(evt.Id, player.Id);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Waiver acceptance required*");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_StandaloneEvent_NotGated()
+    {
+        // Arrange - standalone events have no org, so no waiver applies
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, organizationId: null, cost: 0);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, player.Id);
+
+        // Assert
+        result.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ManagerWithUnacceptedWaiver_AlsoGated()
+    {
+        // Arrange - same rule for everyone with a real account, managers included
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+
+        // Act
+        var act = () => _sut.RegisterAsync(evt.Id, creator.Id);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Waiver acceptance required*");
+    }
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_UnacceptedUser_NotGated()
+    {
+        // Arrange - organizer-initiated adds bypass the waiver gate by design
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+
+        // Act
+        var registration = await _sut.AddUserToWaitlistAsync(evt.Id, player.Id, creator.Id, "Skater");
+
+        // Assert - registration created despite no acceptance
+        registration.Should().NotBeNull();
+        registration.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_WithActiveWaiver_NotGated()
+    {
+        // Arrange - ghosts are exempt from everything waiver-related
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+
+        // Act
+        var registration = await _sut.CreateGhostPlayerAsync(evt.Id, creator.Id, "Ghost", "Goalie", "Goalie", "Bronze");
+
+        // Assert
+        registration.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task CreateAsync_AutoRoster_UnacceptedMembers_StillAdded()
+    {
+        // Arrange - auto-roster is an organizer-initiated path, not gated
+        var creator = await CreateTestUser("creator@example.com");
+        var regular = await CreateTestUser("regular@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        await CreateSubscription(org.Id, regular.Id);
+        await AddAutoRosterMember(org.Id, regular.Id, "Skater", 0);
+
+        // Act
+        var eventDto = await _sut.CreateAsync(CreateEventRequestFor(org.Id), creator.Id);
+
+        // Assert
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == eventDto.Id && r.UserId == regular.Id);
+        registration.Should().NotBeNull();
+        registration!.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_RequiresWaiverAcceptance_ComputedForCurrentUser()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+
+        // Unaccepted -> true (manager too - same rule for everyone)
+        (await _sut.GetByIdAsync(evt.Id, player.Id))!.RequiresWaiverAcceptance.Should().BeTrue();
+        (await _sut.GetByIdAsync(evt.Id, creator.Id))!.RequiresWaiverAcceptance.Should().BeTrue();
+
+        // Accepted -> false
+        await _waiverService.AcceptWaiverAsync(org.Id, waiver!.Id, player.Id);
+        (await _sut.GetByIdAsync(evt.Id, player.Id))!.RequiresWaiverAcceptance.Should().BeFalse();
+
+        // Anonymous -> false
+        (await _sut.GetByIdAsync(evt.Id, null))!.RequiresWaiverAcceptance.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_RequiresWaiverAcceptance_FalseWithoutActiveWaiver()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var orgEvent = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+        var standaloneEvent = await CreateTestEvent(creator.Id, organizationId: null, cost: 0);
+
+        // No waiver + standalone -> false
+        (await _sut.GetByIdAsync(orgEvent.Id, player.Id))!.RequiresWaiverAcceptance.Should().BeFalse();
+        (await _sut.GetByIdAsync(standaloneEvent.Id, player.Id))!.RequiresWaiverAcceptance.Should().BeFalse();
+
+        // Cleared waiver -> false
+        await _waiverService.SetWaiverAsync(org.Id, "v1", creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "", creator.Id);
+        (await _sut.GetByIdAsync(orgEvent.Id, player.Id))!.RequiresWaiverAcceptance.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_HasNotAcceptedWaiver_FlagsOnlyUnacceptedRealUsers()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var accepted = await CreateTestUser("accepted@example.com");
+        var unaccepted = await CreateTestUser("unaccepted@example.com");
+        var ghost = await CreateGhostUser();
+        var org = await CreateTestOrganization(creator.Id);
+        var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+        await CreateRegistration(evt.Id, accepted.Id);
+        await CreateRegistration(evt.Id, unaccepted.Id);
+        await CreateRegistration(evt.Id, ghost.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, waiver!.Id, accepted.Id);
+
+        // Act
+        var registrations = await _sut.GetRegistrationsAsync(evt.Id);
+
+        // Assert - only the unaccepted real user is flagged; ghost is exempt
+        registrations.Should().HaveCount(3);
+        registrations.Single(r => r.User.Id == accepted.Id).HasNotAcceptedWaiver.Should().BeFalse();
+        registrations.Single(r => r.User.Id == unaccepted.Id).HasNotAcceptedWaiver.Should().BeTrue();
+        registrations.Single(r => r.User.Id == ghost.Id).HasNotAcceptedWaiver.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_HasNotAcceptedWaiver_AllFalseWithoutActiveWaiver()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
+        await CreateRegistration(evt.Id, player.Id);
+
+        // Act / Assert - no waiver
+        (await _sut.GetRegistrationsAsync(evt.Id)).Should().OnlyContain(r => !r.HasNotAcceptedWaiver);
+
+        // Cleared waiver
+        await _waiverService.SetWaiverAsync(org.Id, "v1", creator.Id);
+        await _waiverService.SetWaiverAsync(org.Id, "", creator.Id);
+        (await _sut.GetRegistrationsAsync(evt.Id)).Should().OnlyContain(r => !r.HasNotAcceptedWaiver);
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_HasNotAcceptedWaiver_AllFalseOnStandaloneEvent()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, organizationId: null, cost: 0);
+        await CreateRegistration(evt.Id, player.Id);
+
+        // Act / Assert
+        (await _sut.GetRegistrationsAsync(evt.Id)).Should().OnlyContain(r => !r.HasNotAcceptedWaiver);
     }
 
     #endregion
