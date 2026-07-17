@@ -16,6 +16,7 @@ const mockCancelRegistration = jest.fn();
 const mockGetMyRegistrations = jest.fn();
 const mockReorderWaitlist = jest.fn();
 const mockMarkPayment = jest.fn();
+const mockUpdateGhostPlayer = jest.fn();
 
 // Mock the api-client module
 jest.mock('@bhmhockey/api-client', () => ({
@@ -28,6 +29,7 @@ jest.mock('@bhmhockey/api-client', () => ({
     getMyRegistrations: mockGetMyRegistrations,
     reorderWaitlist: mockReorderWaitlist,
     markPayment: mockMarkPayment,
+    updateGhostPlayer: mockUpdateGhostPlayer,
   },
 }));
 
@@ -559,6 +561,61 @@ describe('eventStore', () => {
       expect(useEventStore.getState().events[0].myPaymentStatus).toBe('Pending');
       // Server message surfaced for the UI
       expect(useEventStore.getState().error).toBe(serverMessage);
+    });
+  });
+
+  describe('updateGhostPlayer', () => {
+    it('calls the API and refreshes event data on success', async () => {
+      const event = createMockEvent({ id: 'event-1' });
+      useEventStore.setState({ selectedEvent: event });
+      mockUpdateGhostPlayer.mockResolvedValue({ id: 'reg-1' });
+      mockGetById.mockResolvedValue(event);
+
+      const result = await useEventStore
+        .getState()
+        .updateGhostPlayer('event-1', 'ghost-user-1', 'Jane', 'Smith', 'Goalie', 'Silver');
+
+      expect(result).toBe(true);
+      expect(mockUpdateGhostPlayer).toHaveBeenCalledWith('event-1', 'ghost-user-1', {
+        firstName: 'Jane',
+        lastName: 'Smith',
+        position: 'Goalie',
+        skillLevel: 'Silver',
+      });
+      expect(mockGetById).toHaveBeenCalledWith('event-1');
+      expect(useEventStore.getState().error).toBeNull();
+    });
+
+    it('omits skillLevel when not provided', async () => {
+      mockUpdateGhostPlayer.mockResolvedValue({ id: 'reg-1' });
+      mockGetById.mockResolvedValue(createMockEvent({ id: 'event-1' }));
+
+      await useEventStore
+        .getState()
+        .updateGhostPlayer('event-1', 'ghost-user-1', 'Jane', 'Smith', 'Skater');
+
+      expect(mockUpdateGhostPlayer).toHaveBeenCalledWith('event-1', 'ghost-user-1', {
+        firstName: 'Jane',
+        lastName: 'Smith',
+        position: 'Skater',
+        skillLevel: undefined,
+      });
+    });
+
+    it('returns false and surfaces the server message on failure (roster full for skaters)', async () => {
+      const serverMessage =
+        'The roster is full for skaters. Free up a skater spot before switching this guest from Goalie to Skater.';
+      // The axios interceptor rejects with a plain ApiError object (not an Error instance)
+      mockUpdateGhostPlayer.mockRejectedValue({ message: serverMessage });
+
+      const result = await useEventStore
+        .getState()
+        .updateGhostPlayer('event-1', 'ghost-user-1', 'Jane', 'Smith', 'Skater');
+
+      expect(result).toBe(false);
+      expect(useEventStore.getState().error).toBe(serverMessage);
+      // No refresh on failure
+      expect(mockGetById).not.toHaveBeenCalled();
     });
   });
 });

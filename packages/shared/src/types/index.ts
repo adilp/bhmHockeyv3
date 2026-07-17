@@ -31,6 +31,14 @@ export interface CreateGhostPlayerRequest {
   skillLevel?: SkillLevel;
 }
 
+// Ghost player in-place update request (mirrors CreateGhostPlayerRequest)
+export interface UpdateGhostPlayerRequest {
+  firstName: string;
+  lastName: string;
+  position: 'Goalie' | 'Skater';
+  skillLevel?: SkillLevel;
+}
+
 // Position-skill mapping for multi-position support
 export type UserPositions = {
   goalie?: SkillLevel;

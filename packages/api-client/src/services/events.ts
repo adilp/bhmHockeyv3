@@ -18,7 +18,8 @@ import type {
   WaitlistOrderItem,
   UserSearchResultDto,
   AddUserToEventRequest,
-  CreateGhostPlayerRequest
+  CreateGhostPlayerRequest,
+  UpdateGhostPlayerRequest
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -249,6 +250,18 @@ export const eventService = {
   async createGhostPlayer(eventId: string, request: CreateGhostPlayerRequest): Promise<EventRegistrationDto> {
     const response = await apiClient.instance.post<EventRegistrationDto>(
       `/events/${eventId}/registrations/create-ghost-player`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Update a ghost player's name, position, and skill level in place (organizer only).
+   * The registration is never released during the edit, so the roster spot is preserved.
+   */
+  async updateGhostPlayer(eventId: string, userId: string, request: UpdateGhostPlayerRequest): Promise<EventRegistrationDto> {
+    const response = await apiClient.instance.put<EventRegistrationDto>(
+      `/events/${eventId}/registrations/ghost-players/${userId}`,
       request
     );
     return response.data;

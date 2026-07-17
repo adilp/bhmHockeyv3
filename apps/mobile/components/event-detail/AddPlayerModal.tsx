@@ -15,7 +15,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import type { UserSearchResultDto, SkillLevel } from '@bhmhockey/shared';
+import type { UserSearchResultDto, SkillLevel, EventRegistrationDto } from '@bhmhockey/shared';
 import { useEventStore } from '../../stores/eventStore';
 import { colors, spacing, radius } from '../../theme';
 
@@ -26,6 +26,8 @@ interface AddPlayerModalProps {
   eventId: string;
   onClose: () => void;
   onPlayerAdded: () => void;
+  /** When set, the modal opens in edit mode: only the guest form is shown, pre-filled with this ghost player's values */
+  editingRegistration?: EventRegistrationDto | null;
 }
 
 export function AddPlayerModal({
@@ -33,6 +35,7 @@ export function AddPlayerModal({
   eventId,
   onClose,
   onPlayerAdded,
+  editingRegistration,
 }: AddPlayerModalProps) {
   // Tab state
   const [activeTab, setActiveTab] = useState<TabType>('search');
@@ -53,7 +56,9 @@ export function AddPlayerModal({
   const [guestSkillLevel, setGuestSkillLevel] = useState<SkillLevel | null>(null);
   const [isCreatingGuest, setIsCreatingGuest] = useState(false);
 
-  const { searchUsersForEvent, addUserToEvent, createGhostPlayer } = useEventStore();
+  const { searchUsersForEvent, addUserToEvent, createGhostPlayer, updateGhostPlayer } = useEventStore();
+
+  const isEditMode = !!editingRegistration;
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -75,6 +80,22 @@ export function AddPlayerModal({
       setIsCreatingGuest(false);
     }
   }, [visible]);
+
+  // Edit mode: pre-fill the guest form with the ghost player's current values
+  useEffect(() => {
+    if (visible && editingRegistration) {
+      const { user, registeredPosition } = editingRegistration;
+      const position = registeredPosition === 'Goalie' ? 'Goalie' : 'Skater';
+      setGuestFirstName(user.firstName);
+      setGuestLastName(user.lastName);
+      setGuestPosition(position);
+      // Ghost players have a single-entry positions dict; prefer the registered position's skill
+      const skill = position === 'Goalie'
+        ? user.positions?.goalie ?? user.positions?.skater
+        : user.positions?.skater ?? user.positions?.goalie;
+      setGuestSkillLevel(skill ?? null);
+    }
+  }, [visible, editingRegistration]);
 
   // Debounced search
   useEffect(() => {
@@ -130,7 +151,7 @@ export function AddPlayerModal({
     }
   };
 
-  const handleCreateGuest = async () => {
+  const handleSubmitGuest = async () => {
     if (!guestFirstName.trim()) {
       Alert.alert('Required', 'Please enter a first name.');
       return;
@@ -145,18 +166,30 @@ export function AddPlayerModal({
     }
 
     setIsCreatingGuest(true);
-    const success = await createGhostPlayer(
-      eventId,
-      guestFirstName.trim(),
-      guestLastName.trim(),
-      guestPosition,
-      guestSkillLevel || undefined
-    );
+    const success = editingRegistration
+      ? await updateGhostPlayer(
+          eventId,
+          editingRegistration.user.id,
+          guestFirstName.trim(),
+          guestLastName.trim(),
+          guestPosition,
+          guestSkillLevel || undefined
+        )
+      : await createGhostPlayer(
+          eventId,
+          guestFirstName.trim(),
+          guestLastName.trim(),
+          guestPosition,
+          guestSkillLevel || undefined
+        );
     setIsCreatingGuest(false);
 
     if (success) {
       onPlayerAdded();
       onClose();
+    } else if (editingRegistration) {
+      // Surface the server's message (e.g. roster full for skaters) to the organizer
+      Alert.alert('Error', useEventStore.getState().error || 'Failed to update guest player');
     }
   };
 
@@ -207,39 +240,43 @@ export function AddPlayerModal({
               <View style={styles.modal}>
                 {/* Header */}
                 <View style={styles.header}>
-                  <Text style={styles.title} allowFontScaling={false}>Add Player</Text>
+                  <Text style={styles.title} allowFontScaling={false}>
+                    {isEditMode ? 'Edit Guest' : 'Add Player'}
+                  </Text>
                   <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                     <Text style={styles.closeButtonText} allowFontScaling={false}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Tab Toggle */}
-                <View style={styles.tabContainer}>
-                  <TouchableOpacity
-                    style={[styles.tab, activeTab === 'search' && styles.tabActive]}
-                    onPress={() => setActiveTab('search')}
-                  >
-                    <Text
-                      style={[styles.tabText, activeTab === 'search' && styles.tabTextActive]}
-                      allowFontScaling={false}
+                {/* Tab Toggle - hidden in edit mode (guest form only) */}
+                {!isEditMode && (
+                  <View style={styles.tabContainer}>
+                    <TouchableOpacity
+                      style={[styles.tab, activeTab === 'search' && styles.tabActive]}
+                      onPress={() => setActiveTab('search')}
                     >
-                      Search
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.tab, activeTab === 'create' && styles.tabActive]}
-                    onPress={() => setActiveTab('create')}
-                  >
-                    <Text
-                      style={[styles.tabText, activeTab === 'create' && styles.tabTextActive]}
-                      allowFontScaling={false}
+                      <Text
+                        style={[styles.tabText, activeTab === 'search' && styles.tabTextActive]}
+                        allowFontScaling={false}
+                      >
+                        Search
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.tab, activeTab === 'create' && styles.tabActive]}
+                      onPress={() => setActiveTab('create')}
                     >
-                      Create Guest
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                      <Text
+                        style={[styles.tabText, activeTab === 'create' && styles.tabTextActive]}
+                        allowFontScaling={false}
+                      >
+                        Create Guest
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
-                {activeTab === 'search' ? (
+                {!isEditMode && activeTab === 'search' ? (
                   <>
                     {/* Search Input */}
                     <View style={styles.searchContainer}>
@@ -491,20 +528,20 @@ export function AddPlayerModal({
                       </View>
                     </View>
 
-                    {/* Create Guest Button */}
+                    {/* Create Guest / Save Changes Button */}
                     <TouchableOpacity
                       style={[
                         styles.confirmButton,
                         (!guestFirstName.trim() || !guestLastName.trim() || !guestPosition) && styles.confirmButtonDisabled,
                       ]}
-                      onPress={handleCreateGuest}
+                      onPress={handleSubmitGuest}
                       disabled={isCreatingGuest || !guestFirstName.trim() || !guestLastName.trim() || !guestPosition}
                     >
                       {isCreatingGuest ? (
                         <ActivityIndicator size="small" color={colors.text.primary} />
                       ) : (
                         <Text style={styles.confirmButtonText} allowFontScaling={false}>
-                          Create Guest
+                          {isEditMode ? 'Save Changes' : 'Create Guest'}
                         </Text>
                       )}
                     </TouchableOpacity>

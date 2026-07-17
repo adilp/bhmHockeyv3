@@ -31,6 +31,8 @@ interface PlayerDetailModalProps {
   onMoveToRoster?: (registration: EventRegistrationDto) => void;
   /** Move rostered player to waitlist (organizer only) */
   onMoveToWaitlist?: (registration: EventRegistrationDto) => void;
+  /** Edit a guest (ghost) player in place (organizer only; shown only for ghost players) */
+  onEditGuest?: (registration: EventRegistrationDto) => void;
 }
 
 const getPaymentStatusDisplay = (status?: string): { label: string; color: string } => {
@@ -58,6 +60,7 @@ export function PlayerDetailModal({
   onResetPayment,
   onMoveToRoster,
   onMoveToWaitlist,
+  onEditGuest,
 }: PlayerDetailModalProps) {
   const [badges, setBadges] = useState<UserBadgeDto[]>([]);
   const [isLoadingBadges, setIsLoadingBadges] = useState(false);
@@ -138,10 +141,18 @@ export function PlayerDetailModal({
     onClose();
   };
 
+  const handleEditGuest = () => {
+    onEditGuest?.(registration);
+    onClose();
+  };
+
+  // Edit Guest is only available for ghost (guest) players
+  const canEditGuest = user.isGhostPlayer === true && !!onEditGuest;
+
   // Check if we have any admin actions to show
   const hasAdminActions = isAdmin && (
     onSwapTeam || onRemove || onMarkPaid || onVerifyPayment || onResetPayment ||
-    onMoveToRoster || onMoveToWaitlist
+    onMoveToRoster || onMoveToWaitlist || canEditGuest
   );
 
   return (
@@ -211,6 +222,13 @@ export function PlayerDetailModal({
                 {/* Admin Actions */}
                 {hasAdminActions && (
                   <View style={styles.actions}>
+                    {/* Edit Guest - only for ghost players when organizer */}
+                    {canEditGuest && (
+                      <TouchableOpacity style={styles.actionButton} onPress={handleEditGuest}>
+                        <Text style={styles.actionButtonText} allowFontScaling={false}>Edit Guest</Text>
+                      </TouchableOpacity>
+                    )}
+
                     {/* Swap Team */}
                     {onSwapTeam && (
                       <TouchableOpacity style={styles.actionButton} onPress={handleSwapTeam}>

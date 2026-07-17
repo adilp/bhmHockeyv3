@@ -613,6 +613,37 @@ public class EventsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Update a ghost player's name, position, and skill level in place (organizer only).
+    /// The registration is never released during the edit, so the roster spot is preserved.
+    /// </summary>
+    [Authorize]
+    [HttpPut("{eventId:guid}/registrations/ghost-players/{userId:guid}")]
+    public async Task<ActionResult<EventRegistrationDto>> UpdateGhostPlayer(
+        Guid eventId,
+        Guid userId,
+        [FromBody] UpdateGhostPlayerRequest request)
+    {
+        var organizerId = GetCurrentUserId();
+
+        try
+        {
+            var registration = await _eventService.UpdateGhostPlayerAsync(
+                eventId, organizerId, userId, request.FirstName, request.LastName, request.Position, request.SkillLevel);
+            return Ok(registration);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Ghost player update rejected for event {EventId}, user {UserId}: {Message}",
+                eventId, userId, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     #endregion
 
     #region Roster Order

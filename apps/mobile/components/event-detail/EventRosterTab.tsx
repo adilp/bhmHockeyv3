@@ -51,6 +51,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isAddPlayerModalVisible, setIsAddPlayerModalVisible] = useState(false);
+  const [editingGuest, setEditingGuest] = useState<EventRegistrationDto | null>(null);
   const isUpdatingRoster = useRef(false);
   const hasLoadedOnce = useRef(false);
   const [isShareModalVisible, setIsShareModalVisible] = useState(false);
@@ -137,6 +138,12 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   const handlePlayerAdded = () => {
     // Reload registrations to show the newly added player
     reloadRegistrations();
+  };
+
+  // Open the guest form in edit mode for a ghost player (organizer only)
+  const handleEditGuest = (registration: EventRegistrationDto) => {
+    setEditingGuest(registration);
+    setIsAddPlayerModalVisible(true);
   };
 
   const handlePublishRoster = async () => {
@@ -651,14 +658,19 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
         onResetPayment={canManage ? handleResetPayment : undefined}
         onMoveToRoster={canManage && selectedPlayer?.isWaitlisted ? handleMoveToRoster : undefined}
         onMoveToWaitlist={canManage && !selectedPlayer?.isWaitlisted ? handleMoveToWaitlist : undefined}
+        onEditGuest={canManage ? handleEditGuest : undefined}
       />
 
-      {/* Add Player Modal */}
+      {/* Add Player Modal (also used in edit mode for guest players) */}
       <AddPlayerModal
         visible={isAddPlayerModalVisible}
         eventId={eventId}
-        onClose={() => setIsAddPlayerModalVisible(false)}
+        onClose={() => {
+          setIsAddPlayerModalVisible(false);
+          setEditingGuest(null);
+        }}
         onPlayerAdded={handlePlayerAdded}
+        editingRegistration={editingGuest}
       />
 
       {/* Off-screen card for capture */}

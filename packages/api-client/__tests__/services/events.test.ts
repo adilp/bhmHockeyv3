@@ -95,4 +95,38 @@ describe('eventService waitlist visibility & payment', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('updateGhostPlayer', () => {
+    it('puts the guest edit to the ghost-players endpoint', async () => {
+      const request = {
+        firstName: 'Jane',
+        lastName: 'Smith',
+        position: 'Goalie' as const,
+        skillLevel: 'Silver' as const,
+      };
+      const updated = { id: 'reg-1', registeredPosition: 'Goalie' };
+      mockPut.mockResolvedValueOnce({ data: updated });
+
+      const result = await eventService.updateGhostPlayer('event-1', 'ghost-user-1', request);
+
+      expect(mockPut).toHaveBeenCalledWith(
+        '/events/event-1/registrations/ghost-players/ghost-user-1',
+        request
+      );
+      expect(result).toEqual(updated);
+    });
+
+    it('surfaces server rejection (roster full for skaters)', async () => {
+      const apiError = { message: 'The roster is full for skaters. Free up a skater spot before switching this guest from Goalie to Skater.' };
+      mockPut.mockRejectedValueOnce(apiError);
+
+      await expect(
+        eventService.updateGhostPlayer('event-1', 'ghost-user-1', {
+          firstName: 'Jane',
+          lastName: 'Smith',
+          position: 'Skater',
+        })
+      ).rejects.toEqual(apiError);
+    });
+  });
 });
