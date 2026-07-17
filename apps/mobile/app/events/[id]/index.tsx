@@ -289,6 +289,8 @@ export default function EventDetailScreen() {
 
   const spotsLeft = selectedEvent ? selectedEvent.maxPlayers - selectedEvent.registeredCount : 0;
   const isFull = spotsLeft <= 0;
+  // Paid events always waitlist self-registrations until payment is verified
+  const willWaitlist = isFull || (selectedEvent ? selectedEvent.cost > 0 : false);
   const isWaitlisted = selectedEvent?.amIWaitlisted;
   const canManage = selectedEvent?.canManage || false;
 
@@ -377,7 +379,7 @@ export default function EventDetailScreen() {
             isAuthenticated={isAuthenticated}
             isRegistered={selectedEvent.isRegistered}
             isWaitlisted={isWaitlisted || false}
-            isFull={isFull}
+            willWaitlist={willWaitlist}
             isProcessing={isProcessing}
             onRegister={handleRegister}
           />
