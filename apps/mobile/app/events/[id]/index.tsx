@@ -118,11 +118,8 @@ export default function EventDetailScreen() {
     ) => {
       if (!result) return;
       if (result.status === 'Waitlisted') {
-        // Don't show position during draft mode - roster not yet published
-        Alert.alert(
-          'Added to Waitlist',
-          `You've been added to the waitlist as a ${position}. We'll notify you when a spot opens up!`
-        );
+        // Server message is payment-aware: pay-now vs don't-pay-yet
+        Alert.alert('Added to Waitlist', result.message);
       } else {
         Alert.alert('Success', `You have been registered as a ${position}!`);
       }

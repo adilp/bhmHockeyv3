@@ -767,10 +767,11 @@ public class EventServiceTests : IDisposable
         // Act
         var result = await _sut.RegisterAsync(evt.Id, user.Id);
 
-        // Assert - Should be waitlisted, not registered (paid events always waitlist)
+        // Assert - Should be waitlisted, not registered (paid events always waitlist);
+        // spot is open for their rank, so the message must prompt payment
         result.Status.Should().Be("Waitlisted");
         result.WaitlistPosition.Should().Be(1);
-        result.Message.Should().Contain("payment");
+        result.Message.Should().Contain("Send your payment to secure your spot");
 
         var registration = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == user.Id);
@@ -862,10 +863,10 @@ public class EventServiceTests : IDisposable
         // Act
         var result = await _sut.RegisterAsync(evt.Id, newUser.Id);
 
-        // Assert
+        // Assert - No open spot, so the message must tell them NOT to pay yet
         result.Status.Should().Be("Waitlisted");
         result.WaitlistPosition.Should().Be(1);
-        result.Message.Should().Contain("payment");
+        result.Message.Should().Contain("Don't pay yet");
 
         var registration = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == newUser.Id);

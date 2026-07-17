@@ -507,6 +507,7 @@ public class EventService : IEventService
             // Add to waitlist
             var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
 
+            EventRegistration waitlistReg;
             if (existingReg != null)
             {
                 // Re-activate cancelled registration as waitlisted
@@ -520,6 +521,7 @@ public class EventService : IEventService
                 existingReg.PaymentVerifiedAt = null;
                 existingReg.PromotedAt = null;
                 existingReg.PaymentDeadlineAt = null;
+                waitlistReg = existingReg;
             }
             else
             {
@@ -534,6 +536,7 @@ public class EventService : IEventService
                     PaymentStatus = isPaidEvent ? "Pending" : null
                 };
                 _context.EventRegistrations.Add(registration);
+                waitlistReg = registration;
             }
 
             await _context.SaveChangesAsync();
@@ -541,10 +544,20 @@ public class EventService : IEventService
             // Notify organizer about new waitlist signup
             await NotifyOrganizerNewWaitlistSignupAsync(evt, user, waitlistPosition);
 
-            // Different message for paid events vs full free events
-            var message = isPaidEvent
-                ? "You've been added to the waitlist. Please mark your payment so the organizer can verify and add you to the roster."
-                : $"Event is full. You're #{waitlistPosition} on the waitlist.";
+            // Paid events: tell the player whether to pay now (spot open for their
+            // rank) or hold off (organizer handles outreach when a spot opens)
+            string message;
+            if (isPaidEvent)
+            {
+                var payEligible = await IsWaitlistedRegistrationPayEligibleAsync(evt, waitlistReg);
+                message = payEligible
+                    ? $"You're #{waitlistPosition} on the waitlist. Send your payment to secure your spot - once the organizer verifies it, you'll be added to the roster."
+                    : $"You're #{waitlistPosition} on the waitlist. Don't pay yet - the organizer will reach out if a spot opens.";
+            }
+            else
+            {
+                message = $"Event is full. You're #{waitlistPosition} on the waitlist.";
+            }
 
             return new RegistrationResultDto(
                 "Waitlisted",
