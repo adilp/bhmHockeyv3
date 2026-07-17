@@ -6,9 +6,11 @@ interface RegistrationFooterProps {
   isAuthenticated: boolean;
   isRegistered: boolean;
   isWaitlisted: boolean;
-  // True when registering would place the user on the waitlist (paid events
-  // always waitlist first; free events waitlist once skater spots are full)
-  willWaitlist: boolean;
+  // Full = yellow "Join Waitlist"; otherwise teal "Register for Event".
+  // On paid events registration technically waitlists until payment is
+  // verified, but with open spots the register popup and info tab carry
+  // the "send payment to secure your spot" guidance.
+  isFull: boolean;
   isProcessing: boolean;
   onRegister: () => void;
 }
@@ -17,7 +19,7 @@ export function RegistrationFooter({
   isAuthenticated,
   isRegistered,
   isWaitlisted,
-  willWaitlist,
+  isFull,
   isProcessing,
   onRegister,
 }: RegistrationFooterProps) {
@@ -39,8 +41,8 @@ export function RegistrationFooter({
     return null;
   }
 
-  // Registration would land on the waitlist - say so
-  if (willWaitlist) {
+  // Event full - joining means the waitlist, say so
+  if (isFull) {
     return (
       <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <TouchableOpacity
