@@ -22,6 +22,9 @@ public class Organization
     public string? DefaultVenue { get; set; }
     public string? DefaultVisibility { get; set; }  // "Public", "OrganizationMembers", "InviteOnly"
 
+    // Org-wide GroupMe chat link - events fall back to this unless they set their own
+    public string? GroupMeLink { get; set; }
+
     // Navigation properties
     public ICollection<OrganizationSubscription> Subscriptions { get; set; } = new List<OrganizationSubscription>();
     public ICollection<Event> Events { get; set; } = new List<Event>();

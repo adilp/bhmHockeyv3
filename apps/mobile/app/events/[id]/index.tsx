@@ -324,7 +324,7 @@ export default function EventDetailScreen() {
       case 'roster':
         return <EventRosterTab eventId={id} event={selectedEvent} canManage={canManage} />;
       case 'chat':
-        return <EventChatTab />;
+        return <EventChatTab event={selectedEvent} />;
       default:
         return null;
     }

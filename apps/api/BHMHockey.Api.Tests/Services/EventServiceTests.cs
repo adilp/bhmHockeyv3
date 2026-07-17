@@ -75,7 +75,7 @@ public class EventServiceTests : IDisposable
         return user;
     }
 
-    private async Task<Organization> CreateTestOrganization(Guid creatorId, string name = "Test Org")
+    private async Task<Organization> CreateTestOrganization(Guid creatorId, string name = "Test Org", string? groupMeLink = null)
     {
         var org = new Organization
         {
@@ -83,7 +83,8 @@ public class EventServiceTests : IDisposable
             Name = name,
             CreatorId = creatorId,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            GroupMeLink = groupMeLink
         };
 
         _context.Organizations.Add(org);
@@ -128,10 +129,12 @@ public class EventServiceTests : IDisposable
         string status = "Published",
         DateTime? eventDate = null,
         decimal cost = 25.00m,
-        bool isRosterPublished = false)
+        bool isRosterPublished = false,
+        string? groupMeLink = null)
     {
         var evt = new Event
         {
+            GroupMeLink = groupMeLink,
             Id = Guid.NewGuid(),
             CreatorId = creatorId,
             OrganizationId = organizationId,
@@ -3508,6 +3511,251 @@ public class EventServiceTests : IDisposable
         // Assert
         result.Status.Should().Be("Registered");
         result.User!.IsGhostPlayer.Should().BeTrue();
+    }
+
+    #endregion
+
+    #region GroupMe Link Tests
+
+    private static UpdateEventRequest GroupMeLinkUpdateRequest(string? groupMeLink)
+    {
+        return new UpdateEventRequest(
+            Name: null,
+            Description: null,
+            EventDate: null,
+            Duration: null,
+            Venue: null,
+            MaxPlayers: null,
+            Cost: null,
+            RegistrationDeadline: null,
+            Status: null,
+            Visibility: null,
+            SkillLevels: null,
+            SlotPositionLabels: null,
+            GroupMeLink: groupMeLink
+        );
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_EventWithOwnLink_OverridesOrgLink()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id, groupMeLink: "https://groupme.com/join_group/org");
+        var evt = await CreateTestEvent(creator.Id, organizationId: org.Id, groupMeLink: "https://groupme.com/join_group/event");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://groupme.com/join_group/event");
+        result.GroupMeLinkSource.Should().Be("event");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_OrgEventWithoutOwnLink_FallsBackToOrgLink()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id, groupMeLink: "https://groupme.com/join_group/org");
+        var evt = await CreateTestEvent(creator.Id, organizationId: org.Id);
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://groupme.com/join_group/org");
+        result.GroupMeLinkSource.Should().Be("organization");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_OrgEventWithNoLinks_ReturnsNullLinkAndSource()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, organizationId: org.Id);
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().BeNull();
+        result.GroupMeLinkSource.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_StandaloneEventWithLink_ReturnsEventSource()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id, groupMeLink: "https://groupme.com/join_group/solo");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://groupme.com/join_group/solo");
+        result.GroupMeLinkSource.Should().Be("event");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_StandaloneEventWithoutLink_ReturnsNull()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().BeNull();
+        result.GroupMeLinkSource.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_OrgLinkRotated_InheritingEventReflectsNewLinkImmediately()
+    {
+        // Arrange - live fallback: link resolves at read time, not copied at creation
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id, groupMeLink: "https://groupme.com/join_group/old");
+        var evt = await CreateTestEvent(creator.Id, organizationId: org.Id);
+
+        var before = await _sut.GetByIdAsync(evt.Id, creator.Id);
+        before!.GroupMeLink.Should().Be("https://groupme.com/join_group/old");
+
+        org.GroupMeLink = "https://groupme.com/join_group/new";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var after = await _sut.GetByIdAsync(evt.Id, creator.Id);
+
+        // Assert
+        after!.GroupMeLink.Should().Be("https://groupme.com/join_group/new");
+        after.GroupMeLinkSource.Should().Be("organization");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithWhitespacePaddedLink_TrimsAndStores()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateEventRequest(
+            EventDate: DateTime.UtcNow.AddDays(7),
+            MaxPlayers: 10,
+            Cost: 0,
+            GroupMeLink: "  https://groupme.com/join_group/abc  ");
+
+        // Act
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        // Assert
+        result.GroupMeLink.Should().Be("https://groupme.com/join_group/abc");
+        result.GroupMeLinkSource.Should().Be("event");
+        var evt = await _context.Events.FindAsync(result.Id);
+        evt!.GroupMeLink.Should().Be("https://groupme.com/join_group/abc");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithEmptyLink_StoresNull()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateEventRequest(
+            EventDate: DateTime.UtcNow.AddDays(7),
+            MaxPlayers: 10,
+            Cost: 0,
+            GroupMeLink: "   ");
+
+        // Act
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        // Assert
+        var evt = await _context.Events.FindAsync(result.Id);
+        evt!.GroupMeLink.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("http://groupme.com/join_group/abc")]
+    [InlineData("https://discord.gg/abc")]
+    [InlineData("not a url")]
+    public async Task CreateAsync_WithInvalidGroupMeLink_ThrowsInvalidOperationException(string link)
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateEventRequest(
+            EventDate: DateTime.UtcNow.AddDays(7),
+            MaxPlayers: 10,
+            Cost: 0,
+            GroupMeLink: link);
+
+        // Act & Assert
+        await _sut.Invoking(s => s.CreateAsync(request, creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*GroupMe link*");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SetGroupMeLink_OverridesOrgLink()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id, groupMeLink: "https://groupme.com/join_group/org");
+        var evt = await CreateTestEvent(creator.Id, organizationId: org.Id);
+
+        // Act
+        var result = await _sut.UpdateAsync(evt.Id, GroupMeLinkUpdateRequest("https://groupme.com/join_group/override"), creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://groupme.com/join_group/override");
+        result.GroupMeLinkSource.Should().Be("event");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ClearGroupMeLinkWithEmptyString_FallsBackToOrgLink()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id, groupMeLink: "https://groupme.com/join_group/org");
+        var evt = await CreateTestEvent(creator.Id, organizationId: org.Id, groupMeLink: "https://groupme.com/join_group/event");
+
+        // Act
+        var result = await _sut.UpdateAsync(evt.Id, GroupMeLinkUpdateRequest(""), creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://groupme.com/join_group/org");
+        result.GroupMeLinkSource.Should().Be("organization");
+        var updated = await _context.Events.FindAsync(evt.Id);
+        updated!.GroupMeLink.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NullGroupMeLink_LeavesLinkUnchanged()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id, groupMeLink: "https://groupme.com/join_group/keep");
+
+        // Act
+        var result = await _sut.UpdateAsync(evt.Id, GroupMeLinkUpdateRequest(null), creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://groupme.com/join_group/keep");
+        result.GroupMeLinkSource.Should().Be("event");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithInvalidGroupMeLink_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Act & Assert
+        await _sut.Invoking(s => s.UpdateAsync(evt.Id, GroupMeLinkUpdateRequest("https://discord.gg/abc"), creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*GroupMe link*");
     }
 
     #endregion

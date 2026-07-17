@@ -111,9 +111,16 @@ public class EventsController : ControllerBase
         }
 
         var userId = GetCurrentUserId();
-        var eventDto = await _eventService.CreateAsync(request, userId);
-
-        return CreatedAtAction(nameof(GetById), new { id = eventDto.Id }, eventDto);
+        try
+        {
+            var eventDto = await _eventService.CreateAsync(request, userId);
+            return CreatedAtAction(nameof(GetById), new { id = eventDto.Id }, eventDto);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Event creation rejected for user {UserId}: {Message}", userId, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -124,14 +131,22 @@ public class EventsController : ControllerBase
     public async Task<ActionResult<EventDto>> Update(Guid id, [FromBody] UpdateEventRequest request)
     {
         var userId = GetCurrentUserId();
-        var eventDto = await _eventService.UpdateAsync(id, request, userId);
-
-        if (eventDto == null)
+        try
         {
-            return NotFound();
-        }
+            var eventDto = await _eventService.UpdateAsync(id, request, userId);
 
-        return Ok(eventDto);
+            if (eventDto == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(eventDto);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Event update rejected for event {EventId}: {Message}", id, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>

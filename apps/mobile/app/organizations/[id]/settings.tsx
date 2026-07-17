@@ -19,6 +19,7 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { organizationService } from '@bhmhockey/api-client';
 import type { Organization, EventVisibility } from '@bhmhockey/shared';
+import { isValidGroupMeLink, GROUPME_LINK_ERROR } from '../../../utils/groupme';
 import { colors, spacing, radius } from '../../../theme';
 
 const DAYS_OF_WEEK = [
@@ -55,6 +56,7 @@ export default function OrganizationSettingsScreen() {
   const [defaultCost, setDefaultCost] = useState('');
   const [defaultVenue, setDefaultVenue] = useState('');
   const [defaultVisibility, setDefaultVisibility] = useState<EventVisibility | null>(null);
+  const [groupMeLink, setGroupMeLink] = useState('');
 
   // UI state
   const [showDayPicker, setShowDayPicker] = useState(false);
@@ -101,6 +103,7 @@ export default function OrganizationSettingsScreen() {
       setDefaultCost(toStr(org.defaultCost));
       setDefaultVenue(org.defaultVenue ?? '');
       setDefaultVisibility(org.defaultVisibility ?? null);
+      setGroupMeLink(org.groupMeLink ?? '');
     } catch (error) {
       Alert.alert('Error', 'Failed to load organization');
       router.back();
@@ -167,6 +170,12 @@ export default function OrganizationSettingsScreen() {
       }
     }
 
+    // GroupMe link validation (if provided)
+    if (groupMeLink.trim() && !isValidGroupMeLink(groupMeLink)) {
+      Alert.alert('Error', GROUPME_LINK_ERROR);
+      return false;
+    }
+
     return true;
   };
 
@@ -192,6 +201,8 @@ export default function OrganizationSettingsScreen() {
         defaultCost: parseFloatOrNull(defaultCost),
         defaultVenue: defaultVenue.trim() || null,
         defaultVisibility,
+        // '' clears the org's link (backend stores null); a value sets it
+        groupMeLink: groupMeLink.trim(),
       });
 
       Alert.alert('Success', 'Event defaults updated successfully', [
@@ -361,6 +372,27 @@ export default function OrganizationSettingsScreen() {
               onSubmitEditing={() => Keyboard.dismiss()}
               inputAccessoryViewID={inputAccessoryViewID}
             />
+          </View>
+
+          {/* GroupMe Link */}
+          <View style={styles.field}>
+            <Text style={styles.label}>GroupMe Link</Text>
+            <TextInput
+              style={styles.input}
+              value={groupMeLink}
+              onChangeText={setGroupMeLink}
+              placeholder="https://groupme.com/join_group/..."
+              placeholderTextColor={colors.text.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+              inputAccessoryViewID={inputAccessoryViewID}
+            />
+            <Text style={styles.fieldHint} allowFontScaling={false}>
+              Used for all of this org's events unless an event sets its own link
+            </Text>
           </View>
 
           {/* Visibility */}
@@ -535,6 +567,11 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     color: colors.text.muted,
+  },
+  fieldHint: {
+    fontSize: 12,
+    color: colors.text.muted,
+    marginTop: spacing.xs,
   },
   pickerArrow: {
     fontSize: 12,

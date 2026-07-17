@@ -57,6 +57,7 @@ export interface Organization {
   defaultCost?: number | null;
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
+  groupMeLink?: string | null;  // Org-wide GroupMe chat link (events fall back to this)
 }
 
 // Organization admin info
@@ -132,6 +133,7 @@ export interface CreateOrganizationRequest {
   defaultCost?: number | null;
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
+  groupMeLink?: string | null;  // Org-wide GroupMe chat link
 }
 
 export interface UpdateOrganizationRequest {
@@ -147,6 +149,7 @@ export interface UpdateOrganizationRequest {
   defaultCost?: number | null;
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
+  groupMeLink?: string | null;  // Empty/whitespace clears the link; null/undefined leaves it unchanged
 }
 
 // Event types
@@ -236,6 +239,9 @@ export interface EventDto {
   amIWaitlisted: boolean;        // Convenience flag - true if current user is on waitlist
   // Slot position labels (organizer feature)
   slotPositionLabels?: Record<number, string>; // Maps slot index to position label (e.g., {1: "C", 2: "LW"})
+  // GroupMe chat link, resolved server-side at read time: event override wins, else org's link
+  groupMeLink?: string | null;
+  groupMeLinkSource?: 'event' | 'organization' | null; // Where the resolved link came from
 }
 
 // EventRegistrationDto - API response for registration with user details
@@ -276,6 +282,7 @@ export interface CreateEventRequest {
   visibility?: EventVisibility;  // Default: 'Public'
   skillLevels?: SkillLevel[];    // Optional - overrides org's skill levels if set
   applyAutoRoster?: boolean;     // Auto-add the org's auto-roster members (default true; ignored for standalone events)
+  groupMeLink?: string;          // Optional game-specific GroupMe link (blank inherits org's link)
 }
 
 export interface UpdateEventRequest {
@@ -291,6 +298,7 @@ export interface UpdateEventRequest {
   visibility?: EventVisibility;  // Can change visibility after creation
   skillLevels?: SkillLevel[];    // Can change skill levels after creation
   slotPositionLabels?: Record<number, string>;  // Slot position labels (e.g., {1: "C", 2: "LW"})
+  groupMeLink?: string;          // Empty string clears the override (falls back to org); undefined leaves unchanged
 }
 
 // Payment request types (Phase 4)

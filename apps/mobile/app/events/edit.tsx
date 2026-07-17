@@ -51,6 +51,8 @@ export default function EditEventScreen() {
         cost: data.cost,
         visibility: data.visibility,
         skillLevels: data.skillLevels,
+        // '' clears the event's own link (falls back to org); a value sets the override
+        groupMeLink: data.groupMeLink,
       });
 
       Alert.alert('Success', 'Event updated successfully!', [
