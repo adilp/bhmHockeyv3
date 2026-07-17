@@ -157,12 +157,13 @@ function WaitlistedBadges({ event }: { event: EventDto }) {
   const spotsLeft = event.maxPlayers - event.registeredCount;
   const isFull = spotsLeft <= 0;
 
-  // If roster is full and published, show position (you're actually queued for capacity)
+  // If roster is full, show position (you're actually queued for capacity).
+  // Own position is always visible now, even before the roster is published.
   if (isFull) {
     return (
       <View style={styles.waitlistedStats}>
         <Badge variant="warning">
-          {event.isRosterPublished ? `#${event.myWaitlistPosition} on waitlist` : 'Waitlist'}
+          {event.myWaitlistPosition ? `#${event.myWaitlistPosition} on waitlist` : 'Waitlist'}
         </Badge>
       </View>
     );

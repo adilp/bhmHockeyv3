@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   InputAccessoryView,
+  Switch,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
@@ -56,6 +57,7 @@ export default function OrganizationSettingsScreen() {
   const [defaultCost, setDefaultCost] = useState('');
   const [defaultVenue, setDefaultVenue] = useState('');
   const [defaultVisibility, setDefaultVisibility] = useState<EventVisibility | null>(null);
+  const [defaultShowWaitlistBeforePublish, setDefaultShowWaitlistBeforePublish] = useState(false);
   const [groupMeLink, setGroupMeLink] = useState('');
 
   // UI state
@@ -103,6 +105,7 @@ export default function OrganizationSettingsScreen() {
       setDefaultCost(toStr(org.defaultCost));
       setDefaultVenue(org.defaultVenue ?? '');
       setDefaultVisibility(org.defaultVisibility ?? null);
+      setDefaultShowWaitlistBeforePublish(org.defaultShowWaitlistBeforePublish ?? false);
       setGroupMeLink(org.groupMeLink ?? '');
     } catch (error) {
       Alert.alert('Error', 'Failed to load organization');
@@ -201,6 +204,7 @@ export default function OrganizationSettingsScreen() {
         defaultCost: parseFloatOrNull(defaultCost),
         defaultVenue: defaultVenue.trim() || null,
         defaultVisibility,
+        defaultShowWaitlistBeforePublish,
         // '' clears the org's link (backend stores null); a value sets it
         groupMeLink: groupMeLink.trim(),
       });
@@ -412,6 +416,24 @@ export default function OrganizationSettingsScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Show Waitlist Before Publish */}
+          <View style={styles.field}>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel} allowFontScaling={false}>
+                Show waitlist before publish
+              </Text>
+              <Switch
+                value={defaultShowWaitlistBeforePublish}
+                onValueChange={setDefaultShowWaitlistBeforePublish}
+                trackColor={{ false: colors.bg.hover, true: colors.primary.teal }}
+                thumbColor={defaultShowWaitlistBeforePublish ? colors.text.primary : colors.text.muted}
+              />
+            </View>
+            <Text style={styles.fieldHint} allowFontScaling={false}>
+              New events start with the waitlist visible to registered and waitlisted players before publish
+            </Text>
+          </View>
+
           {/* Save Button */}
           <TouchableOpacity
             style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
@@ -582,6 +604,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  switchLabel: {
+    fontSize: 15,
+    color: colors.text.primary,
+    flex: 1,
+    marginRight: spacing.sm,
   },
   clearButton: {
     paddingHorizontal: spacing.md,

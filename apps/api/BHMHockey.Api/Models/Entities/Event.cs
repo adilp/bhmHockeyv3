@@ -24,6 +24,10 @@ public class Event
     // New events start unpublished; organizers must publish before players see placements
     public bool IsRosterPublished { get; set; } = false;
 
+    // When true, registered/waitlisted players can see the ordered waitlist (names + positions,
+    // no payment info) before the roster is published. Roster names stay hidden until publish.
+    public bool ShowWaitlistBeforePublish { get; set; } = false;
+
     // Visibility controls who can see and register for the event
     // - Public: Anyone can see and register
     // - OrganizationMembers: Only subscribers of the organization (requires OrganizationId)

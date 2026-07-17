@@ -816,7 +816,7 @@ public class WaitlistServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task PromoteFromWaitlistAsync_NotifiesUnverifiedUsers_WhenSpotsRemain()
+    public async Task PromoteFromWaitlistAsync_DoesNotNotifyUnverifiedUsers_WhenSpotsRemain()
     {
         // Arrange - 1 verified user, 3 unverified users, 3 spots open
         var creator = await CreateTestUser("creator@example.com");
@@ -883,7 +883,7 @@ public class WaitlistServiceTests : IDisposable
 
         await _context.SaveChangesAsync();
 
-        // Act - Promote 3 spots (1 verified + 2 unverified notifications)
+        // Act - Promote 3 spots (only the verified user is promoted; unverified users are NOT notified)
         var result = await _sut.PromoteFromWaitlistAsync(evt.Id, spotCount: 3);
 
         // Assert
@@ -891,18 +891,17 @@ public class WaitlistServiceTests : IDisposable
         result.Promoted.Should().HaveCount(1);
         result.Promoted[0].UserId.Should().Be(verifiedUser.Id);
 
-        // 3 notifications: 1 auto-promoted + 2 spot-available (not 3 because only 2 remaining spots)
-        result.PendingNotifications.Should().HaveCount(3);
-        result.PendingNotifications.Count(n => n.Type == NotificationType.AutoPromoted).Should().Be(1);
-        result.PendingNotifications.Count(n => n.Type == NotificationType.SpotAvailable).Should().Be(2);
+        // Only the auto-promoted notification - no spot-available blast to unverified users
+        // (organizer handles all outreach manually)
+        result.PendingNotifications.Should().HaveCount(1);
+        result.PendingNotifications[0].Type.Should().Be(NotificationType.AutoPromoted);
+        result.PendingNotifications[0].User.Id.Should().Be(verifiedUser.Id);
 
-        // Verify unverified users 1 and 2 got notified (in waitlist order)
-        var spotAvailableNotifications = result.PendingNotifications
-            .Where(n => n.Type == NotificationType.SpotAvailable)
-            .ToList();
-        spotAvailableNotifications.Should().Contain(n => n.User.Id == unverifiedUser1.Id);
-        spotAvailableNotifications.Should().Contain(n => n.User.Id == unverifiedUser2.Id);
-        spotAvailableNotifications.Should().NotContain(n => n.User.Id == unverifiedUser3.Id);
+        // Unverified users remain waitlisted and unnotified
+        var unverifiedAfter = await _context.EventRegistrations
+            .Where(r => r.EventId == evt.Id && r.Status == "Waitlisted")
+            .ToListAsync();
+        unverifiedAfter.Should().HaveCount(3);
     }
 
     [Fact]
@@ -1127,40 +1126,56 @@ public class WaitlistServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SendPendingNotificationsAsync_SendsSpotAvailableNotification()
+    public async Task PromoteFromWaitlistAsync_NeverSendsSpotAvailableNotification()
     {
-        // Arrange
-        // Note: isRosterPublished must be true for notifications to be sent (draft mode suppresses)
+        // Arrange - published paid event, open spots, only an UNVERIFIED waitlisted user
+        // Note: isRosterPublished is true so this is not just draft-mode suppression
         var creator = await CreateTestUser("creator@example.com");
-        var evt = await CreateTestEvent(creator.Id, isRosterPublished: true);
+        var evt = await CreateTestEvent(creator.Id, cost: 25.00m, maxPlayers: 10, isRosterPublished: true);
         var user = await CreateTestUser("user@example.com", pushToken: "ExponentPushToken[user]");
 
-        var notifications = new List<PendingNotification>
+        var reg = new EventRegistration
         {
-            new PendingNotification
-            {
-                User = user,
-                Event = evt,
-                Organizer = creator,
-                Type = NotificationType.SpotAvailable
-            }
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = user.Id,
+            Status = "Waitlisted",
+            WaitlistPosition = 1,
+            PaymentStatus = "Pending",
+            RegisteredPosition = "Skater",
+            RegisteredAt = DateTime.UtcNow.AddHours(-1)
         };
+        _context.EventRegistrations.Add(reg);
+        await _context.SaveChangesAsync();
 
-        // Act
-        await _sut.SendPendingNotificationsAsync(notifications);
+        // Act - service owns the transaction so any pending notifications WOULD be sent
+        var result = await _sut.PromoteFromWaitlistAsync(evt.Id, spotCount: 1);
 
-        // Assert
+        // Assert - the spot_available blast is gone; the unverified user hears nothing
+        result.Promoted.Should().BeEmpty();
+        result.PendingNotifications.Should().BeEmpty();
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                "spot_available",
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Never);
         _mockNotificationService.Verify(
             n => n.SendPushNotificationAsync(
                 "ExponentPushToken[user]",
-                "Spot Available!",
-                It.Is<string>(s => s.Contains("Complete payment")),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
                 It.IsAny<object>(),
-                user.Id,
-                "spot_available",
-                evt.OrganizationId,
-                evt.Id),
-            Times.Once);
+                It.IsAny<Guid?>(),
+                It.IsAny<string>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Never);
     }
 
     #endregion
@@ -1572,7 +1587,7 @@ public class WaitlistServiceTests : IDisposable
     #region PromoteFromWaitlistAsync Additional Tests
 
     [Fact]
-    public async Task PromoteFromWaitlistAsync_NoVerifiedUsers_NotifiesAllUnverifiedNonePromoted()
+    public async Task PromoteFromWaitlistAsync_NoVerifiedUsers_NoPromotionsAndNoNotifications()
     {
         // Arrange - Only unverified users on waitlist, 2 spots available
         var creator = await CreateTestUser("creator@example.com");
@@ -1612,12 +1627,9 @@ public class WaitlistServiceTests : IDisposable
         // Act - 2 spots available, 0 verified users
         var result = await _sut.PromoteFromWaitlistAsync(evt.Id, spotCount: 2);
 
-        // Assert - No promotions, both users notified of available spots
+        // Assert - No promotions and NO spot-available notifications (organizer handles outreach)
         result.Promoted.Should().BeEmpty();
-        result.PendingNotifications.Should().HaveCount(2);
-        result.PendingNotifications.All(n => n.Type == NotificationType.SpotAvailable).Should().BeTrue();
-        result.PendingNotifications.Should().Contain(n => n.User.Id == unverifiedUser1.Id);
-        result.PendingNotifications.Should().Contain(n => n.User.Id == unverifiedUser2.Id);
+        result.PendingNotifications.Should().BeEmpty();
 
         // Verify users are still waitlisted (not promoted)
         var reg1After = await _context.EventRegistrations.FirstAsync(r => r.Id == unverifiedReg1.Id);

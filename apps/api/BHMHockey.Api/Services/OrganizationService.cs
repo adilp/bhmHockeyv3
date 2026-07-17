@@ -106,6 +106,7 @@ public class OrganizationService : IOrganizationService
             DefaultCost = request.DefaultCost,
             DefaultVenue = request.DefaultVenue,
             DefaultVisibility = request.DefaultVisibility,
+            DefaultShowWaitlistBeforePublish = request.DefaultShowWaitlistBeforePublish,
             GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink)
         };
 
@@ -202,6 +203,7 @@ public class OrganizationService : IOrganizationService
         if (request.DefaultCost != null) organization.DefaultCost = request.DefaultCost;
         if (request.DefaultVenue != null) organization.DefaultVenue = request.DefaultVenue;
         if (request.DefaultVisibility != null) organization.DefaultVisibility = request.DefaultVisibility;
+        if (request.DefaultShowWaitlistBeforePublish != null) organization.DefaultShowWaitlistBeforePublish = request.DefaultShowWaitlistBeforePublish;
         // Empty/whitespace clears the link (Normalize returns null); null leaves it unchanged
         if (request.GroupMeLink != null) organization.GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink);
 
@@ -435,7 +437,8 @@ public class OrganizationService : IOrganizationService
             org.DefaultCost,
             org.DefaultVenue,
             org.DefaultVisibility,
-            org.GroupMeLink
+            org.GroupMeLink,
+            org.DefaultShowWaitlistBeforePublish
         );
     }
 }

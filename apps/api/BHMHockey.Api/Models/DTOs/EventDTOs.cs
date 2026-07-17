@@ -38,7 +38,11 @@ public record EventDto(
     Dictionary<int, string>? SlotPositionLabels,  // Maps slot index to position label (e.g., {1: "C", 2: "LW"})
     // GroupMe chat link, resolved at read time: event override wins, else org's link
     string? GroupMeLink = null,
-    string? GroupMeLinkSource = null  // "event" | "organization" | null - where the resolved link came from
+    string? GroupMeLinkSource = null,  // "event" | "organization" | null - where the resolved link came from
+    // Waitlist visibility (pre-publish)
+    bool ShowWaitlistBeforePublish = false,  // Registered/waitlisted viewers can see the ordered waitlist before publish
+    // Pay-eligibility for the current user's waitlisted registration on paid events
+    bool? MyWaitlistPaymentEligible = null   // null when not applicable (not waitlisted or free event)
 );
 
 public record CreateEventRequest(
@@ -54,7 +58,8 @@ public record CreateEventRequest(
     string? Visibility = "Public",       // Default to public if not specified
     List<string>? SkillLevels = null,    // Optional - overrides org's skill levels if set
     bool ApplyAutoRoster = true,         // Auto-add the org's auto-roster members (ignored for standalone events)
-    string? GroupMeLink = null           // Optional game-specific GroupMe link (blank inherits org's link)
+    string? GroupMeLink = null,          // Optional game-specific GroupMe link (blank inherits org's link)
+    bool? ShowWaitlistBeforePublish = null  // Optional - defaults to false (client pre-fills from org default)
 );
 
 public record UpdateEventRequest(
@@ -70,7 +75,8 @@ public record UpdateEventRequest(
     string? Visibility,                            // Can change visibility after creation
     List<string>? SkillLevels,                     // Can change skill levels after creation
     Dictionary<int, string>? SlotPositionLabels,  // Slot position labels (e.g., {1: "C", 2: "LW"})
-    string? GroupMeLink = null                    // Empty/whitespace clears the override (falls back to org); null leaves unchanged
+    string? GroupMeLink = null,                   // Empty/whitespace clears the override (falls back to org); null leaves unchanged
+    bool? ShowWaitlistBeforePublish = null        // null leaves unchanged
 );
 
 public record EventRegistrationDto(

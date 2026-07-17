@@ -1,19 +1,26 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { EventDto } from '@bhmhockey/shared';
+import type { EventDto, EventRegistrationDto } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../../theme';
 import { Badge } from '../Badge';
 import { getPaymentBadgeInfo } from '../../utils/payment';
 
 interface DraftModeRosterProps {
   event: EventDto;
+  /** Pre-publish waitlist (server returns it only when showWaitlistBeforePublish allows the viewer) */
+  waitlist?: EventRegistrationDto[];
 }
 
-export function DraftModeRoster({ event }: DraftModeRosterProps) {
+export function DraftModeRoster({ event, waitlist = [] }: DraftModeRosterProps) {
   const isRegistered = event.isRegistered;
   const isWaitlisted = event.amIWaitlisted;
   const paymentStatus = event.myPaymentStatus;
   const isPaidEvent = event.cost > 0;
+
+  // Server only returns the pre-publish waitlist to registered/waitlisted viewers when the
+  // event setting is on - this client check just mirrors that gate
+  const showWaitlist =
+    event.showWaitlistBeforePublish && (isRegistered || isWaitlisted) && waitlist.length > 0;
 
   return (
     <View style={styles.container}>
@@ -61,7 +68,9 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
             </Text>
           </View>
           <Text style={styles.confirmationSubtext} allowFontScaling={false}>
-            Your exact position will be visible when the roster is published.
+            {event.myWaitlistPosition
+              ? `You're #${event.myWaitlistPosition} of ${event.waitlistCount} on the waitlist.`
+              : "You're on the waitlist."}
           </Text>
           {isPaidEvent && paymentStatus && (
             <View style={styles.paymentRow}>
@@ -78,6 +87,32 @@ export function DraftModeRoster({ event }: DraftModeRosterProps) {
           <Text style={styles.notRegisteredText} allowFontScaling={false}>
             You're not registered for this event.
           </Text>
+        </View>
+      )}
+
+      {/* Pre-publish Waitlist (names + positions only - no payment info) */}
+      {showWaitlist && (
+        <View style={styles.waitlistCard}>
+          <Text style={styles.waitlistTitle} allowFontScaling={false}>
+            Waitlist ({waitlist.length})
+          </Text>
+          {waitlist.map((registration, index) => (
+            <View key={registration.id} style={styles.waitlistRow}>
+              <View style={styles.waitlistPositionBadge}>
+                <Text style={styles.waitlistPositionText} allowFontScaling={false}>
+                  #{registration.waitlistPosition ?? index + 1}
+                </Text>
+              </View>
+              <View style={styles.waitlistUserInfo}>
+                <Text style={styles.waitlistUserName} allowFontScaling={false}>
+                  {registration.user.firstName} {registration.user.lastName}
+                </Text>
+                <Text style={styles.waitlistUserMeta} allowFontScaling={false}>
+                  {registration.registeredPosition || 'Skater'}
+                </Text>
+              </View>
+            </View>
+          ))}
         </View>
       )}
     </View>
@@ -157,5 +192,53 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text.secondary,
     textAlign: 'center',
+  },
+  waitlistCard: {
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    marginTop: spacing.lg,
+  },
+  waitlistTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  waitlistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+  },
+  waitlistPositionBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.status.warningSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  waitlistPositionText: {
+    color: colors.status.warning,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  waitlistUserInfo: {
+    flex: 1,
+  },
+  waitlistUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  waitlistUserMeta: {
+    fontSize: 13,
+    color: colors.text.muted,
+    marginTop: 2,
   },
 });

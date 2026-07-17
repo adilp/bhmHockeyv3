@@ -30,6 +30,9 @@ export function EventInfoTab({
   const showCostPreview = !event.isRegistered && !event.amIWaitlisted && event.cost > 0;
   const hasMoreDetails = event.description || event.registrationDeadline;
   const isRosterFull = event.registeredCount >= event.maxPlayers;
+  // Waitlisted players should only pay when their spot fits open capacity (server-computed).
+  // Only an explicit false hides the pay affordance - null/undefined keeps it available.
+  const waitlistPayIneligible = event.myWaitlistPaymentEligible === false;
 
   // Format: "SAT"
   const getDayName = (dateString: string) => {
@@ -122,7 +125,7 @@ export function EventInfoTab({
             {event.isRegistered && <Badge variant="green">Registered</Badge>}
             {event.amIWaitlisted && (
               <Badge variant="warning">
-                {event.isRosterPublished ? `#${event.myWaitlistPosition} Waitlist` : 'Waitlist'}
+                {event.myWaitlistPosition ? `#${event.myWaitlistPosition} Waitlist` : 'Waitlist'}
               </Badge>
             )}
             {/* Payment status badge for registered/waitlisted users on paid events */}
@@ -149,22 +152,28 @@ export function EventInfoTab({
             <View style={styles.paymentDivider} />
 
             <View style={styles.waitlistPaymentSection}>
-              {/* Waitlist Position Header - only show when roster is full AND published */}
-              {isRosterFull && event.isRosterPublished && (
+              {/* Waitlist Position Header - own position is always visible now.
+                  Skipped for ineligible pending payments (their message includes it). */}
+              {event.myWaitlistPosition != null &&
+                !(event.myPaymentStatus === 'Pending' && waitlistPayIneligible) && (
                 <Text style={styles.waitlistPositionText}>
-                  You're #{event.myWaitlistPosition} on the waitlist
+                  You're #{event.myWaitlistPosition} of {event.waitlistCount} on the waitlist
                 </Text>
               )}
 
-              {/* Pending: Show payment prompt and buttons */}
-              {event.myPaymentStatus === 'Pending' && (
+              {/* Pending + ineligible: no pay affordance - the spot doesn't fit open capacity */}
+              {event.myPaymentStatus === 'Pending' && waitlistPayIneligible && (
+                <Text style={styles.waitlistPaymentPrompt}>
+                  You're #{event.myWaitlistPosition} of {event.waitlistCount} on the waitlist — don't
+                  pay yet. The organizer will reach out if a spot opens.
+                </Text>
+              )}
+
+              {/* Pending + eligible: prompt to pay and claim the spot */}
+              {event.myPaymentStatus === 'Pending' && !waitlistPayIneligible && (
                 <>
                   <Text style={styles.waitlistPaymentPrompt}>
-                    {!event.isRosterPublished
-                      ? 'Pay to secure your registration'
-                      : isRosterFull
-                        ? 'Pay to be ready when a spot opens'
-                        : 'Pay to secure your spot on the roster'}
+                    Send ${event.cost.toFixed(2)} to claim your spot
                   </Text>
 
                   <View style={styles.paymentActions}>

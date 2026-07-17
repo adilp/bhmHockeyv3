@@ -2605,7 +2605,7 @@ public class EventServiceTests : IDisposable
         result!.IsRosterPublished.Should().BeFalse();
         result.AmIWaitlisted.Should().BeTrue();  // Registration status visible
         result.MyPaymentStatus.Should().Be("Pending");  // Payment status visible
-        result.MyWaitlistPosition.Should().BeNull();  // Position hidden during draft
+        result.MyWaitlistPosition.Should().Be(1);  // Own position always visible, even during draft
         result.MyTeamAssignment.Should().BeNull();  // Team hidden during draft
         result.CanManage.Should().BeFalse();  // Not organizer
     }
@@ -3756,6 +3756,430 @@ public class EventServiceTests : IDisposable
         await _sut.Invoking(s => s.UpdateAsync(evt.Id, GroupMeLinkUpdateRequest("https://discord.gg/abc"), creator.Id))
             .Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*GroupMe link*");
+    }
+
+    #endregion
+
+    #region Waitlist Visibility & Pay Eligibility Tests
+
+    private async Task<EventRegistration> CreatePositionedRegistration(
+        Guid eventId,
+        Guid userId,
+        string status,
+        string position,
+        int? waitlistPosition = null,
+        string? paymentStatus = null)
+    {
+        var registration = await CreateRegistration(eventId, userId, status);
+        registration.RegisteredPosition = position;
+        registration.WaitlistPosition = waitlistPosition;
+        registration.PaymentStatus = paymentStatus;
+        await _context.SaveChangesAsync();
+        return registration;
+    }
+
+    private static UpdateEventRequest ShowWaitlistUpdateRequest(bool? showWaitlistBeforePublish)
+    {
+        return new UpdateEventRequest(
+            Name: null,
+            Description: null,
+            EventDate: null,
+            Duration: null,
+            Venue: null,
+            MaxPlayers: null,
+            Cost: null,
+            RegistrationDeadline: null,
+            Status: null,
+            Visibility: null,
+            SkillLevels: null,
+            SlotPositionLabels: null,
+            ShowWaitlistBeforePublish: showWaitlistBeforePublish
+        );
+    }
+
+    [Fact]
+    public async Task CreateAsync_DefaultsShowWaitlistBeforePublishToFalse()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateEventRequest(
+            EventDate: DateTime.UtcNow.AddDays(7),
+            MaxPlayers: 10,
+            Cost: 0,
+            Name: "Default Waitlist Visibility Event");
+
+        // Act
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        // Assert
+        result.ShowWaitlistBeforePublish.Should().BeFalse();
+        var evt = await _context.Events.FindAsync(result.Id);
+        evt!.ShowWaitlistBeforePublish.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithShowWaitlistBeforePublishTrue_SetsFlag()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateEventRequest(
+            EventDate: DateTime.UtcNow.AddDays(7),
+            MaxPlayers: 10,
+            Cost: 0,
+            Name: "Waitlist Visibility Event",
+            ShowWaitlistBeforePublish: true);
+
+        // Act
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        // Assert
+        result.ShowWaitlistBeforePublish.Should().BeTrue();
+        var evt = await _context.Events.FindAsync(result.Id);
+        evt!.ShowWaitlistBeforePublish.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_TogglesShowWaitlistBeforePublish()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id);
+
+        // Act - turn on
+        var result = await _sut.UpdateAsync(evt.Id, ShowWaitlistUpdateRequest(true), creator.Id);
+
+        // Assert
+        result!.ShowWaitlistBeforePublish.Should().BeTrue();
+
+        // Act - turn back off
+        result = await _sut.UpdateAsync(evt.Id, ShowWaitlistUpdateRequest(false), creator.Id);
+        result!.ShowWaitlistBeforePublish.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NullShowWaitlistBeforePublish_LeavesUnchanged()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var evt = await CreateTestEvent(creator.Id);
+        evt.ShowWaitlistBeforePublish = true;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdateAsync(evt.Id, ShowWaitlistUpdateRequest(null), creator.Id);
+
+        // Assert
+        result!.ShowWaitlistBeforePublish.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WaitlistedGoalie_PaidEvent_IsPayEligible()
+    {
+        // Arrange - goalies never consume MaxPlayers, so they're always pay-eligible
+        var creator = await CreateTestUser();
+        var goalie = await CreateTestUser("goalie@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 1, cost: 25.00m);
+
+        // Roster full of skaters - irrelevant for a goalie
+        var skater = await CreateTestUser("skater@example.com");
+        await CreatePositionedRegistration(evt.Id, skater.Id, "Registered", "Skater");
+        await CreatePositionedRegistration(evt.Id, goalie.Id, "Waitlisted", "Goalie", waitlistPosition: 1, paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, goalie.Id);
+
+        // Assert
+        result!.MyWaitlistPaymentEligible.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WaitlistedSkater_WithinOpenCapacity_IsPayEligible()
+    {
+        // Arrange - 2 open spots (maxPlayers 3, 1 registered skater), waitlist rank 1
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var waitlisted = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 3, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater");
+        await CreatePositionedRegistration(evt.Id, waitlisted.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, waitlisted.Id);
+
+        // Assert
+        result!.MyWaitlistPaymentEligible.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WaitlistedSkater_BoundaryRankEqualsOpenSpots_IsPayEligible()
+    {
+        // Arrange - exactly 2 open spots; skater at waitlist rank 2 is the boundary case
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var wl1 = await CreateTestUser("wl1@example.com");
+        var wl2 = await CreateTestUser("wl2@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 3, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater");
+        await CreatePositionedRegistration(evt.Id, wl1.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+        await CreatePositionedRegistration(evt.Id, wl2.Id, "Waitlisted", "Skater", waitlistPosition: 2, paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, wl2.Id);
+
+        // Assert - rank 2 <= 2 open spots
+        result!.MyWaitlistPaymentEligible.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WaitlistedSkater_BeyondOpenCapacity_NotPayEligible()
+    {
+        // Arrange - 1 open spot (maxPlayers 2, 1 registered skater); skater at rank 2 is too deep
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var wl1 = await CreateTestUser("wl1@example.com");
+        var wl2 = await CreateTestUser("wl2@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater");
+        await CreatePositionedRegistration(evt.Id, wl1.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+        await CreatePositionedRegistration(evt.Id, wl2.Id, "Waitlisted", "Skater", waitlistPosition: 2, paymentStatus: "Pending");
+
+        // Act
+        var eligibleResult = await _sut.GetByIdAsync(evt.Id, wl1.Id);
+        var ineligibleResult = await _sut.GetByIdAsync(evt.Id, wl2.Id);
+
+        // Assert
+        eligibleResult!.MyWaitlistPaymentEligible.Should().BeTrue();
+        ineligibleResult!.MyWaitlistPaymentEligible.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WaitlistedSkater_RosterFull_NotPayEligible()
+    {
+        // Arrange - 0 open spots
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var waitlisted = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 1, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater");
+        await CreatePositionedRegistration(evt.Id, waitlisted.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, waitlisted.Id);
+
+        // Assert
+        result!.MyWaitlistPaymentEligible.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WaitlistedSkater_GoalieOnRosterDoesNotConsumeCapacity()
+    {
+        // Arrange - registered goalie doesn't count against MaxPlayers, so a spot stays open
+        var creator = await CreateTestUser();
+        var goalie = await CreateTestUser("goalie@example.com");
+        var waitlisted = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 1, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, goalie.Id, "Registered", "Goalie");
+        await CreatePositionedRegistration(evt.Id, waitlisted.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, waitlisted.Id);
+
+        // Assert
+        result!.MyWaitlistPaymentEligible.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_FreeEvent_WaitlistedUser_EligibilityIsNull()
+    {
+        // Arrange - eligibility only applies to paid events
+        var creator = await CreateTestUser();
+        var waitlisted = await CreateTestUser("waitlisted@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 0);
+
+        await CreatePositionedRegistration(evt.Id, waitlisted.Id, "Waitlisted", "Skater", waitlistPosition: 1);
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, waitlisted.Id);
+
+        // Assert
+        result!.MyWaitlistPaymentEligible.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_RegisteredUser_PaidEvent_EligibilityIsNull()
+    {
+        // Arrange - eligibility only applies to WAITLISTED registrations
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater", paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, registered.Id);
+
+        // Assert
+        result!.MyWaitlistPaymentEligible.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WaitlistedPlayer_OwnPositionVisibleBeforePublish_SettingOff()
+    {
+        // Arrange - own "#X of Y" is always visible: publish off, visibility setting off
+        var creator = await CreateTestUser();
+        var waitlisted = await CreateTestUser("waitlisted@example.com");
+        var other = await CreateTestUser("other@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 25.00m, isRosterPublished: false);
+
+        await CreatePositionedRegistration(evt.Id, other.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+        await CreatePositionedRegistration(evt.Id, waitlisted.Id, "Waitlisted", "Skater", waitlistPosition: 2, paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, waitlisted.Id);
+
+        // Assert
+        result!.IsRosterPublished.Should().BeFalse();
+        result.ShowWaitlistBeforePublish.Should().BeFalse();
+        result.MyWaitlistPosition.Should().Be(2);
+        result.WaitlistCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_IneligibleWaitlistedSkater_ThrowsInvalidOperation()
+    {
+        // Arrange - 1 open spot; skater at rank 2 must not be able to self-report payment
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var wl1 = await CreateTestUser("wl1@example.com");
+        var wl2 = await CreateTestUser("wl2@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater");
+        await CreatePositionedRegistration(evt.Id, wl1.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+        var ineligibleReg = await CreatePositionedRegistration(evt.Id, wl2.Id, "Waitlisted", "Skater", waitlistPosition: 2, paymentStatus: "Pending");
+
+        // Act & Assert
+        await _sut.Invoking(s => s.MarkPaymentAsync(evt.Id, wl2.Id, null))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*don't pay yet*");
+
+        // Payment status unchanged
+        var updated = await _context.EventRegistrations.FindAsync(ineligibleReg.Id);
+        updated!.PaymentStatus.Should().Be("Pending");
+        updated.PaymentMarkedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_EligibleWaitlistedSkater_Succeeds()
+    {
+        // Arrange - 1 open spot; skater at rank 1 can self-report payment
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var wl1 = await CreateTestUser("wl1@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater");
+        var reg = await CreatePositionedRegistration(evt.Id, wl1.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(evt.Id, wl1.Id, null);
+
+        // Assert
+        result.Should().BeTrue();
+        var updated = await _context.EventRegistrations.FindAsync(reg.Id);
+        updated!.PaymentStatus.Should().Be("MarkedPaid");
+    }
+
+    [Fact]
+    public async Task MarkPaymentAsync_WaitlistedGoalie_RosterFull_Succeeds()
+    {
+        // Arrange - goalies are always pay-eligible regardless of skater capacity
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var goalie = await CreateTestUser("goalie@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 1, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater");
+        var reg = await CreatePositionedRegistration(evt.Id, goalie.Id, "Waitlisted", "Goalie", waitlistPosition: 1, paymentStatus: "Pending");
+
+        // Act
+        var result = await _sut.MarkPaymentAsync(evt.Id, goalie.Id, null);
+
+        // Assert
+        result.Should().BeTrue();
+        var updated = await _context.EventRegistrations.FindAsync(reg.Id);
+        updated!.PaymentStatus.Should().Be("MarkedPaid");
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_IneligibleWaitlistedUser_OrganizerVerifyStillWorks()
+    {
+        // Arrange - organizer paths are exempt from pay-eligibility: verifying a deep-waitlisted
+        // player on a full roster still succeeds (stays waitlisted with Verified status)
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var wl1 = await CreateTestUser("wl1@example.com");
+        var wl2 = await CreateTestUser("wl2@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 1, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater");
+        await CreatePositionedRegistration(evt.Id, wl1.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+        var deepReg = await CreatePositionedRegistration(evt.Id, wl2.Id, "Waitlisted", "Skater", waitlistPosition: 2, paymentStatus: "MarkedPaid");
+
+        // Act
+        var result = await _sut.UpdatePaymentStatusAsync(evt.Id, deepReg.Id, "Verified", creator.Id);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Promoted.Should().BeFalse(); // Roster full - stays waitlisted
+        var updated = await _context.EventRegistrations.FindAsync(deepReg.Id);
+        updated!.PaymentStatus.Should().Be("Verified");
+        updated.Status.Should().Be("Waitlisted");
+    }
+
+    [Fact]
+    public async Task GetPrePublishWaitlistAsync_ReturnsOrderedWaitlistWithoutPaymentInfo()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var registered = await CreateTestUser("registered@example.com");
+        var wl1 = await CreateTestUser("wl1@example.com");
+        var wl2 = await CreateTestUser("wl2@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 25.00m);
+
+        await CreatePositionedRegistration(evt.Id, registered.Id, "Registered", "Skater", paymentStatus: "Verified");
+        await CreatePositionedRegistration(evt.Id, wl2.Id, "Waitlisted", "Goalie", waitlistPosition: 2, paymentStatus: "MarkedPaid");
+        await CreatePositionedRegistration(evt.Id, wl1.Id, "Waitlisted", "Skater", waitlistPosition: 1, paymentStatus: "Pending");
+
+        // GetWaitlistWithBadgesAsync delegates to the (mocked) waitlist service - back it with the real query
+        _mockWaitlistService.Setup(w => w.GetWaitlistAsync(evt.Id))
+            .ReturnsAsync(await _context.EventRegistrations
+                .Include(r => r.User)
+                .Where(r => r.EventId == evt.Id && r.Status == "Waitlisted")
+                .OrderBy(r => r.WaitlistPosition)
+                .ToListAsync());
+
+        // Act
+        var result = await _sut.GetPrePublishWaitlistAsync(evt.Id);
+
+        // Assert - only waitlisted entries, ordered, names + positions visible, payment stripped
+        result.Should().HaveCount(2);
+        result[0].User.Id.Should().Be(wl1.Id);
+        result[0].WaitlistPosition.Should().Be(1);
+        result[0].RegisteredPosition.Should().Be("Skater");
+        result[1].User.Id.Should().Be(wl2.Id);
+        result[1].WaitlistPosition.Should().Be(2);
+        result[1].RegisteredPosition.Should().Be("Goalie");
+        result.Should().OnlyContain(r => r.PaymentStatus == null
+            && r.PaymentMarkedAt == null
+            && r.PaymentVerifiedAt == null
+            && r.PaymentDeadlineAt == null);
+        result.Should().NotContain(r => r.User.Id == registered.Id);
     }
 
     #endregion

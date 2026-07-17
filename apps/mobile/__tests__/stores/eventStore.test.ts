@@ -15,6 +15,7 @@ const mockRegister = jest.fn();
 const mockCancelRegistration = jest.fn();
 const mockGetMyRegistrations = jest.fn();
 const mockReorderWaitlist = jest.fn();
+const mockMarkPayment = jest.fn();
 
 // Mock the api-client module
 jest.mock('@bhmhockey/api-client', () => ({
@@ -26,6 +27,7 @@ jest.mock('@bhmhockey/api-client', () => ({
     cancelRegistration: mockCancelRegistration,
     getMyRegistrations: mockGetMyRegistrations,
     reorderWaitlist: mockReorderWaitlist,
+    markPayment: mockMarkPayment,
   },
 }));
 
@@ -64,6 +66,8 @@ const createMockEvent = (overrides: Partial<EventDto> = {}): EventDto => ({
   amIWaitlisted: false,
   // Roster publishing (Phase 2)
   isRosterPublished: true,
+  // Waitlist visibility (pre-publish)
+  showWaitlistBeforePublish: false,
   ...overrides,
 });
 
@@ -513,6 +517,48 @@ describe('eventStore', () => {
       }
 
       expect(useEventStore.getState().processingEventId).toBeNull();
+    });
+  });
+
+  describe('markPayment', () => {
+    it('optimistically sets myPaymentStatus to MarkedPaid on success', async () => {
+      const event = createMockEvent({
+        id: 'event-1',
+        amIWaitlisted: true,
+        myPaymentStatus: 'Pending',
+        myWaitlistPaymentEligible: true,
+      });
+      useEventStore.setState({ events: [event], selectedEvent: event });
+      mockMarkPayment.mockResolvedValue(undefined);
+
+      const result = await useEventStore.getState().markPayment('event-1');
+
+      expect(result).toBe(true);
+      expect(useEventStore.getState().selectedEvent?.myPaymentStatus).toBe('MarkedPaid');
+      expect(useEventStore.getState().events[0].myPaymentStatus).toBe('MarkedPaid');
+    });
+
+    it('rolls back and surfaces server message when rejected (ineligible waitlisted player)', async () => {
+      const serverMessage =
+        "You're on the waitlist and there isn't an open spot for you yet - don't pay yet. The organizer will reach out if a spot opens.";
+      const event = createMockEvent({
+        id: 'event-1',
+        amIWaitlisted: true,
+        myPaymentStatus: 'Pending',
+        myWaitlistPaymentEligible: false,
+      });
+      useEventStore.setState({ events: [event], selectedEvent: event });
+      // The axios interceptor rejects with a plain ApiError object (not an Error instance)
+      mockMarkPayment.mockRejectedValue({ message: serverMessage });
+
+      const result = await useEventStore.getState().markPayment('event-1');
+
+      expect(result).toBe(false);
+      // Rollback to Pending
+      expect(useEventStore.getState().selectedEvent?.myPaymentStatus).toBe('Pending');
+      expect(useEventStore.getState().events[0].myPaymentStatus).toBe('Pending');
+      // Server message surfaced for the UI
+      expect(useEventStore.getState().error).toBe(serverMessage);
     });
   });
 });

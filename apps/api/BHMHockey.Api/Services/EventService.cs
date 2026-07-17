@@ -113,7 +113,8 @@ public class EventService : IEventService
             RegistrationDeadline = request.RegistrationDeadline,
             Visibility = visibility,
             SkillLevels = request.SkillLevels,
-            GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink)
+            GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink),
+            ShowWaitlistBeforePublish = request.ShowWaitlistBeforePublish ?? false
         };
 
         _context.Events.Add(evt);
@@ -423,6 +424,11 @@ public class EventService : IEventService
         if (request.GroupMeLink != null)
         {
             evt.GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink);
+        }
+
+        if (request.ShowWaitlistBeforePublish.HasValue)
+        {
+            evt.ShowWaitlistBeforePublish = request.ShowWaitlistBeforePublish.Value;
         }
 
         evt.UpdatedAt = DateTime.UtcNow;
@@ -798,6 +804,26 @@ public class EventService : IEventService
         }).ToList();
     }
 
+    /// <summary>
+    /// Pre-publish waitlist view for registered/waitlisted (non-manager) viewers when
+    /// ShowWaitlistBeforePublish is on: ordered waitlist with names and registered positions,
+    /// but payment details stripped. Roster (Registered) entries are never included.
+    /// </summary>
+    public async Task<List<EventRegistrationDto>> GetPrePublishWaitlistAsync(Guid eventId)
+    {
+        var waitlist = await GetWaitlistWithBadgesAsync(eventId);
+
+        return waitlist
+            .Select(r => r with
+            {
+                PaymentStatus = null,
+                PaymentMarkedAt = null,
+                PaymentVerifiedAt = null,
+                PaymentDeadlineAt = null
+            })
+            .ToList();
+    }
+
     // Update roster order for multiple registrations (batch update)
     public async Task<bool> UpdateRosterOrderAsync(Guid eventId, List<RosterOrderItem> items, Guid organizerId, Dictionary<int, string>? slotPositionLabels = null)
     {
@@ -935,6 +961,7 @@ public class EventService : IEventService
         int? myWaitlistPosition = null;
         DateTime? myPaymentDeadline = null;
         bool amIWaitlisted = false;
+        bool? myWaitlistPaymentEligible = null;
         if (currentUserId.HasValue)
         {
             var myReg = evt.Registrations?.FirstOrDefault(r => r.UserId == currentUserId.Value && r.Status != "Cancelled")
@@ -945,10 +972,13 @@ public class EventService : IEventService
                 myPaymentDeadline = myReg.PaymentDeadlineAt;
                 amIWaitlisted = myReg.Status == "Waitlisted";
 
-                // Waitlist position only visible if roster is published OR user can manage
-                if (evt.IsRosterPublished || canManage)
+                // Own waitlist position is always visible, even before the roster is published
+                myWaitlistPosition = myReg.WaitlistPosition;
+
+                // Pay-eligibility only applies to waitlisted registrations on paid events
+                if (amIWaitlisted && evt.Cost > 0)
                 {
-                    myWaitlistPosition = myReg.WaitlistPosition;
+                    myWaitlistPaymentEligible = await IsWaitlistedRegistrationPayEligibleAsync(evt, myReg);
                 }
             }
         }
@@ -1003,8 +1033,37 @@ public class EventService : IEventService
             amIWaitlisted,       // Phase 5 - Waitlist
             evt.SlotPositionLabels,  // Slot position labels
             groupMeLink,         // Resolved GroupMe chat link
-            groupMeLinkSource    // "event" | "organization" | null
+            groupMeLinkSource,   // "event" | "organization" | null
+            evt.ShowWaitlistBeforePublish,  // Waitlist visibility (pre-publish)
+            myWaitlistPaymentEligible       // Pay-eligibility for current user's waitlisted spot
         );
+    }
+
+    /// <summary>
+    /// A waitlisted player on a paid event is pay-eligible iff their spot fits open capacity
+    /// for their position type. Goalies never consume MaxPlayers, so they are always eligible.
+    /// Skaters are eligible when their rank among waitlisted skaters (by WaitlistPosition)
+    /// fits within max(0, MaxPlayers - currently registered skater count).
+    /// </summary>
+    private async Task<bool> IsWaitlistedRegistrationPayEligibleAsync(Event evt, EventRegistration registration)
+    {
+        // Goalies don't count against MaxPlayers - always eligible
+        if (registration.RegisteredPosition == "Goalie") return true;
+
+        var registeredSkaterCount = await _context.EventRegistrations
+            .CountAsync(r => r.EventId == evt.Id && r.Status == "Registered" && r.RegisteredPosition != "Goalie");
+        var openSpots = Math.Max(0, evt.MaxPlayers - registeredSkaterCount);
+        if (openSpots == 0) return false;
+
+        // Rank among waitlisted skaters, ordered by waitlist position (1-based)
+        var waitlistedSkaterIds = await _context.EventRegistrations
+            .Where(r => r.EventId == evt.Id && r.Status == "Waitlisted" && r.RegisteredPosition != "Goalie")
+            .OrderBy(r => r.WaitlistPosition)
+            .Select(r => r.Id)
+            .ToListAsync();
+        var rank = waitlistedSkaterIds.IndexOf(registration.Id) + 1;
+
+        return rank > 0 && rank <= openSpots;
     }
 
     // Payment methods (Phase 4)
@@ -1023,6 +1082,18 @@ public class EventService : IEventService
 
         // Can only mark as paid if currently Pending
         if (registration.PaymentStatus != "Pending") return false;
+
+        // Waitlisted players may only self-report payment when their spot fits open capacity.
+        // Organizer paths (verify, move-to-roster, manual add) are intentionally exempt.
+        if (registration.Status == "Waitlisted" &&
+            !await IsWaitlistedRegistrationPayEligibleAsync(registration.Event, registration))
+        {
+            _logger.LogWarning(
+                "MarkPayment rejected for user {UserId} on event {EventId}: waitlist spot does not fit open capacity",
+                userId, eventId);
+            throw new InvalidOperationException(
+                "You're on the waitlist and there isn't an open spot for you yet - don't pay yet. The organizer will reach out if a spot opens.");
+        }
 
         registration.PaymentStatus = "MarkedPaid";
         registration.PaymentMarkedAt = DateTime.UtcNow;

@@ -236,6 +236,13 @@ public class EventsController : ControllerBase
             return Ok(await _eventService.GetRegistrationsAsync(id));
         }
 
+        // Pre-publish waitlist visibility: when enabled, viewers registered or waitlisted on the
+        // event see the ordered waitlist (names + positions, no payment info). Roster names stay hidden.
+        if (evt.ShowWaitlistBeforePublish && (evt.IsRegistered || evt.AmIWaitlisted))
+        {
+            return Ok(await _eventService.GetPrePublishWaitlistAsync(id));
+        }
+
         // Non-organizers on unpublished events: empty list
         // (They see their own status via EventDto fields instead)
         return Ok(new List<EventRegistrationDto>());
@@ -319,14 +326,22 @@ public class EventsController : ControllerBase
     {
         var userId = GetCurrentUserId();
 
-        var success = await _eventService.MarkPaymentAsync(id, userId, request?.PaymentReference);
-
-        if (!success)
+        try
         {
-            return BadRequest(new { message = "Unable to mark payment. Registration not found, event is free, or payment already marked." });
-        }
+            var success = await _eventService.MarkPaymentAsync(id, userId, request?.PaymentReference);
 
-        return Ok(new { message = "Payment marked as complete. Awaiting organizer verification." });
+            if (!success)
+            {
+                return BadRequest(new { message = "Unable to mark payment. Registration not found, event is free, or payment already marked." });
+            }
+
+            return Ok(new { message = "Payment marked as complete. Awaiting organizer verification." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Mark payment rejected for event {EventId}, user {UserId}: {Message}", id, userId, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
