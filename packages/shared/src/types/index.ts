@@ -200,6 +200,8 @@ export interface RegistrationResultDto {
   status: 'Registered' | 'Waitlisted';
   waitlistPosition: number | null;
   message: string;
+  /** Waitlisted on a paid event: may they pay now? (null/undefined otherwise) */
+  payEligible?: boolean | null;
 }
 
 // Team assignment for events

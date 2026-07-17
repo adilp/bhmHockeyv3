@@ -151,16 +151,22 @@ export const useEventStore = create<EventState>((set, get) => ({
       myPaymentStatus: event.cost > 0 ? 'Pending' : undefined,
       amIWaitlisted: false,
       myWaitlistPosition: undefined,
+      myWaitlistPaymentEligible: null,
     });
 
     // Helper to update event for waitlisted status
-    const updateEventAsWaitlisted = (event: EventDto, waitlistPosition: number): EventDto => ({
+    const updateEventAsWaitlisted = (
+      event: EventDto,
+      waitlistPosition: number,
+      payEligible?: boolean | null
+    ): EventDto => ({
       ...event,
       isRegistered: false,
       amIWaitlisted: true,
       myWaitlistPosition: waitlistPosition,
       myPaymentStatus: 'Pending' as PaymentStatus,
       waitlistCount: event.waitlistCount + 1,
+      myWaitlistPaymentEligible: payEligible ?? null,
     });
 
     // Only do optimistic update if there's room
@@ -197,10 +203,10 @@ export const useEventStore = create<EventState>((set, get) => ({
         const waitlistPosition = result.waitlistPosition ?? 1;
         const waitlistedEvent = events.find(e => e.id === eventId);
         if (waitlistedEvent) {
-          const updatedEvent = updateEventAsWaitlisted(waitlistedEvent, waitlistPosition);
+          const updatedEvent = updateEventAsWaitlisted(waitlistedEvent, waitlistPosition, result.payEligible);
           set({
             events: events.map(e => e.id === eventId ? updatedEvent : e),
-            selectedEvent: selectedEvent?.id === eventId ? updateEventAsWaitlisted(selectedEvent, waitlistPosition) : selectedEvent,
+            selectedEvent: selectedEvent?.id === eventId ? updateEventAsWaitlisted(selectedEvent, waitlistPosition, result.payEligible) : selectedEvent,
             myRegistrations: [...myRegistrations, updatedEvent],
             processingEventId: null,
           });

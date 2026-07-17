@@ -547,10 +547,11 @@ public class EventService : IEventService
             // Paid events: tell the player whether to pay now (spot open for their
             // rank) or hold off (organizer handles outreach when a spot opens)
             string message;
+            bool? payEligible = null;
             if (isPaidEvent)
             {
-                var payEligible = await IsWaitlistedRegistrationPayEligibleAsync(evt, waitlistReg);
-                message = payEligible
+                payEligible = await IsWaitlistedRegistrationPayEligibleAsync(evt, waitlistReg);
+                message = payEligible.Value
                     ? $"You're #{waitlistPosition} on the waitlist. Send your payment to secure your spot - once the organizer verifies it, you'll be added to the roster."
                     : $"You're #{waitlistPosition} on the waitlist. Don't pay yet - the organizer will reach out if a spot opens.";
             }
@@ -562,7 +563,8 @@ public class EventService : IEventService
             return new RegistrationResultDto(
                 "Waitlisted",
                 waitlistPosition,
-                message
+                message,
+                payEligible
             );
         }
         else

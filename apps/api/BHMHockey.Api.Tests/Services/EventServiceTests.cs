@@ -772,6 +772,7 @@ public class EventServiceTests : IDisposable
         result.Status.Should().Be("Waitlisted");
         result.WaitlistPosition.Should().Be(1);
         result.Message.Should().Contain("Send your payment to secure your spot");
+        result.PayEligible.Should().BeTrue();
 
         var registration = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == user.Id);
@@ -867,6 +868,7 @@ public class EventServiceTests : IDisposable
         result.Status.Should().Be("Waitlisted");
         result.WaitlistPosition.Should().Be(1);
         result.Message.Should().Contain("Don't pay yet");
+        result.PayEligible.Should().BeFalse();
 
         var registration = await _context.EventRegistrations
             .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == newUser.Id);

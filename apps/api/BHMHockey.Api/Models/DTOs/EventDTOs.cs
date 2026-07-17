@@ -156,7 +156,8 @@ public class WaitlistOrderItem
 public record RegistrationResultDto(
     string Status,               // "Registered" or "Waitlisted"
     int? WaitlistPosition,       // Position if waitlisted (null if registered)
-    string Message               // User-friendly message
+    string Message,              // User-friendly message
+    bool? PayEligible = null     // Waitlisted on paid event: may they pay now? (null otherwise)
 );
 
 // Payment update result DTO (Phase 5 - payment verification response)
