@@ -63,7 +63,10 @@ public class EventsControllerTests
         Guid? organizationId = null,
         string? organizationName = "Test Organization",
         string visibility = "Public",
-        bool isCreator = false)
+        bool isCreator = false,
+        bool isRosterPublished = true,
+        bool amIWaitlisted = false,
+        bool showWaitlistBeforePublish = false)
     {
         // If useDefaultOrg is true and no explicit org is passed, use _testOrgId
         // If useDefaultOrg is false or explicit null is passed, use null
@@ -89,7 +92,7 @@ public class EventsControllerTests
             IsRegistered: isRegistered,
             CanManage: isCreator,
             CreatedAt: DateTime.UtcNow,
-            IsRosterPublished: true,     // Roster draft mode
+            IsRosterPublished: isRosterPublished,  // Roster draft mode
             CreatorVenmoHandle: null,    // Phase 4
             MyPaymentStatus: null,       // Phase 4
             MyTeamAssignment: null,      // Team assignment
@@ -97,8 +100,9 @@ public class EventsControllerTests
             WaitlistCount: 0,            // Phase 5 - Waitlist
             MyWaitlistPosition: null,    // Phase 5 - Waitlist
             MyPaymentDeadline: null,     // Phase 5 - Waitlist
-            AmIWaitlisted: false,        // Phase 5 - Waitlist
-            SlotPositionLabels: null     // Slot position labels
+            AmIWaitlisted: amIWaitlisted,  // Phase 5 - Waitlist
+            SlotPositionLabels: null,    // Slot position labels
+            ShowWaitlistBeforePublish: showWaitlistBeforePublish  // Pre-publish waitlist visibility
         );
     }
 
@@ -575,6 +579,126 @@ public class EventsControllerTests
         returnedRegistrations.Should().HaveCount(1);
     }
 
+    private List<EventRegistrationDto> CreateWaitlistDtos()
+    {
+        return new List<EventRegistrationDto>
+        {
+            new EventRegistrationDto(
+                Id: Guid.NewGuid(),
+                EventId: _testEventId,
+                User: CreateUserDto(Guid.NewGuid()),
+                Status: "Waitlisted",
+                RegisteredAt: DateTime.UtcNow,
+                RegisteredPosition: "Skater",
+                PaymentStatus: null,           // Payment info stripped pre-publish
+                PaymentMarkedAt: null,
+                PaymentVerifiedAt: null,
+                TeamAssignment: null,
+                RosterOrder: null,
+                WaitlistPosition: 1,
+                PromotedAt: null,
+                PaymentDeadlineAt: null,
+                IsWaitlisted: true
+            )
+        };
+    }
+
+    [Fact]
+    public async Task GetRegistrations_Unpublished_SettingOn_RegisteredViewer_ReturnsPrePublishWaitlist()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, _testUserId))
+            .ReturnsAsync(CreateEventDto(isRosterPublished: false, showWaitlistBeforePublish: true, isRegistered: true));
+        _mockEventService.Setup(s => s.GetPrePublishWaitlistAsync(_testEventId))
+            .ReturnsAsync(CreateWaitlistDtos());
+
+        // Act
+        var result = await _controller.GetRegistrations(_testEventId);
+
+        // Assert - waitlist-only view; full roster endpoint is never used
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returned = okResult.Value.Should().BeAssignableTo<List<EventRegistrationDto>>().Subject;
+        returned.Should().HaveCount(1);
+        returned[0].IsWaitlisted.Should().BeTrue();
+        _mockEventService.Verify(s => s.GetRegistrationsAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetRegistrations_Unpublished_SettingOn_WaitlistedViewer_ReturnsPrePublishWaitlist()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, _testUserId))
+            .ReturnsAsync(CreateEventDto(isRosterPublished: false, showWaitlistBeforePublish: true, amIWaitlisted: true));
+        _mockEventService.Setup(s => s.GetPrePublishWaitlistAsync(_testEventId))
+            .ReturnsAsync(CreateWaitlistDtos());
+
+        // Act
+        var result = await _controller.GetRegistrations(_testEventId);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returned = okResult.Value.Should().BeAssignableTo<List<EventRegistrationDto>>().Subject;
+        returned.Should().HaveCount(1);
+        _mockEventService.Verify(s => s.GetRegistrationsAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetRegistrations_Unpublished_SettingOn_CasualViewer_ReturnsEmpty()
+    {
+        // Arrange - viewer is neither registered nor waitlisted
+        SetupAuthenticatedUser();
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, _testUserId))
+            .ReturnsAsync(CreateEventDto(isRosterPublished: false, showWaitlistBeforePublish: true));
+
+        // Act
+        var result = await _controller.GetRegistrations(_testEventId);
+
+        // Assert - nothing leaks to casual viewers
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returned = okResult.Value.Should().BeAssignableTo<List<EventRegistrationDto>>().Subject;
+        returned.Should().BeEmpty();
+        _mockEventService.Verify(s => s.GetPrePublishWaitlistAsync(It.IsAny<Guid>()), Times.Never);
+        _mockEventService.Verify(s => s.GetRegistrationsAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetRegistrations_Unpublished_SettingOff_RegisteredViewer_ReturnsEmpty()
+    {
+        // Arrange - today's behavior when the setting is off
+        SetupAuthenticatedUser();
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, _testUserId))
+            .ReturnsAsync(CreateEventDto(isRosterPublished: false, isRegistered: true));
+
+        // Act
+        var result = await _controller.GetRegistrations(_testEventId);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returned = okResult.Value.Should().BeAssignableTo<List<EventRegistrationDto>>().Subject;
+        returned.Should().BeEmpty();
+        _mockEventService.Verify(s => s.GetPrePublishWaitlistAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetRegistrations_Unpublished_Organizer_ReturnsFullRoster()
+    {
+        // Arrange - canManage always sees everything regardless of the setting
+        SetupAuthenticatedUser();
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, _testUserId))
+            .ReturnsAsync(CreateEventDto(isRosterPublished: false, isCreator: true));
+        _mockEventService.Setup(s => s.GetRegistrationsAsync(_testEventId))
+            .ReturnsAsync(new List<EventRegistrationDto>());
+
+        // Act
+        await _controller.GetRegistrations(_testEventId);
+
+        // Assert
+        _mockEventService.Verify(s => s.GetRegistrationsAsync(_testEventId), Times.Once);
+        _mockEventService.Verify(s => s.GetPrePublishWaitlistAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
     #endregion
 
     #region Payment Tests
@@ -639,6 +763,23 @@ public class EventsControllerTests
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task MarkPayment_IneligibleWaitlistedPlayer_Returns400WithMessage()
+    {
+        // Arrange - service rejects ineligible waitlisted players with InvalidOperationException
+        SetupAuthenticatedUser();
+        var message = "You're on the waitlist and there isn't an open spot for you yet - don't pay yet. The organizer will reach out if a spot opens.";
+        _mockEventService.Setup(s => s.MarkPaymentAsync(_testEventId, _testUserId, null))
+            .ThrowsAsync(new InvalidOperationException(message));
+
+        // Act
+        var result = await _controller.MarkPayment(_testEventId, null);
+
+        // Assert
+        var badRequest = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value!.ToString().Should().Contain("don't pay yet");
     }
 
     [Fact]

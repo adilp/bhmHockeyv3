@@ -30,6 +30,7 @@ export default function CreateEventScreen() {
       skillLevels: data.skillLevels,
       applyAutoRoster: data.applyAutoRoster,
       groupMeLink: data.groupMeLink || undefined,
+      showWaitlistBeforePublish: data.showWaitlistBeforePublish,
     });
 
     if (result) {

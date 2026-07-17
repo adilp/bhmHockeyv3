@@ -6,6 +6,10 @@ interface RegistrationFooterProps {
   isAuthenticated: boolean;
   isRegistered: boolean;
   isWaitlisted: boolean;
+  // Full = yellow "Join Waitlist"; otherwise teal "Register for Event".
+  // On paid events registration technically waitlists until payment is
+  // verified, but with open spots the register popup and info tab carry
+  // the "send payment to secure your spot" guidance.
   isFull: boolean;
   isProcessing: boolean;
   onRegister: () => void;
@@ -37,7 +41,7 @@ export function RegistrationFooter({
     return null;
   }
 
-  // Event full - show join waitlist
+  // Event full - joining means the waitlist, say so
   if (isFull) {
     return (
       <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>

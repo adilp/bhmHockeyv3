@@ -4,7 +4,7 @@ import { Badge } from './Badge';
 import { SkillLevelDots } from './SkillLevelDots';
 import { OrgAvatar } from './OrgAvatar';
 import type { EventDto, SkillLevel } from '@bhmhockey/shared';
-import { getPaymentBadgeInfo } from '../utils/payment';
+import { getSelfPaymentBadgeInfo } from '../utils/payment';
 
 export type EventCardVariant = 'available' | 'registered' | 'waitlisted' | 'organizing';
 
@@ -157,20 +157,34 @@ function WaitlistedBadges({ event }: { event: EventDto }) {
   const spotsLeft = event.maxPlayers - event.registeredCount;
   const isFull = spotsLeft <= 0;
 
-  // If roster is full and published, show position (you're actually queued for capacity)
+  // If roster is full, show the full state alongside your position (you're
+  // queued for capacity). Own position is always visible, even pre-publish.
   if (isFull) {
     return (
       <View style={styles.waitlistedStats}>
+        <Badge variant="error">Full</Badge>
         <Badge variant="warning">
-          {event.isRosterPublished ? `#${event.myWaitlistPosition} on waitlist` : 'Waitlist'}
+          {event.myWaitlistPosition ? `#${event.myWaitlistPosition} on waitlist` : 'Waitlist'}
         </Badge>
       </View>
     );
   }
 
-  // Roster has space - you're on waitlist because of payment (pay-to-play model)
-  // Show payment status instead of position
-  const { text, variant } = getPaymentBadgeInfo(event.myPaymentStatus);
+  // Roster has space but people ahead of you hold the open spots - you're
+  // genuinely queued, and shouldn't pay yet
+  if (event.myWaitlistPaymentEligible === false) {
+    return (
+      <View style={styles.waitlistedStats}>
+        <Badge variant="warning">
+          {event.myWaitlistPosition ? `#${event.myWaitlistPosition} on waitlist` : 'Waitlist'}
+        </Badge>
+      </View>
+    );
+  }
+
+  // Roster has space and it's your spot to claim (pay-to-play model):
+  // prompt the action instead of the bare "Unpaid" state
+  const { text, variant } = getSelfPaymentBadgeInfo(event.myPaymentStatus);
   return (
     <View style={styles.waitlistedStats}>
       <Badge variant={variant}>{text}</Badge>
@@ -179,8 +193,9 @@ function WaitlistedBadges({ event }: { event: EventDto }) {
 }
 
 function RegisteredBadges({ event }: { event: EventDto }) {
-  const { text, variant } = getPaymentBadgeInfo(event.myPaymentStatus);
+  const { text, variant } = getSelfPaymentBadgeInfo(event.myPaymentStatus);
   const isBlackTeam = event.myTeamAssignment === 'Black';
+  const needsPayment = event.cost > 0 && event.myPaymentStatus !== 'Verified';
 
   return (
     <View style={styles.registeredStats}>
@@ -198,6 +213,8 @@ function RegisteredBadges({ event }: { event: EventDto }) {
           </Text>
         </View>
       )}
+      {/* Unpaid rostered players see their state + the action: Registered + Send Payment */}
+      {needsPayment && <Badge variant="green">Registered</Badge>}
       {/* Payment badge */}
       {event.cost > 0 && <Badge variant={variant}>{text}</Badge>}
     </View>

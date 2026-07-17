@@ -543,9 +543,11 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
     );
   }
 
-  // Draft mode: non-organizers see simplified view without roster details
+  // Draft mode: non-organizers see simplified view without roster details.
+  // When showWaitlistBeforePublish allows it, the server returns waitlisted entries
+  // (payment info stripped) for registered/waitlisted viewers - pass them through.
   if (!event.isRosterPublished && !canManage) {
-    return <DraftModeRoster event={event} />;
+    return <DraftModeRoster event={event} waitlist={waitlist} />;
   }
 
   const showPayment = canManage;

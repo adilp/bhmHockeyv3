@@ -21,6 +21,7 @@ public class Organization
     public decimal? DefaultCost { get; set; }
     public string? DefaultVenue { get; set; }
     public string? DefaultVisibility { get; set; }  // "Public", "OrganizationMembers", "InviteOnly"
+    public bool? DefaultShowWaitlistBeforePublish { get; set; }  // Pre-fills ShowWaitlistBeforePublish on new events
 
     // Org-wide GroupMe chat link - events fall back to this unless they set their own
     public string? GroupMeLink { get; set; }

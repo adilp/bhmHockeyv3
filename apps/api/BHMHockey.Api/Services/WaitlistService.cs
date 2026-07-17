@@ -121,7 +121,7 @@ public class WaitlistService : IWaitlistService
             // Notify user their registration was cancelled
             await NotifyRegistrationExpiredAsync(registration);
 
-            // Promote next verified user from waitlist (or notify unverified users of spot)
+            // Promote next verified user from waitlist
             var promotionResult = await PromoteFromWaitlistAsync(registration.EventId, spotCount: 1);
             await SendPendingNotificationsAsync(promotionResult.PendingNotifications);
         }
@@ -304,29 +304,10 @@ public class WaitlistService : IWaitlistService
             eventId: registration.EventId);
     }
 
-    private async Task NotifySpotAvailableAsync(EventRegistration registration)
-    {
-        if (string.IsNullOrEmpty(registration.User.PushToken))
-        {
-            return;
-        }
-
-        var eventName = registration.Event.Name ?? $"Event on {registration.Event.EventDate:MMM d}";
-
-        await _notificationService.SendPushNotificationAsync(
-            registration.User.PushToken,
-            "Spot Available!",
-            $"A spot opened up for {eventName}. Complete payment to secure your spot!",
-            new { eventId = registration.EventId.ToString(), type = "spot_available" },
-            userId: registration.UserId,
-            type: "spot_available",
-            organizationId: registration.Event.OrganizationId,
-            eventId: registration.EventId);
-    }
-
     /// <summary>
-    /// Promotes users from waitlist using priority queue: verified users first (by RegisteredAt),
-    /// then notifies unverified users of available spots (by WaitlistPosition).
+    /// Promotes users from waitlist using priority queue: verified users first (by RegisteredAt).
+    /// Unverified waitlisted users are NOT notified when spots open - the organizer handles all
+    /// outreach manually (capacity often blips transiently while guests are swapped).
     /// </summary>
     /// <param name="eventId">The event ID</param>
     /// <param name="spotCount">Number of spots to fill</param>
@@ -374,32 +355,8 @@ public class WaitlistService : IWaitlistService
             spotsRemaining--;
         }
 
-        // If spots remain, notify unverified users (by WaitlistPosition order)
-        if (spotsRemaining > 0)
-        {
-            var unverifiedUsers = await _context.EventRegistrations
-                .Include(r => r.User)
-                .Include(r => r.Event)
-                    .ThenInclude(e => e.Creator)
-                .Where(r => r.EventId == eventId
-                         && r.Status == "Waitlisted"
-                         && r.PaymentStatus != "Verified")
-                .OrderBy(r => r.WaitlistPosition)
-                .ThenBy(r => r.Id)
-                .Take(spotsRemaining)
-                .ToListAsync();
-
-            foreach (var registration in unverifiedUsers)
-            {
-                result.PendingNotifications.Add(new PendingNotification
-                {
-                    User = registration.User,
-                    Event = registration.Event,
-                    Organizer = registration.Event.Creator,
-                    Type = NotificationType.SpotAvailable
-                });
-            }
-        }
+        // Spots left after promoting verified users go unannounced - no spot_available blast
+        // to unverified users. The organizer reaches out manually if a spot truly opens.
 
         await _context.SaveChangesAsync();
 
@@ -467,23 +424,6 @@ public class WaitlistService : IWaitlistService
                         eventId: notification.Event.Id);
                 }
             }
-            else if (notification.Type == NotificationType.SpotAvailable)
-            {
-                // Send spot available notification to unverified user
-                if (!string.IsNullOrEmpty(notification.User.PushToken))
-                {
-                    var eventName = notification.Event.Name ?? $"Event on {notification.Event.EventDate:MMM d}";
-                    await _notificationService.SendPushNotificationAsync(
-                        notification.User.PushToken,
-                        "Spot Available!",
-                        $"A spot opened up for {eventName}. Complete payment to secure your spot!",
-                        new { eventId = notification.Event.Id.ToString(), type = "spot_available" },
-                        userId: notification.User.Id,
-                        type: "spot_available",
-                        organizationId: notification.Event.OrganizationId,
-                        eventId: notification.Event.Id);
-                }
-            }
         }
     }
 
@@ -538,7 +478,7 @@ public class PromotionResult
     public List<EventRegistration> Promoted { get; set; } = new();
 
     /// <summary>
-    /// Notifications pending to be sent (auto-promoted or spot-available).
+    /// Notifications pending to be sent (auto-promoted).
     /// </summary>
     public List<PendingNotification> PendingNotifications { get; set; } = new();
 }
@@ -560,7 +500,5 @@ public class PendingNotification
 public enum NotificationType
 {
     /// <summary>User was auto-promoted from waitlist.</summary>
-    AutoPromoted,
-    /// <summary>Spot became available for unverified user.</summary>
-    SpotAvailable
+    AutoPromoted
 }

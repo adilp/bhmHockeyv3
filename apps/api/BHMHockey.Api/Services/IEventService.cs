@@ -47,6 +47,12 @@ public interface IEventService
     Task<List<EventRegistrationDto>> GetWaitlistWithBadgesAsync(Guid eventId);
 
     /// <summary>
+    /// Pre-publish waitlist view for registered/waitlisted viewers when ShowWaitlistBeforePublish
+    /// is on: ordered waitlist with names and positions, payment details stripped.
+    /// </summary>
+    Task<List<EventRegistrationDto>> GetPrePublishWaitlistAsync(Guid eventId);
+
+    /// <summary>
     /// Publish the roster for an event (organizer only).
     /// Sets IsRosterPublished=true, records PublishedAt timestamp, and sends notifications to all players.
     /// Returns failure if roster is already published.

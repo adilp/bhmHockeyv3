@@ -45,6 +45,7 @@ export interface EventFormData {
   skillLevels?: SkillLevel[];
   applyAutoRoster?: boolean;
   groupMeLink?: string;  // '' clears the event's own link (inherits org's); trimmed value sets it
+  showWaitlistBeforePublish: boolean;
 }
 
 interface EventFormProps {
@@ -79,6 +80,7 @@ export function EventForm({
   const [skillLevels, setSkillLevels] = useState<SkillLevel[]>([]);
   const [applyAutoRoster, setApplyAutoRoster] = useState(true);
   const [groupMeLink, setGroupMeLink] = useState('');
+  const [showWaitlistBeforePublish, setShowWaitlistBeforePublish] = useState(false);
 
   // Auto-roster of the selected org (create mode only, admin-only endpoint)
   const autoRoster = useOrganizationStore((state) => state.autoRoster);
@@ -121,6 +123,7 @@ export function EventForm({
       setSkillLevels((initialData.skillLevels as SkillLevel[]) || []);
       // Only pre-fill the event's OWN link - an inherited org link stays blank (blank means inherit)
       setGroupMeLink(initialData.groupMeLinkSource === 'event' ? initialData.groupMeLink || '' : '');
+      setShowWaitlistBeforePublish(initialData.showWaitlistBeforePublish ?? false);
     }
   }, [initialData]);
 
@@ -141,6 +144,7 @@ export function EventForm({
       org.defaultCost,
       org.defaultVenue,
       org.defaultVisibility,
+      org.defaultShowWaitlistBeforePublish,
     ];
     const hasDefaults = defaultFields.some(field => field != null);
     if (!hasDefaults) return;
@@ -199,6 +203,9 @@ export function EventForm({
     if (org.defaultVisibility != null) {
       setVisibility(org.defaultVisibility);
       setVisibilitySelectionMade(true);
+    }
+    if (org.defaultShowWaitlistBeforePublish != null) {
+      setShowWaitlistBeforePublish(org.defaultShowWaitlistBeforePublish);
     }
 
     // Mark defaults as applied and show notification
@@ -348,6 +355,7 @@ export function EventForm({
       skillLevels: skillLevels.length > 0 ? skillLevels : undefined,
       applyAutoRoster: selectedOrgId ? applyAutoRoster : undefined,
       groupMeLink: groupMeLink.trim(),
+      showWaitlistBeforePublish,
     };
 
     await onSubmit(formData);
@@ -589,6 +597,24 @@ export function EventForm({
             </Text>
           </View>
         )}
+
+        {/* Waitlist Visibility Toggle */}
+        <View style={styles.field}>
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel} allowFontScaling={false}>
+              Show waitlist before publish
+            </Text>
+            <Switch
+              value={showWaitlistBeforePublish}
+              onValueChange={setShowWaitlistBeforePublish}
+              trackColor={{ false: colors.bg.hover, true: colors.primary.teal }}
+              thumbColor={showWaitlistBeforePublish ? colors.text.primary : colors.text.muted}
+            />
+          </View>
+          <Text style={styles.skillNote}>
+            Registered and waitlisted players can see the waitlist order before the roster is published
+          </Text>
+        </View>
 
         {/* Skill Levels */}
         <View style={styles.field}>

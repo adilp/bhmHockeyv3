@@ -18,7 +18,8 @@ public record OrganizationDto(
     decimal? DefaultCost,
     string? DefaultVenue,
     string? DefaultVisibility,
-    string? GroupMeLink = null  // Org-wide GroupMe chat link (events fall back to this)
+    string? GroupMeLink = null,  // Org-wide GroupMe chat link (events fall back to this)
+    bool? DefaultShowWaitlistBeforePublish = null  // Pre-fills ShowWaitlistBeforePublish on new events
 );
 
 // Member/subscriber info - visible to all subscribers
@@ -47,7 +48,8 @@ public record CreateOrganizationRequest(
     decimal? DefaultCost,
     string? DefaultVenue,
     string? DefaultVisibility,
-    string? GroupMeLink = null  // Org-wide GroupMe chat link
+    string? GroupMeLink = null,  // Org-wide GroupMe chat link
+    bool? DefaultShowWaitlistBeforePublish = null
 );
 
 public record UpdateOrganizationRequest(
@@ -62,7 +64,8 @@ public record UpdateOrganizationRequest(
     decimal? DefaultCost,
     string? DefaultVenue,
     string? DefaultVisibility,
-    string? GroupMeLink = null  // Empty/whitespace clears the link; null leaves it unchanged
+    string? GroupMeLink = null,  // Empty/whitespace clears the link; null leaves it unchanged
+    bool? DefaultShowWaitlistBeforePublish = null  // null leaves unchanged
 );
 
 public record OrganizationSubscriptionDto(

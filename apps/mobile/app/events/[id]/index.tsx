@@ -23,7 +23,7 @@ import {
 } from '../../../components';
 import type { TabKey } from '../../../components';
 import { colors, spacing } from '../../../theme';
-import type { Position } from '@bhmhockey/shared';
+import type { Position, RegistrationResultDto } from '@bhmhockey/shared';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -113,16 +113,14 @@ export default function EventDetailScreen() {
     }
 
     const showResultMessage = (
-      result: { status: string; waitlistPosition?: number | null; message: string } | null,
+      result: RegistrationResultDto | null,
       position: string
     ) => {
       if (!result) return;
       if (result.status === 'Waitlisted') {
-        // Don't show position during draft mode - roster not yet published
-        Alert.alert(
-          'Added to Waitlist',
-          `You've been added to the waitlist as a ${position}. We'll notify you when a spot opens up!`
-        );
+        // Server message is payment-aware: pay-now vs don't-pay-yet
+        const title = result.payEligible ? 'Please Send Payment' : 'Added to Waitlist';
+        Alert.alert(title, result.message);
       } else {
         Alert.alert('Success', `You have been registered as a ${position}!`);
       }

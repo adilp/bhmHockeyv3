@@ -57,6 +57,7 @@ export interface Organization {
   defaultCost?: number | null;
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
+  defaultShowWaitlistBeforePublish?: boolean | null;  // Pre-fills showWaitlistBeforePublish on new events
   groupMeLink?: string | null;  // Org-wide GroupMe chat link (events fall back to this)
 }
 
@@ -133,6 +134,7 @@ export interface CreateOrganizationRequest {
   defaultCost?: number | null;
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
+  defaultShowWaitlistBeforePublish?: boolean | null;
   groupMeLink?: string | null;  // Org-wide GroupMe chat link
 }
 
@@ -149,6 +151,7 @@ export interface UpdateOrganizationRequest {
   defaultCost?: number | null;
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
+  defaultShowWaitlistBeforePublish?: boolean | null;  // null/undefined leaves it unchanged
   groupMeLink?: string | null;  // Empty/whitespace clears the link; null/undefined leaves it unchanged
 }
 
@@ -197,6 +200,8 @@ export interface RegistrationResultDto {
   status: 'Registered' | 'Waitlisted';
   waitlistPosition: number | null;
   message: string;
+  /** Waitlisted on a paid event: may they pay now? (null/undefined otherwise) */
+  payEligible?: boolean | null;
 }
 
 // Team assignment for events
@@ -234,9 +239,13 @@ export interface EventDto {
   unpaidCount?: number;          // Count of registrations with PaymentStatus != "Verified"
   // Waitlist fields (Phase 5)
   waitlistCount: number;         // Number of people on waitlist
-  myWaitlistPosition?: number;   // Current user's waitlist position (null if not waitlisted)
+  myWaitlistPosition?: number;   // Current user's waitlist position (null if not waitlisted); always visible to the player
   myPaymentDeadline?: string;    // Current user's payment deadline after promotion (ISO date string)
   amIWaitlisted: boolean;        // Convenience flag - true if current user is on waitlist
+  // Waitlist visibility (pre-publish)
+  showWaitlistBeforePublish: boolean;  // Registered/waitlisted viewers can see the ordered waitlist before publish
+  // Pay-eligibility for the current user's waitlisted registration on paid events
+  myWaitlistPaymentEligible?: boolean | null;  // null when not applicable (not waitlisted or free event)
   // Slot position labels (organizer feature)
   slotPositionLabels?: Record<number, string>; // Maps slot index to position label (e.g., {1: "C", 2: "LW"})
   // GroupMe chat link, resolved server-side at read time: event override wins, else org's link
@@ -283,6 +292,7 @@ export interface CreateEventRequest {
   skillLevels?: SkillLevel[];    // Optional - overrides org's skill levels if set
   applyAutoRoster?: boolean;     // Auto-add the org's auto-roster members (default true; ignored for standalone events)
   groupMeLink?: string;          // Optional game-specific GroupMe link (blank inherits org's link)
+  showWaitlistBeforePublish?: boolean;  // Optional - defaults to false (form pre-fills from org default)
 }
 
 export interface UpdateEventRequest {
@@ -299,6 +309,7 @@ export interface UpdateEventRequest {
   skillLevels?: SkillLevel[];    // Can change skill levels after creation
   slotPositionLabels?: Record<number, string>;  // Slot position labels (e.g., {1: "C", 2: "LW"})
   groupMeLink?: string;          // Empty string clears the override (falls back to org); undefined leaves unchanged
+  showWaitlistBeforePublish?: boolean;  // undefined leaves unchanged
 }
 
 // Payment request types (Phase 4)

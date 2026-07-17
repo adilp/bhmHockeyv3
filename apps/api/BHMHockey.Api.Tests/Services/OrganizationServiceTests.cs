@@ -935,4 +935,102 @@ public class OrganizationServiceTests : IDisposable
     }
 
     #endregion
+
+    #region DefaultShowWaitlistBeforePublish Tests
+
+    private static UpdateOrganizationRequest ShowWaitlistDefaultUpdateRequest(bool? defaultShowWaitlistBeforePublish)
+    {
+        return new UpdateOrganizationRequest(
+            Name: null,
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            DefaultShowWaitlistBeforePublish: defaultShowWaitlistBeforePublish
+        );
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithDefaultShowWaitlistBeforePublish_StoresAndReturnsIt()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest(
+            Name: "Waitlist Default Org",
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            DefaultShowWaitlistBeforePublish: true);
+
+        // Act
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        // Assert
+        result.DefaultShowWaitlistBeforePublish.Should().BeTrue();
+        var org = await _context.Organizations.FindAsync(result.Id);
+        org!.DefaultShowWaitlistBeforePublish.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SetsDefaultShowWaitlistBeforePublish_ReturnsItInDto()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+
+        // Act
+        var result = await _sut.UpdateAsync(org.Id, ShowWaitlistDefaultUpdateRequest(true), creator.Id);
+
+        // Assert
+        result!.DefaultShowWaitlistBeforePublish.Should().BeTrue();
+        var updated = await _context.Organizations.FindAsync(org.Id);
+        updated!.DefaultShowWaitlistBeforePublish.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NullDefaultShowWaitlistBeforePublish_LeavesUnchanged()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultShowWaitlistBeforePublish = true;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdateAsync(org.Id, ShowWaitlistDefaultUpdateRequest(null), creator.Id);
+
+        // Assert
+        result!.DefaultShowWaitlistBeforePublish.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ReturnsDefaultShowWaitlistBeforePublish()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultShowWaitlistBeforePublish = true;
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetByIdAsync(org.Id, creator.Id);
+
+        // Assert
+        result!.DefaultShowWaitlistBeforePublish.Should().BeTrue();
+    }
+
+    #endregion
 }

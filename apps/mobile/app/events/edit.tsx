@@ -53,6 +53,7 @@ export default function EditEventScreen() {
         skillLevels: data.skillLevels,
         // '' clears the event's own link (falls back to org); a value sets the override
         groupMeLink: data.groupMeLink,
+        showWaitlistBeforePublish: data.showWaitlistBeforePublish,
       });
 
       Alert.alert('Success', 'Event updated successfully!', [
