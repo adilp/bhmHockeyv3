@@ -100,7 +100,7 @@ GRANT ALL PRIVILEGES ON DATABASE bhmhockey TO bhmhockey;
 
 #### 3. Configure Environment Variables
 
-No root `.env` is needed — nothing loads it locally. Local API config comes from `apps/api/BHMHockey.Api/appsettings.Development.json` (connection string expects Postgres on port **5433**; see the README for the 5433-vs-5432 explanation and how to override with the `ConnectionStrings__DefaultConnection` env var). The JWT secret is auto-defaulted in development. The root `.env.example` documents the **production** variables set in the DigitalOcean console.
+No root `.env` is needed — nothing loads it locally. Local API config comes from `apps/api/BHMHockey.Api/appsettings.Development.json` (connection string expects Postgres on port **5433**; see the README for the 5433-vs-5432 explanation and how to override with the `ConnectionStrings__DefaultConnection` env var). The JWT secret is auto-defaulted in development. Production variables are declared in `.do/app.yaml` and set in the DigitalOcean console.
 
 #### 4. Run Database Migrations
 

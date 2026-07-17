@@ -79,7 +79,7 @@ Only manually bump `version` (e.g., `1.0.4` → `1.0.5`) in TWO places when the 
 2. `apps/mobile/ios/BHMHockey/Info.plist` - `CFBundleShortVersionString`
 
 ### Environment Variables
-- Root `.env.example` - reference for production env vars (set in the DigitalOcean console); the API does NOT read a root `.env` locally — local config lives in `appsettings.Development.json`
+- The API does NOT use dotenv `.env` files — local config lives in `appsettings.Development.json`; production env vars are declared in `.do/app.yaml` and set in the DigitalOcean console
 - `apps/mobile/.env` - `EXPO_PUBLIC_API_URL` for local dev (gitignored, see `apps/mobile/.env.example`)
 - Never commit secrets
 

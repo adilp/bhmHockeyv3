@@ -33,7 +33,7 @@ yarn install
 
 ### 2. Understand how local config is loaded (30 seconds, saves an hour)
 
-The API does **not** read the root `.env` file — nothing loads it locally (there is no dotenv loader in `Program.cs`). `.env.example` is a reference for the environment variables set in the DigitalOcean console for production. You do **not** need to create a `.env` to run locally.
+The API does **not** use dotenv-style `.env` files — there is nothing to copy or create to run locally. Production environment variables are declared in [`.do/app.yaml`](./.do/app.yaml) and set in the DigitalOcean console.
 
 Local API config comes from `apps/api/BHMHockey.Api/appsettings.Development.json`, which expects:
 
@@ -93,6 +93,21 @@ open http://localhost:5001/swagger    # interactive API docs
 ```
 
 Then press `i` (iOS simulator) or `a` (Android emulator) in the Metro terminal, or scan the QR code with Expo Go.
+
+### 6. Make yourself an admin (first run only)
+
+Register an account in the app (or via Swagger: `POST /api/auth/register`). New accounts are always `Player`, and only Organizer/Admin can create organizations and events — there is no in-app way to promote the *first* admin. Flip your role directly in the DB:
+
+```bash
+# Docker/OrbStack Postgres:
+docker exec bhmhockey-postgres psql -U bhmhockey -c \
+  "UPDATE \"Users\" SET \"Role\" = 'Admin' WHERE \"Email\" = 'you@example.com';"
+
+# Homebrew Postgres:
+psql -d bhmhockey -c "UPDATE \"Users\" SET \"Role\" = 'Admin' WHERE \"Email\" = 'you@example.com';"
+```
+
+Then **log out and back in** — the role is baked into the JWT at login, so it only takes effect on a fresh login. Further admins can be promoted from the in-app admin panel.
 
 ## Mobile App → API Connection
 
