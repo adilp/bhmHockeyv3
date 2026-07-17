@@ -280,6 +280,54 @@ public class AuthServiceTests : IDisposable
             .WithMessage("*JWT Secret*");
     }
 
+    [Fact]
+    public async Task GenerateJwtToken_WithEmptySecret_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        // appsettings.json ships "Secret": "" - an empty string must be treated as
+        // missing, not passed to SymmetricSecurityKey (which throws ArgumentException)
+        var mockConfigEmptySecret = new Mock<IConfiguration>();
+        mockConfigEmptySecret.Setup(c => c["Jwt:Secret"]).Returns("");
+        var serviceEmptySecret = new AuthService(_context, mockConfigEmptySecret.Object, _mockNotificationService.Object);
+        var request = new RegisterRequest("emptysecret@example.com", "Password1!", "John", "Doe", null, null, null);
+
+        // Act
+        var act = () => serviceEmptySecret.RegisterAsync(request);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*JWT Secret*");
+    }
+
+    [Fact]
+    public async Task GenerateJwtToken_WithDevFallbackWrittenToConfiguration_ReturnsToken()
+    {
+        // Arrange
+        // Mirrors Program.cs: config ships an empty secret, then the development
+        // fallback is written back so all readers of Jwt:Secret see it
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Secret"] = "",
+                ["Jwt:Issuer"] = "test-issuer",
+                ["Jwt:Audience"] = "test-audience",
+                ["Jwt:ExpiryMinutes"] = "60"
+            })
+            .Build();
+        configuration["Jwt:Secret"] = "dev-secret-key-for-local-development-only-min-32-chars";
+        var serviceWithFallback = new AuthService(_context, configuration, _mockNotificationService.Object);
+        var request = new RegisterRequest("devfallback@example.com", "Password1!", "John", "Doe", null, null, null);
+
+        // Act
+        var result = await serviceWithFallback.RegisterAsync(request);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Token.Should().NotBeNullOrEmpty();
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(result.Token);
+        token.Issuer.Should().Be("test-issuer");
+    }
+
     #endregion
 
     #region Logout Tests
