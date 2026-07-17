@@ -33,6 +33,9 @@ public class Event
     // Optional skill levels - if set, overrides organization's skill levels
     public List<string>? SkillLevels { get; set; }
 
+    // Optional game-specific GroupMe link - overrides the organization's link when set
+    public string? GroupMeLink { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

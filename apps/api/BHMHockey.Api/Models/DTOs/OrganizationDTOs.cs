@@ -17,7 +17,8 @@ public record OrganizationDto(
     int? DefaultMaxPlayers,
     decimal? DefaultCost,
     string? DefaultVenue,
-    string? DefaultVisibility
+    string? DefaultVisibility,
+    string? GroupMeLink = null  // Org-wide GroupMe chat link (events fall back to this)
 );
 
 // Member/subscriber info - visible to all subscribers
@@ -45,7 +46,8 @@ public record CreateOrganizationRequest(
     int? DefaultMaxPlayers,
     decimal? DefaultCost,
     string? DefaultVenue,
-    string? DefaultVisibility
+    string? DefaultVisibility,
+    string? GroupMeLink = null  // Org-wide GroupMe chat link
 );
 
 public record UpdateOrganizationRequest(
@@ -59,7 +61,8 @@ public record UpdateOrganizationRequest(
     int? DefaultMaxPlayers,
     decimal? DefaultCost,
     string? DefaultVenue,
-    string? DefaultVisibility
+    string? DefaultVisibility,
+    string? GroupMeLink = null  // Empty/whitespace clears the link; null leaves it unchanged
 );
 
 public record OrganizationSubscriptionDto(

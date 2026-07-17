@@ -101,8 +101,16 @@ public class OrganizationsController : ControllerBase
         }
 
         var userId = GetCurrentUserId();
-        var organization = await _organizationService.CreateAsync(request, userId);
-        return CreatedAtAction(nameof(GetById), new { id = organization.Id }, organization);
+        try
+        {
+            var organization = await _organizationService.CreateAsync(request, userId);
+            return CreatedAtAction(nameof(GetById), new { id = organization.Id }, organization);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Organization creation rejected for user {UserId}: {Message}", userId, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -113,14 +121,22 @@ public class OrganizationsController : ControllerBase
     public async Task<ActionResult<OrganizationDto>> Update(Guid id, [FromBody] UpdateOrganizationRequest request)
     {
         var userId = GetCurrentUserId();
-        var organization = await _organizationService.UpdateAsync(id, request, userId);
-
-        if (organization == null)
+        try
         {
-            return NotFound();
-        }
+            var organization = await _organizationService.UpdateAsync(id, request, userId);
 
-        return Ok(organization);
+            if (organization == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(organization);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Organization update rejected for organization {OrganizationId}: {Message}", id, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>

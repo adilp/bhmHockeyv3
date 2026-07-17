@@ -766,4 +766,173 @@ public class OrganizationServiceTests : IDisposable
     }
 
     #endregion
+
+    #region GroupMe Link Tests
+
+    private static UpdateOrganizationRequest GroupMeLinkUpdateRequest(string? groupMeLink)
+    {
+        return new UpdateOrganizationRequest(
+            Name: null,
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            GroupMeLink: groupMeLink
+        );
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithWhitespacePaddedGroupMeLink_TrimsAndStores()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest(
+            Name: "GroupMe Org",
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            GroupMeLink: "  https://groupme.com/join_group/abc  ");
+
+        // Act
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        // Assert
+        result.GroupMeLink.Should().Be("https://groupme.com/join_group/abc");
+        var org = await _context.Organizations.FindAsync(result.Id);
+        org!.GroupMeLink.Should().Be("https://groupme.com/join_group/abc");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithInvalidGroupMeLink_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest(
+            Name: "Bad Link Org",
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            GroupMeLink: "http://groupme.com/join_group/abc");
+
+        // Act & Assert
+        await _sut.Invoking(s => s.CreateAsync(request, creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*GroupMe link*");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SetGroupMeLink_ReturnsLinkInDto()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+
+        // Act
+        var result = await _sut.UpdateAsync(org.Id, GroupMeLinkUpdateRequest("https://www.groupme.com/join_group/xyz"), creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://www.groupme.com/join_group/xyz");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_EmptyGroupMeLink_ClearsLink()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.GroupMeLink = "https://groupme.com/join_group/old";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdateAsync(org.Id, GroupMeLinkUpdateRequest(""), creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().BeNull();
+        var updated = await _context.Organizations.FindAsync(org.Id);
+        updated!.GroupMeLink.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NullGroupMeLink_LeavesLinkUnchanged()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.GroupMeLink = "https://groupme.com/join_group/keep";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.UpdateAsync(org.Id, GroupMeLinkUpdateRequest(null), creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://groupme.com/join_group/keep");
+    }
+
+    [Theory]
+    [InlineData("http://groupme.com/join_group/abc")]  // not https
+    [InlineData("https://discord.gg/abc")]             // wrong host
+    [InlineData("groupme.com/join_group/abc")]         // not absolute https URL
+    public async Task UpdateAsync_WithInvalidGroupMeLink_ThrowsInvalidOperationException(string link)
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+
+        // Act & Assert
+        await _sut.Invoking(s => s.UpdateAsync(org.Id, GroupMeLinkUpdateRequest(link), creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*GroupMe link*");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_GroupMeLinkOverMaxLength_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        var longLink = "https://groupme.com/join_group/" + new string('a', 500);
+
+        // Act & Assert
+        await _sut.Invoking(s => s.UpdateAsync(org.Id, GroupMeLinkUpdateRequest(longLink), creator.Id))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*500*");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ReturnsGroupMeLink()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.GroupMeLink = "https://groupme.com/join_group/visible";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetByIdAsync(org.Id, creator.Id);
+
+        // Assert
+        result!.GroupMeLink.Should().Be("https://groupme.com/join_group/visible");
+    }
+
+    #endregion
 }

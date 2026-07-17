@@ -135,6 +135,22 @@ public class OrganizationsControllerTests
         createdResult!.Value.Should().BeEquivalentTo(createdOrg);
     }
 
+    [Fact]
+    public async Task Create_WhenServiceThrowsInvalidOperation_ReturnsBadRequest()
+    {
+        // Arrange - e.g. invalid GroupMe link or duplicate name
+        SetupAuthenticatedUser(_testUserId);
+        var request = new CreateOrganizationRequest("New Org", null, null, null, null, null, null, null, null, null, null, "https://discord.gg/abc");
+        _mockOrgService.Setup(s => s.CreateAsync(request, _testUserId))
+            .ThrowsAsync(new InvalidOperationException("GroupMe link must be an https://groupme.com URL (e.g., https://groupme.com/join_group/...)."));
+
+        // Act
+        var result = await _controller.Create(request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
     #endregion
 
     #region Update Tests
@@ -170,6 +186,23 @@ public class OrganizationsControllerTests
 
         // Assert
         result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task Update_WhenServiceThrowsInvalidOperation_ReturnsBadRequest()
+    {
+        // Arrange - e.g. invalid GroupMe link
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var request = new UpdateOrganizationRequest(null, null, null, null, null, null, null, null, null, null, null, "http://groupme.com/join_group/abc");
+        _mockOrgService.Setup(s => s.UpdateAsync(orgId, request, _testUserId))
+            .ThrowsAsync(new InvalidOperationException("GroupMe link must be an https://groupme.com URL (e.g., https://groupme.com/join_group/...)."));
+
+        // Act
+        var result = await _controller.Update(orgId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     #endregion

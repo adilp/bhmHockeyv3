@@ -112,7 +112,8 @@ public class EventService : IEventService
             Cost = request.Cost,
             RegistrationDeadline = request.RegistrationDeadline,
             Visibility = visibility,
-            SkillLevels = request.SkillLevels
+            SkillLevels = request.SkillLevels,
+            GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink)
         };
 
         _context.Events.Add(evt);
@@ -416,6 +417,12 @@ public class EventService : IEventService
         if (request.SlotPositionLabels != null)
         {
             evt.SlotPositionLabels = request.SlotPositionLabels;
+        }
+
+        // Empty/whitespace clears the override (Normalize returns null, falls back to org); null leaves unchanged
+        if (request.GroupMeLink != null)
+        {
+            evt.GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink);
         }
 
         evt.UpdatedAt = DateTime.UtcNow;
@@ -946,6 +953,25 @@ public class EventService : IEventService
             }
         }
 
+        // Resolve chat link at read time: event override wins, else the org's link (live fallback,
+        // so rotating the org link updates all inheriting events instantly)
+        string? groupMeLink = null;
+        string? groupMeLinkSource = null;
+        if (!string.IsNullOrWhiteSpace(evt.GroupMeLink))
+        {
+            groupMeLink = evt.GroupMeLink;
+            groupMeLinkSource = "event";
+        }
+        else if (evt.OrganizationId.HasValue)
+        {
+            var org = evt.Organization ?? await _context.Organizations.FindAsync(evt.OrganizationId.Value);
+            if (!string.IsNullOrWhiteSpace(org?.GroupMeLink))
+            {
+                groupMeLink = org.GroupMeLink;
+                groupMeLinkSource = "organization";
+            }
+        }
+
         return new EventDto(
             evt.Id,
             evt.OrganizationId,
@@ -975,7 +1001,9 @@ public class EventService : IEventService
             myWaitlistPosition,  // Phase 5 - Waitlist
             myPaymentDeadline,   // Phase 5 - Waitlist
             amIWaitlisted,       // Phase 5 - Waitlist
-            evt.SlotPositionLabels  // Slot position labels
+            evt.SlotPositionLabels,  // Slot position labels
+            groupMeLink,         // Resolved GroupMe chat link
+            groupMeLinkSource    // "event" | "organization" | null
         );
     }
 

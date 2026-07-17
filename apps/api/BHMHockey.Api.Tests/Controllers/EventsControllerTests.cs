@@ -245,6 +245,27 @@ public class EventsControllerTests
         returnedEvent.Should().NotBeNull();
     }
 
+    [Fact]
+    public async Task Create_WhenServiceThrowsInvalidOperation_ReturnsBadRequest()
+    {
+        // Arrange - e.g. invalid GroupMe link or invalid visibility config
+        SetupAuthenticatedUser();
+        var request = new CreateEventRequest(
+            EventDate: DateTime.UtcNow.AddDays(7),
+            MaxPlayers: 10,
+            Cost: 0,
+            GroupMeLink: "https://discord.gg/abc"
+        );
+        _mockEventService.Setup(s => s.CreateAsync(request, _testUserId))
+            .ThrowsAsync(new InvalidOperationException("GroupMe link must be an https://groupme.com URL (e.g., https://groupme.com/join_group/...)."));
+
+        // Act
+        var result = await _controller.Create(request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
     #endregion
 
     #region Update Tests
@@ -294,6 +315,22 @@ public class EventsControllerTests
 
         // Assert
         result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task Update_WhenServiceThrowsInvalidOperation_ReturnsBadRequest()
+    {
+        // Arrange - e.g. invalid GroupMe link
+        SetupAuthenticatedUser();
+        var request = new UpdateEventRequest(null, null, null, null, null, null, null, null, null, null, null, null, GroupMeLink: "http://groupme.com/join_group/abc");
+        _mockEventService.Setup(s => s.UpdateAsync(_testEventId, request, _testUserId))
+            .ThrowsAsync(new InvalidOperationException("GroupMe link must be an https://groupme.com URL (e.g., https://groupme.com/join_group/...)."));
+
+        // Act
+        var result = await _controller.Update(_testEventId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     #endregion
