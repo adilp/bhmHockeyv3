@@ -1,23 +1,20 @@
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 
 /**
  * Get the API URL based on the platform and environment
  *
- * Returns the base URL with /api suffix for API client initialization.
+ * Resolution order:
+ * 1. EXPO_PUBLIC_API_URL env var — set in apps/mobile/.env for local dev
+ *    (gitignored; see apps/mobile/.env.example for per-platform values)
+ * 2. Production URL (fallback, used by release builds)
  *
- * For local development:
- * - iOS Simulator: http://localhost:5001/api
- * - Android Emulator: http://10.0.2.2:5001/api (special IP for host machine)
- * - Physical Device: http://192.168.3.10:5001/api (your computer's local IP)
- *
- * For production: Uses the configured API_URL from app.config.js
+ * Env vars are inlined at bundle time: restart Metro after changing .env
+ * (npx expo start --clear).
  *
  * Note: /health endpoint is at root level, not under /api
  */
 export function getApiUrl(): string {
-  return 'https://bhmhockey-mb3md.ondigitalocean.app/api';
-  // return 'http://192.168.3.218:5001/api';
+  return process.env.EXPO_PUBLIC_API_URL || 'https://bhmhockey-mb3md.ondigitalocean.app/api';
 }
 
 /**

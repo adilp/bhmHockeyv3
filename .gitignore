@@ -80,3 +80,8 @@ apps/mobile/android/
 # Legal documents (not sensitive but not needed in repo)
 *.pdf
 .planning/
+
+# Private planning docs (kept local, not published to the public repo)
+docs/plans/
+docs/tasks/
+docs/jira-tickets/

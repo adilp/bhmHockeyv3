@@ -15,9 +15,10 @@ Phase 4 Complete + Multi-Admin + Notification Center | Ready for Phase 5 (Waitli
 ## Quick Start
 
 ```bash
-yarn install && yarn dev    # Install + start API + Metro simultaneously
+yarn install && yarn dev    # Install + auto-start Postgres (Docker) + API + Metro
 
 # Or separately:
+yarn db                     # Postgres 16 via docker compose (port 5433)
 yarn api                    # API on port 5001 (auto-migrations)
 yarn mobile                 # Metro bundler on port 8081
 
@@ -65,10 +66,11 @@ Mobile Component
 ## Cross-Cutting Gotchas
 
 ### API URLs by Platform
+Set via `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (gitignored, see `apps/mobile/.env.example`); defaults to production when unset. Restart Metro after changing it.
 - iOS Simulator: `http://localhost:5001/api`
 - Android Emulator: `http://10.0.2.2:5001/api`
 - Physical Device: `http://{YOUR_LOCAL_IP}:5001/api`
-- Production: `https://bhmhockey-mb3md.ondigitalocean.app/api`
+- Production (default): `https://bhmhockey-mb3md.ondigitalocean.app/api`
 
 ### Version Sync (Mobile)
 EAS auto-increments `buildNumber` (iOS) and `versionCode` (Android) on production builds via `eas.json`. Do NOT manually bump those.
@@ -78,8 +80,8 @@ Only manually bump `version` (e.g., `1.0.4` → `1.0.5`) in TWO places when the 
 2. `apps/mobile/ios/BHMHockey/Info.plist` - `CFBundleShortVersionString`
 
 ### Environment Variables
-- `.env` at root - database password, JWT secret (gitignored)
-- `.env.example` - template for required variables
+- The API does NOT use dotenv `.env` files — local config lives in `appsettings.Development.json`; production env vars are declared in `.do/app.yaml` and set in the DigitalOcean console
+- `apps/mobile/.env` - `EXPO_PUBLIC_API_URL` for local dev (gitignored, see `apps/mobile/.env.example`)
 - Never commit secrets
 
 ### Type Consistency

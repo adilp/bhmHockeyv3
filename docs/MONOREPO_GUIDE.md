@@ -2,6 +2,8 @@
 
 Complete guide for developing the BHM Hockey app using a monorepo structure with React Native (Expo) and C# (.NET 8 API).
 
+> **Note:** first-time setup steps live in the [root README](../README.md), which is the canonical setup doc. If this guide and the README disagree, trust the README. This guide goes deeper on workspace mechanics.
+
 ## Table of Contents
 
 1. [Monorepo Structure](#monorepo-structure)
@@ -50,7 +52,6 @@ bhmhockey2/
 ├── .do/
 │   └── app.yaml            # Digital Ocean deployment config
 ├── package.json            # Root workspace config
-├── lerna.json             # Lerna monorepo config
 └── yarn.lock
 
 ```
@@ -82,46 +83,26 @@ yarn install
 
 #### 2. Set Up Database
 
-Create a local PostgreSQL database:
+The easiest path is Docker — `yarn dev` auto-starts a Postgres 16 container from the repo's `docker-compose.yml` (port 5433, matching `appsettings.Development.json`). To start it on its own: `yarn db`. No manual database creation needed.
+
+To use a Homebrew Postgres instead (listens on 5432 — override the connection string per the root README):
 
 ```bash
 # macOS (using Homebrew)
-brew install postgresql@15
-brew services start postgresql@15
+brew install postgresql@16
+brew services start postgresql@16
 
 # Create database and user
 psql postgres
 CREATE DATABASE bhmhockey;
-CREATE USER bhmhockey WITH PASSWORD 'your-password';
+CREATE USER bhmhockey WITH PASSWORD 'password';
 GRANT ALL PRIVILEGES ON DATABASE bhmhockey TO bhmhockey;
 \q
 ```
 
 #### 3. Configure Environment Variables
 
-Create `.env` file in the root:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```env
-# Database
-ConnectionStrings__DefaultConnection=Host=localhost;Database=bhmhockey;Username=bhmhockey;Password=your-password
-
-# JWT (auto-generated in dev mode, but you can set it)
-Jwt__Secret=dev-secret-key-for-local-development-only-min-32-chars
-Jwt__Issuer=http://localhost:5001
-Jwt__Audience=http://localhost:5001
-
-# CORS (not needed in dev - automatically allows all)
-# Cors__AllowedOrigins=
-
-# Expo Push Notifications (optional for Phase 1)
-# Expo__AccessToken=
-```
+No root `.env` is needed — nothing loads it locally. Local API config comes from `apps/api/BHMHockey.Api/appsettings.Development.json` (connection string expects Postgres on port **5433**; see the README for the 5433-vs-5432 explanation and how to override with the `ConnectionStrings__DefaultConnection` env var). The JWT secret is auto-defaulted in development. Production variables are declared in `.do/app.yaml` and set in the DigitalOcean console.
 
 #### 4. Run Database Migrations
 
@@ -184,38 +165,13 @@ ipconfig
 
 ### Platform-Specific API URLs
 
-The mobile app automatically detects the platform and uses the correct API URL:
-
-**File**: `apps/mobile/config/api.ts`
-
-```typescript
-export function getApiUrl(): string {
-  if (__DEV__) {
-    if (Platform.OS === 'android') {
-      return 'http://10.0.2.2:5001/api';  // Android emulator
-    } else if (Platform.OS === 'ios') {
-      return 'http://localhost:5001/api';  // iOS simulator
-    } else {
-      // For physical devices
-      return 'http://192.168.1.XXX:5001/api';  // TODO: Replace with your IP
-    }
-  }
-  // Production
-  return 'https://your-app.ondigitalocean.app/api';
-}
-```
+The API base URL is env-driven: `apps/mobile/config/api.ts` reads `EXPO_PUBLIC_API_URL` from `apps/mobile/.env` (gitignored) and defaults to the production API when unset. Copy `apps/mobile/.env.example` to `.env` and uncomment the line for your platform (iOS simulator: `localhost`, Android emulator: `10.0.2.2`, physical device: your Mac's LAN IP).
 
 ### Testing on Physical Device
 
 1. **Find your computer's IP** (see above)
-2. **Update** `apps/mobile/config/api.ts`:
-   ```typescript
-   // Replace this line:
-   return 'http://192.168.1.XXX:5001/api';
-   // With your actual IP:
-   return 'http://192.168.1.100:5001/api';
-   ```
-3. **Restart** the Expo development server
+2. Set it in `apps/mobile/.env`: `EXPO_PUBLIC_API_URL=http://192.168.1.100:5001/api`
+3. **Restart** the Expo dev server (`npx expo start --clear`) — env values are inlined at bundle time
 
 ### API Client Initialization
 

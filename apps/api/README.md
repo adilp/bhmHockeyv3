@@ -2,6 +2,8 @@
 
 ASP.NET Core 8 Web API for the BHM Hockey mobile application.
 
+> **Note:** first-time setup lives in the [root README](../../README.md), which is canonical. Some sections below predate the monorepo restructure.
+
 ## Tech Stack
 
 - **Framework**: ASP.NET Core 8 Web API
@@ -34,17 +36,7 @@ BHMHockey.Api/
 
 ### Step 1: Clone and Configure
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/bhm-hockey-backend.git
-cd bhm-hockey-backend/backend
-
-# Copy environment template
-cp ../.env.example ../.env
-
-# Edit .env with your local settings
-nano ../.env
-```
+Follow the [root README](../../README.md) First-Time Setup — no `.env` file is needed; local config comes from `BHMHockey.Api/appsettings.Development.json`.
 
 ### Step 2: Database Setup
 
@@ -249,7 +241,7 @@ dotnet format
 
 ## Environment Variables Reference
 
-See `.env.example` for all available configuration options.
+See `.do/app.yaml` (repo root) for the production environment variable declarations; local development uses `BHMHockey.Api/appsettings.Development.json`.
 
 ### Required for Production
 - `ConnectionStrings__DefaultConnection` - PostgreSQL connection string (auto-injected by App Platform)

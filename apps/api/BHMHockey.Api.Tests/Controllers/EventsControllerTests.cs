@@ -523,6 +523,9 @@ public class EventsControllerTests
                 IsWaitlisted: false            // Phase 5 - Waitlist
             )
         };
+        // Controller checks the event exists (and roster visibility) before returning registrations
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, _testUserId))
+            .ReturnsAsync(CreateEventDto());
         _mockEventService.Setup(s => s.GetRegistrationsAsync(_testEventId))
             .ReturnsAsync(registrations);
 
