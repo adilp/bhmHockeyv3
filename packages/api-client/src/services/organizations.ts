@@ -5,7 +5,9 @@ import type {
   OrganizationAdmin,
   CreateOrganizationRequest,
   UpdateOrganizationRequest,
-  AddAdminRequest
+  AddAdminRequest,
+  AutoRosterMember,
+  AddAutoRosterMemberRequest
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -119,5 +121,42 @@ export const organizationService = {
    */
   async removeAdmin(organizationId: string, userId: string): Promise<void> {
     await apiClient.instance.delete(`/organizations/${organizationId}/admins/${userId}`);
+  },
+
+  // Auto-roster methods (admin only) - org "regulars" auto-added to new org events
+
+  /**
+   * Get the organization's auto-roster list ordered by sort order (admin only)
+   */
+  async getAutoRoster(organizationId: string): Promise<AutoRosterMember[]> {
+    const response = await apiClient.instance.get<AutoRosterMember[]>(`/organizations/${organizationId}/auto-roster`);
+    return response.data;
+  },
+
+  /**
+   * Add a subscriber to the organization's auto-roster (admin only)
+   */
+  async addAutoRosterMember(organizationId: string, data: AddAutoRosterMemberRequest): Promise<AutoRosterMember> {
+    const response = await apiClient.instance.post<AutoRosterMember>(`/organizations/${organizationId}/auto-roster`, data);
+    return response.data;
+  },
+
+  /**
+   * Remove a user from the organization's auto-roster (admin only)
+   */
+  async removeAutoRosterMember(organizationId: string, userId: string): Promise<void> {
+    await apiClient.instance.delete(`/organizations/${organizationId}/auto-roster/${userId}`);
+  },
+
+  /**
+   * Reorder the organization's auto-roster (admin only).
+   * All current members must be included exactly once.
+   */
+  async reorderAutoRoster(organizationId: string, orderedUserIds: string[]): Promise<AutoRosterMember[]> {
+    const response = await apiClient.instance.put<AutoRosterMember[]>(
+      `/organizations/${organizationId}/auto-roster/order`,
+      { orderedUserIds }
+    );
+    return response.data;
   },
 };
