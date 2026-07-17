@@ -380,6 +380,17 @@ export default function OrganizationDetailScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Auto-Roster Button - visible to admins only */}
+        {isAdmin && (
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => router.push(`/organizations/${id}/auto-roster`)}
+          >
+            <Ionicons name="people-outline" size={20} color={colors.text.secondary} />
+            <Text style={styles.settingsButtonText}>Auto-Roster</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Share Invite Button - visible to all members */}
         {(organization.isSubscribed || isAdmin) && (
           <TouchableOpacity

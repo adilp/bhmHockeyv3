@@ -4,6 +4,7 @@ using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using System.Security.Claims;
 using Xunit;
@@ -18,6 +19,7 @@ public class OrganizationsControllerTests
 {
     private readonly Mock<IOrganizationService> _mockOrgService;
     private readonly Mock<IOrganizationAdminService> _mockAdminService;
+    private readonly Mock<IOrganizationAutoRosterService> _mockAutoRosterService;
     private readonly OrganizationsController _controller;
     private readonly Guid _testUserId = Guid.NewGuid();
 
@@ -25,7 +27,12 @@ public class OrganizationsControllerTests
     {
         _mockOrgService = new Mock<IOrganizationService>();
         _mockAdminService = new Mock<IOrganizationAdminService>();
-        _controller = new OrganizationsController(_mockOrgService.Object, _mockAdminService.Object);
+        _mockAutoRosterService = new Mock<IOrganizationAutoRosterService>();
+        _controller = new OrganizationsController(
+            _mockOrgService.Object,
+            _mockAdminService.Object,
+            _mockAutoRosterService.Object,
+            Mock.Of<ILogger<OrganizationsController>>());
     }
 
     #region GetAll Tests
@@ -269,6 +276,170 @@ public class OrganizationsControllerTests
 
     #endregion
 
+    #region Auto-Roster Tests
+
+    [Fact]
+    public async Task GetAutoRoster_AsAdmin_ReturnsMembers()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var members = new List<AutoRosterMemberDto> { CreateAutoRosterMemberDto(sortOrder: 0) };
+        _mockAutoRosterService.Setup(s => s.GetAutoRosterAsync(orgId, _testUserId)).ReturnsAsync(members);
+
+        // Act
+        var result = await _controller.GetAutoRoster(orgId);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        var okResult = result.Result as OkObjectResult;
+        (okResult!.Value as List<AutoRosterMemberDto>).Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetAutoRoster_AsNonAdmin_ReturnsForbidden()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockAutoRosterService.Setup(s => s.GetAutoRosterAsync(orgId, _testUserId))
+            .ThrowsAsync(new UnauthorizedAccessException("Not an admin"));
+
+        // Act
+        var result = await _controller.GetAutoRoster(orgId);
+
+        // Assert
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    [Fact]
+    public async Task AddAutoRosterMember_WithValidRequest_ReturnsMember()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var memberUserId = Guid.NewGuid();
+        var request = new AddAutoRosterMemberRequest(memberUserId, "Skater");
+        var member = CreateAutoRosterMemberDto(userId: memberUserId);
+        _mockAutoRosterService.Setup(s => s.AddMemberAsync(orgId, memberUserId, "Skater", _testUserId))
+            .ReturnsAsync(member);
+
+        // Act
+        var result = await _controller.AddAutoRosterMember(orgId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        var okResult = result.Result as OkObjectResult;
+        (okResult!.Value as AutoRosterMemberDto)!.UserId.Should().Be(memberUserId);
+    }
+
+    [Fact]
+    public async Task AddAutoRosterMember_WhenNotSubscriber_Returns400()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var request = new AddAutoRosterMemberRequest(Guid.NewGuid(), "Skater");
+        _mockAutoRosterService.Setup(s => s.AddMemberAsync(orgId, request.UserId, "Skater", _testUserId))
+            .ThrowsAsync(new InvalidOperationException("User must be a member of this organization"));
+
+        // Act
+        var result = await _controller.AddAutoRosterMember(orgId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task AddAutoRosterMember_AsNonAdmin_ReturnsForbidden()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var request = new AddAutoRosterMemberRequest(Guid.NewGuid(), "Skater");
+        _mockAutoRosterService.Setup(s => s.AddMemberAsync(orgId, request.UserId, "Skater", _testUserId))
+            .ThrowsAsync(new UnauthorizedAccessException("Not an admin"));
+
+        // Act
+        var result = await _controller.AddAutoRosterMember(orgId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    [Fact]
+    public async Task RemoveAutoRosterMember_WhenInList_Returns204()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var memberUserId = Guid.NewGuid();
+        _mockAutoRosterService.Setup(s => s.RemoveMemberAsync(orgId, memberUserId, _testUserId)).ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.RemoveAutoRosterMember(orgId, memberUserId);
+
+        // Assert
+        result.Should().BeOfType<NoContentResult>();
+    }
+
+    [Fact]
+    public async Task RemoveAutoRosterMember_WhenNotInList_Returns404()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var memberUserId = Guid.NewGuid();
+        _mockAutoRosterService.Setup(s => s.RemoveMemberAsync(orgId, memberUserId, _testUserId)).ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.RemoveAutoRosterMember(orgId, memberUserId);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task ReorderAutoRoster_WithValidOrder_ReturnsMembers()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var orderedIds = new List<Guid> { Guid.NewGuid(), Guid.NewGuid() };
+        var request = new ReorderAutoRosterRequest(orderedIds);
+        var members = new List<AutoRosterMemberDto>
+        {
+            CreateAutoRosterMemberDto(userId: orderedIds[0], sortOrder: 0),
+            CreateAutoRosterMemberDto(userId: orderedIds[1], sortOrder: 1)
+        };
+        _mockAutoRosterService.Setup(s => s.ReorderAsync(orgId, orderedIds, _testUserId)).ReturnsAsync(members);
+
+        // Act
+        var result = await _controller.ReorderAutoRoster(orgId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task ReorderAutoRoster_WithIncompleteList_Returns400()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var request = new ReorderAutoRosterRequest(new List<Guid> { Guid.NewGuid() });
+        _mockAutoRosterService.Setup(s => s.ReorderAsync(orgId, request.OrderedUserIds, _testUserId))
+            .ThrowsAsync(new InvalidOperationException("All auto-roster members must be included exactly once"));
+
+        // Act
+        var result = await _controller.ReorderAutoRoster(orgId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private void SetupAuthenticatedUser(Guid userId, string role = "Organizer")
@@ -285,6 +456,20 @@ public class OrganizationsControllerTests
         {
             HttpContext = new DefaultHttpContext { User = principal }
         };
+    }
+
+    private AutoRosterMemberDto CreateAutoRosterMemberDto(Guid? userId = null, int sortOrder = 0)
+    {
+        return new AutoRosterMemberDto(
+            Guid.NewGuid(),
+            userId ?? Guid.NewGuid(),
+            "Test",
+            "User",
+            new Dictionary<string, string> { { "skater", "Silver" } },
+            "Skater",
+            sortOrder,
+            DateTime.UtcNow
+        );
     }
 
     private OrganizationDto CreateOrgDto(string name, bool isSubscribed = false, bool isCreator = false)

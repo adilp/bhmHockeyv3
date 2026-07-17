@@ -28,6 +28,7 @@ export default function CreateEventScreen() {
       cost: data.cost,
       visibility: data.visibility,
       skillLevels: data.skillLevels,
+      applyAutoRoster: data.applyAutoRoster,
     });
 
     if (result) {

@@ -84,3 +84,24 @@ public record OrganizationAdminDto(
 public record AddAdminRequest(
     Guid UserId
 );
+
+// Auto-roster DTOs - org "regulars" auto-added to new org events
+public record AutoRosterMemberDto(
+    Guid Id,
+    Guid UserId,
+    string FirstName,
+    string LastName,
+    Dictionary<string, string>? Positions,  // User's profile positions {"goalie": "Gold", "skater": "Silver"}
+    string Position,                        // "Goalie" or "Skater" - position they'll be auto-added as
+    int SortOrder,
+    DateTime AddedAt
+);
+
+public record AddAutoRosterMemberRequest(
+    Guid UserId,
+    string Position                         // "Goalie" or "Skater"
+);
+
+public record ReorderAutoRosterRequest(
+    List<Guid> OrderedUserIds               // All auto-roster member user IDs in the new order
+);

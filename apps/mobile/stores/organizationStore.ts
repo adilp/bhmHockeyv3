@@ -1,11 +1,22 @@
 import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
-import type { Organization, OrganizationSubscription, CreateOrganizationRequest } from '@bhmhockey/shared';
+import type { Organization, OrganizationSubscription, CreateOrganizationRequest, OrganizationMember, AutoRosterMember, Position } from '@bhmhockey/shared';
+
+/** Extract message from ApiError objects or Error instances */
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
+    return (error as any).message || fallback;
+  }
+  return fallback;
+}
 
 interface OrganizationState {
   organizations: Organization[];
   mySubscriptions: OrganizationSubscription[];
   myOrganizations: Organization[]; // Organizations I created/own
+  members: OrganizationMember[]; // Members of the org being viewed (admin flows)
+  autoRoster: AutoRosterMember[]; // Auto-roster of the org being viewed (admin only)
+  autoRosterOrgId: string | null; // Which org the loaded autoRoster belongs to
   isLoading: boolean;
   error: string | null;
 
@@ -18,12 +29,24 @@ interface OrganizationState {
   unsubscribe: (organizationId: string) => Promise<void>;
   deleteOrganization: (organizationId: string) => Promise<boolean>;
   clearError: () => void;
+
+  // Members (admin flows)
+  fetchMembers: (organizationId: string) => Promise<void>;
+
+  // Auto-roster actions (admin only)
+  fetchAutoRoster: (organizationId: string) => Promise<void>;
+  addAutoRosterMember: (organizationId: string, userId: string, position: Position) => Promise<boolean>;
+  removeAutoRosterMember: (organizationId: string, userId: string) => Promise<boolean>;
+  reorderAutoRoster: (organizationId: string, orderedUserIds: string[]) => Promise<boolean>;
 }
 
 export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   organizations: [],
   mySubscriptions: [],
   myOrganizations: [],
+  members: [],
+  autoRoster: [],
+  autoRosterOrgId: null,
   isLoading: false,
   error: null,
 
@@ -154,4 +177,79 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  fetchMembers: async (organizationId: string) => {
+    try {
+      const members = await organizationService.getMembers(organizationId);
+      set({ members });
+    } catch (error) {
+      set({ error: getErrorMessage(error, 'Failed to load members') });
+    }
+  },
+
+  fetchAutoRoster: async (organizationId: string) => {
+    try {
+      const autoRoster = await organizationService.getAutoRoster(organizationId);
+      set({ autoRoster, autoRosterOrgId: organizationId });
+    } catch (error) {
+      set({ error: getErrorMessage(error, 'Failed to load auto-roster') });
+    }
+  },
+
+  addAutoRosterMember: async (organizationId: string, userId: string, position: Position) => {
+    try {
+      const member = await organizationService.addAutoRosterMember(organizationId, { userId, position });
+      set((state) => ({ autoRoster: [...state.autoRoster, member], autoRosterOrgId: organizationId }));
+      return true;
+    } catch (error) {
+      set({ error: getErrorMessage(error, 'Failed to add player to auto-roster') });
+      return false;
+    }
+  },
+
+  removeAutoRosterMember: async (organizationId: string, userId: string) => {
+    const { autoRoster } = get();
+
+    // Optimistic update
+    set({ autoRoster: autoRoster.filter((m) => m.userId !== userId) });
+
+    try {
+      await organizationService.removeAutoRosterMember(organizationId, userId);
+      return true;
+    } catch (error) {
+      // Rollback on failure
+      set({
+        autoRoster,
+        error: getErrorMessage(error, 'Failed to remove player from auto-roster'),
+      });
+      return false;
+    }
+  },
+
+  reorderAutoRoster: async (organizationId: string, orderedUserIds: string[]) => {
+    const { autoRoster } = get();
+
+    // Optimistic update - reorder locally
+    const byUserId = new Map(autoRoster.map((m) => [m.userId, m]));
+    const reordered = orderedUserIds
+      .map((userId, index) => {
+        const member = byUserId.get(userId);
+        return member ? { ...member, sortOrder: index } : null;
+      })
+      .filter((m): m is AutoRosterMember => m !== null);
+    set({ autoRoster: reordered });
+
+    try {
+      const updated = await organizationService.reorderAutoRoster(organizationId, orderedUserIds);
+      set({ autoRoster: updated });
+      return true;
+    } catch (error) {
+      // Rollback on failure
+      set({
+        autoRoster,
+        error: getErrorMessage(error, 'Failed to reorder auto-roster'),
+      });
+      return false;
+    }
+  },
 }));

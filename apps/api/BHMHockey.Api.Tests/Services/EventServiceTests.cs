@@ -173,6 +173,265 @@ public class EventServiceTests : IDisposable
         return registration;
     }
 
+    private async Task<OrganizationAutoRosterMember> AddAutoRosterMember(
+        Guid orgId,
+        Guid userId,
+        string position,
+        int sortOrder,
+        Guid? addedByUserId = null)
+    {
+        var member = new OrganizationAutoRosterMember
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = orgId,
+            UserId = userId,
+            Position = position,
+            SortOrder = sortOrder,
+            AddedAt = DateTime.UtcNow,
+            AddedByUserId = addedByUserId
+        };
+
+        _context.OrganizationAutoRosterMembers.Add(member);
+        await _context.SaveChangesAsync();
+        return member;
+    }
+
+    private CreateEventRequest CreateEventRequestFor(
+        Guid orgId,
+        int maxPlayers = 10,
+        decimal cost = 0,
+        bool applyAutoRoster = true)
+    {
+        return new CreateEventRequest(
+            EventDate: DateTime.UtcNow.AddDays(7),
+            MaxPlayers: maxPlayers,
+            Cost: cost,
+            OrganizationId: orgId,
+            Name: "Auto Roster Test Event",
+            ApplyAutoRoster: applyAutoRoster);
+    }
+
+    #endregion
+
+    #region Auto-Roster Application Tests
+
+    [Fact]
+    public async Task CreateAsync_WithAutoRoster_PaidEvent_RegistersMembersWithPendingPayment()
+    {
+        // Arrange
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var user1 = await CreateTestUser("regular1@example.com");
+        var user2 = await CreateTestUser("regular2@example.com");
+        await CreateSubscription(org.Id, user1.Id);
+        await CreateSubscription(org.Id, user2.Id);
+        await AddAutoRosterMember(org.Id, user1.Id, "Skater", 0);
+        await AddAutoRosterMember(org.Id, user2.Id, "Skater", 1);
+
+        // Act
+        var result = await _sut.CreateAsync(CreateEventRequestFor(org.Id, maxPlayers: 10, cost: 20m), admin.Id);
+
+        // Assert - paid events do NOT waitlist auto-roster members (organizer-add semantics)
+        var registrations = await _context.EventRegistrations
+            .Where(r => r.EventId == result.Id)
+            .ToListAsync();
+        registrations.Should().HaveCount(2);
+        registrations.Should().OnlyContain(r => r.Status == "Registered");
+        registrations.Should().OnlyContain(r => r.PaymentStatus == "Pending");
+        registrations.Should().OnlyContain(r => r.PaymentDeadlineAt == null);
+        registrations.Should().OnlyContain(r => r.TeamAssignment == "Black" || r.TeamAssignment == "White");
+        registrations.Select(r => r.TeamAssignment).Distinct().Should().HaveCount(2, "team assignments should be balanced");
+        result.RegisteredCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithAutoRoster_FreeEvent_RegistersMembersWithoutPaymentStatus()
+    {
+        // Arrange
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var user = await CreateTestUser("regular@example.com");
+        await CreateSubscription(org.Id, user.Id);
+        await AddAutoRosterMember(org.Id, user.Id, "Skater", 0);
+
+        // Act
+        var result = await _sut.CreateAsync(CreateEventRequestFor(org.Id, cost: 0), admin.Id);
+
+        // Assert
+        var registration = await _context.EventRegistrations
+            .SingleAsync(r => r.EventId == result.Id && r.UserId == user.Id);
+        registration.Status.Should().Be("Registered");
+        registration.PaymentStatus.Should().BeNull();
+        registration.RegisteredPosition.Should().Be("Skater");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithAutoRoster_GoaliesDoNotConsumeSkaterSlots()
+    {
+        // Arrange - MaxPlayers=1: one skater fills the roster, goalie listed after must still roster
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var skater = await CreateTestUser("skater@example.com");
+        var goalie = await CreateTestUser("goalie@example.com", new Dictionary<string, string> { { "goalie", "Gold" } });
+        await CreateSubscription(org.Id, skater.Id);
+        await CreateSubscription(org.Id, goalie.Id);
+        await AddAutoRosterMember(org.Id, skater.Id, "Skater", 0);
+        await AddAutoRosterMember(org.Id, goalie.Id, "Goalie", 1);
+
+        // Act
+        var result = await _sut.CreateAsync(CreateEventRequestFor(org.Id, maxPlayers: 1), admin.Id);
+
+        // Assert
+        var skaterReg = await _context.EventRegistrations
+            .SingleAsync(r => r.EventId == result.Id && r.UserId == skater.Id);
+        var goalieReg = await _context.EventRegistrations
+            .SingleAsync(r => r.EventId == result.Id && r.UserId == goalie.Id);
+        skaterReg.Status.Should().Be("Registered");
+        goalieReg.Status.Should().Be("Registered", "goalies never count against MaxPlayers");
+        goalieReg.RegisteredPosition.Should().Be("Goalie");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithAutoRoster_OverflowSkatersWaitlistedInListOrder()
+    {
+        // Arrange - MaxPlayers=1 with 3 skaters: first rosters, rest waitlist in SortOrder
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var user1 = await CreateTestUser("regular1@example.com");
+        var user2 = await CreateTestUser("regular2@example.com");
+        var user3 = await CreateTestUser("regular3@example.com");
+        await CreateSubscription(org.Id, user1.Id);
+        await CreateSubscription(org.Id, user2.Id);
+        await CreateSubscription(org.Id, user3.Id);
+        await AddAutoRosterMember(org.Id, user1.Id, "Skater", 0);
+        await AddAutoRosterMember(org.Id, user2.Id, "Skater", 1);
+        await AddAutoRosterMember(org.Id, user3.Id, "Skater", 2);
+
+        var nextWaitlistPosition = 0;
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(() => ++nextWaitlistPosition);
+
+        // Act
+        var result = await _sut.CreateAsync(CreateEventRequestFor(org.Id, maxPlayers: 1), admin.Id);
+
+        // Assert
+        var reg1 = await _context.EventRegistrations.SingleAsync(r => r.EventId == result.Id && r.UserId == user1.Id);
+        var reg2 = await _context.EventRegistrations.SingleAsync(r => r.EventId == result.Id && r.UserId == user2.Id);
+        var reg3 = await _context.EventRegistrations.SingleAsync(r => r.EventId == result.Id && r.UserId == user3.Id);
+        reg1.Status.Should().Be("Registered");
+        reg2.Status.Should().Be("Waitlisted");
+        reg2.WaitlistPosition.Should().Be(1);
+        reg2.TeamAssignment.Should().BeNull();
+        reg3.Status.Should().Be("Waitlisted");
+        reg3.WaitlistPosition.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithApplyAutoRosterFalse_AddsNoRegistrations()
+    {
+        // Arrange
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var user = await CreateTestUser("regular@example.com");
+        await CreateSubscription(org.Id, user.Id);
+        await AddAutoRosterMember(org.Id, user.Id, "Skater", 0);
+
+        // Act
+        var result = await _sut.CreateAsync(CreateEventRequestFor(org.Id, applyAutoRoster: false), admin.Id);
+
+        // Assert
+        var registrations = await _context.EventRegistrations
+            .Where(r => r.EventId == result.Id)
+            .ToListAsync();
+        registrations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithAutoRoster_SkipsUnsubscribedMembers()
+    {
+        // Arrange - user2 was in the list but unsubscribed from the org
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var user1 = await CreateTestUser("regular1@example.com");
+        var user2 = await CreateTestUser("unsubscribed@example.com");
+        await CreateSubscription(org.Id, user1.Id);
+        await AddAutoRosterMember(org.Id, user1.Id, "Skater", 0);
+        await AddAutoRosterMember(org.Id, user2.Id, "Skater", 1);
+
+        // Act
+        var result = await _sut.CreateAsync(CreateEventRequestFor(org.Id), admin.Id);
+
+        // Assert
+        var registrations = await _context.EventRegistrations
+            .Where(r => r.EventId == result.Id)
+            .ToListAsync();
+        registrations.Should().ContainSingle(r => r.UserId == user1.Id);
+        registrations.Should().NotContain(r => r.UserId == user2.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithAutoRoster_SkipsInactiveMembers()
+    {
+        // Arrange
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var activeUser = await CreateTestUser("active@example.com");
+        var inactiveUser = await CreateTestUser("inactive@example.com");
+        inactiveUser.IsActive = false;
+        await _context.SaveChangesAsync();
+        await CreateSubscription(org.Id, activeUser.Id);
+        await CreateSubscription(org.Id, inactiveUser.Id);
+        await AddAutoRosterMember(org.Id, inactiveUser.Id, "Skater", 0);
+        await AddAutoRosterMember(org.Id, activeUser.Id, "Skater", 1);
+
+        // Act
+        var result = await _sut.CreateAsync(CreateEventRequestFor(org.Id), admin.Id);
+
+        // Assert
+        var registrations = await _context.EventRegistrations
+            .Where(r => r.EventId == result.Id)
+            .ToListAsync();
+        registrations.Should().ContainSingle(r => r.UserId == activeUser.Id);
+        registrations.Should().NotContain(r => r.UserId == inactiveUser.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithAutoRoster_UnpublishedRoster_SendsNoRosterNotifications()
+    {
+        // Arrange - new events start with IsRosterPublished=false, so added_to_roster pushes are suppressed
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var user = await CreateTestUser("regular@example.com");
+        user.PushToken = "ExponentPushToken[test]";
+        await _context.SaveChangesAsync();
+        await CreateSubscription(org.Id, user.Id);
+        await AddAutoRosterMember(org.Id, user.Id, "Skater", 0);
+
+        // Act
+        await _sut.CreateAsync(CreateEventRequestFor(org.Id), admin.Id);
+
+        // Assert - no direct pushes (the org-wide new_event notification uses NotifyOrganizationSubscribersAsync)
+        _mockNotificationService.Verify(n => n.SendPushNotificationAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object?>(),
+            It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithEmptyAutoRoster_CreatesEventNormally()
+    {
+        // Arrange
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+
+        // Act
+        var result = await _sut.CreateAsync(CreateEventRequestFor(org.Id), admin.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.RegisteredCount.Should().Be(0);
+    }
+
     #endregion
 
     #region Registration Tests

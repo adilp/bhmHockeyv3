@@ -13,11 +13,13 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   InputAccessoryView,
+  Switch,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import type { EventVisibility, SkillLevel, EventDto, Organization } from '@bhmhockey/shared';
 import { SkillLevelSelector } from './SkillLevelSelector';
+import { useOrganizationStore } from '../stores/organizationStore';
 import { colors, spacing, radius } from '../theme';
 
 // Platform-specific Picker props for dark theme
@@ -40,6 +42,7 @@ export interface EventFormData {
   cost: number;
   visibility: EventVisibility;
   skillLevels?: SkillLevel[];
+  applyAutoRoster?: boolean;
 }
 
 interface EventFormProps {
@@ -72,6 +75,13 @@ export function EventForm({
   const [cost, setCost] = useState('');
   const [visibility, setVisibility] = useState<EventVisibility>('Public');
   const [skillLevels, setSkillLevels] = useState<SkillLevel[]>([]);
+  const [applyAutoRoster, setApplyAutoRoster] = useState(true);
+
+  // Auto-roster of the selected org (create mode only, admin-only endpoint)
+  const autoRoster = useOrganizationStore((state) => state.autoRoster);
+  const autoRosterOrgId = useOrganizationStore((state) => state.autoRosterOrgId);
+  const fetchAutoRoster = useOrganizationStore((state) => state.fetchAutoRoster);
+  const autoRosterCount = selectedOrgId && autoRosterOrgId === selectedOrgId ? autoRoster.length : 0;
 
   // Keyboard accessory ID for iOS
   const inputAccessoryViewID = 'eventFormAccessory';
@@ -198,6 +208,13 @@ export function EventForm({
     }
   }, [selectedOrgId, visibility]);
 
+  // Load the selected org's auto-roster so the toggle can show the player count
+  useEffect(() => {
+    if (mode === 'create' && selectedOrgId) {
+      fetchAutoRoster(selectedOrgId);
+    }
+  }, [mode, selectedOrgId, fetchAutoRoster]);
+
   // Helper to check if org can be shown in visibility picker
   const hasOrganization = mode === 'edit'
     ? !!initialData?.organizationId
@@ -307,6 +324,7 @@ export function EventForm({
       cost: parseFloat(cost),
       visibility,
       skillLevels: skillLevels.length > 0 ? skillLevels : undefined,
+      applyAutoRoster: selectedOrgId ? applyAutoRoster : undefined,
     };
 
     await onSubmit(formData);
@@ -506,6 +524,26 @@ export function EventForm({
         </View>
 
 
+        {/* Auto-Roster Toggle (create mode, org events with a non-empty auto-roster) */}
+        {mode === 'create' && !!selectedOrgId && autoRosterCount > 0 && (
+          <View style={styles.field}>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel} allowFontScaling={false}>
+                Add auto-roster ({autoRosterCount} {autoRosterCount === 1 ? 'player' : 'players'})
+              </Text>
+              <Switch
+                value={applyAutoRoster}
+                onValueChange={setApplyAutoRoster}
+                trackColor={{ false: colors.bg.hover, true: colors.primary.teal }}
+                thumbColor={applyAutoRoster ? colors.text.primary : colors.text.muted}
+              />
+            </View>
+            <Text style={styles.skillNote}>
+              Your organization's regulars will be placed on the roster automatically
+            </Text>
+          </View>
+        )}
+
         {/* Skill Levels */}
         <View style={styles.field}>
           <SkillLevelSelector
@@ -687,6 +725,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.text.muted,
     marginTop: spacing.xs,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  switchLabel: {
+    fontSize: 15,
+    color: colors.text.primary,
+    flex: 1,
+    marginRight: spacing.sm,
   },
   submitButton: {
     backgroundColor: colors.primary.teal,

@@ -12,11 +12,19 @@ public class OrganizationsController : ControllerBase
 {
     private readonly IOrganizationService _organizationService;
     private readonly IOrganizationAdminService _adminService;
+    private readonly IOrganizationAutoRosterService _autoRosterService;
+    private readonly ILogger<OrganizationsController> _logger;
 
-    public OrganizationsController(IOrganizationService organizationService, IOrganizationAdminService adminService)
+    public OrganizationsController(
+        IOrganizationService organizationService,
+        IOrganizationAdminService adminService,
+        IOrganizationAutoRosterService autoRosterService,
+        ILogger<OrganizationsController> logger)
     {
         _organizationService = organizationService;
         _adminService = adminService;
+        _autoRosterService = autoRosterService;
+        _logger = logger;
     }
 
     private Guid? GetCurrentUserIdOrNull()
@@ -253,6 +261,105 @@ public class OrganizationsController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // Auto-roster endpoints - org "regulars" auto-added to new org events
+
+    /// <summary>
+    /// Get the organization's auto-roster list ordered by sort order. Only admins can access.
+    /// </summary>
+    [HttpGet("{id:guid}/auto-roster")]
+    [Authorize]
+    public async Task<ActionResult<List<AutoRosterMemberDto>>> GetAutoRoster(Guid id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var members = await _autoRosterService.GetAutoRosterAsync(id, userId);
+            return Ok(members);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Get auto-roster denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+    }
+
+    /// <summary>
+    /// Add a subscriber to the organization's auto-roster. Only admins can add.
+    /// </summary>
+    [HttpPost("{id:guid}/auto-roster")]
+    [Authorize]
+    public async Task<ActionResult<AutoRosterMemberDto>> AddAutoRosterMember(Guid id, [FromBody] AddAutoRosterMemberRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var member = await _autoRosterService.AddMemberAsync(id, request.UserId, request.Position, userId);
+            return Ok(member);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Add auto-roster member denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Add auto-roster member rejected for organization {OrganizationId}: {Message}", id, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Remove a user from the organization's auto-roster. Only admins can remove.
+    /// </summary>
+    [HttpDelete("{id:guid}/auto-roster/{memberUserId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> RemoveAutoRosterMember(Guid id, Guid memberUserId)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var removed = await _autoRosterService.RemoveMemberAsync(id, memberUserId, userId);
+
+            if (!removed)
+            {
+                _logger.LogWarning("Remove auto-roster member failed for organization {OrganizationId}: user {MemberUserId} not in list", id, memberUserId);
+                return NotFound(new { message = "User is not in the auto-roster" });
+            }
+
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Remove auto-roster member denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+    }
+
+    /// <summary>
+    /// Reorder the organization's auto-roster. All current members must be included. Only admins can reorder.
+    /// </summary>
+    [HttpPut("{id:guid}/auto-roster/order")]
+    [Authorize]
+    public async Task<ActionResult<List<AutoRosterMemberDto>>> ReorderAutoRoster(Guid id, [FromBody] ReorderAutoRosterRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var members = await _autoRosterService.ReorderAsync(id, request.OrderedUserIds, userId);
+            return Ok(members);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Reorder auto-roster denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Reorder auto-roster rejected for organization {OrganizationId}: {Message}", id, ex.Message);
             return BadRequest(new { message = ex.Message });
         }
     }

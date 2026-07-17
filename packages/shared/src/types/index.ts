@@ -91,6 +91,27 @@ export interface OrganizationMember {
 
 export type SkillLevel = 'Gold' | 'Silver' | 'Bronze' | 'D-League';
 
+// Auto-roster types - org "regulars" auto-added to new org events
+export interface AutoRosterMember {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  positions?: UserPositions;  // User's profile positions
+  position: Position;         // Position they'll be auto-added as
+  sortOrder: number;
+  addedAt: string;
+}
+
+export interface AddAutoRosterMemberRequest {
+  userId: string;
+  position: Position;
+}
+
+export interface ReorderAutoRosterRequest {
+  orderedUserIds: string[];   // All auto-roster member user IDs in the new order
+}
+
 export interface OrganizationSubscription {
   id: string;
   organization: Organization;
@@ -254,6 +275,7 @@ export interface CreateEventRequest {
   registrationDeadline?: string;
   visibility?: EventVisibility;  // Default: 'Public'
   skillLevels?: SkillLevel[];    // Optional - overrides org's skill levels if set
+  applyAutoRoster?: boolean;     // Auto-add the org's auto-roster members (default true; ignored for standalone events)
 }
 
 export interface UpdateEventRequest {
