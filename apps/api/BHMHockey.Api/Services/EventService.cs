@@ -496,9 +496,13 @@ public class EventService : IEventService
         bool isFull = registeredPosition == "Goalie" ? false : skaterCount >= evt.MaxPlayers;
         bool isPaidEvent = evt.Cost > 0;
 
+        // Event managers self-registering skip payment verification: they roster
+        // directly as Verified when a spot is open (they'd be verifying themselves)
+        bool isManager = await CanUserManageEventAsync(evt, userId);
+
         // Paid events: ALWAYS waitlist first (organizer verifies payment before adding to roster)
         // Free events: Only waitlist if roster is full
-        if (isPaidEvent || isFull)
+        if ((isPaidEvent && !isManager) || isFull)
         {
             // Add to waitlist
             var waitlistPosition = await _waitlistService.GetNextWaitlistPositionAsync(eventId);
@@ -550,8 +554,11 @@ public class EventService : IEventService
         }
         else
         {
-            // Free event with available capacity: register directly
+            // Open spot with no payment barrier (free event, or a manager
+            // self-registering on a paid event - auto-verified): register directly
             var teamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
+            var paymentStatus = isPaidEvent ? "Verified" : null;
+            DateTime? paymentVerifiedAt = isPaidEvent ? DateTime.UtcNow : null;
 
             if (existingReg != null)
             {
@@ -561,9 +568,9 @@ public class EventService : IEventService
                 existingReg.RegisteredPosition = registeredPosition;
                 existingReg.TeamAssignment = teamAssignment;
                 existingReg.WaitlistPosition = null;
-                existingReg.PaymentStatus = null; // Free event, no payment tracking
+                existingReg.PaymentStatus = paymentStatus;
                 existingReg.PaymentMarkedAt = null;
-                existingReg.PaymentVerifiedAt = null;
+                existingReg.PaymentVerifiedAt = paymentVerifiedAt;
                 existingReg.PromotedAt = null;
                 existingReg.PaymentDeadlineAt = null;
             }
@@ -576,7 +583,8 @@ public class EventService : IEventService
                     UserId = userId,
                     RegisteredPosition = registeredPosition,
                     TeamAssignment = teamAssignment,
-                    PaymentStatus = null // Free event, no payment tracking
+                    PaymentStatus = paymentStatus,
+                    PaymentVerifiedAt = paymentVerifiedAt
                 };
                 _context.EventRegistrations.Add(registration);
             }

@@ -289,10 +289,11 @@ export default function EventDetailScreen() {
 
   const spotsLeft = selectedEvent ? selectedEvent.maxPlayers - selectedEvent.registeredCount : 0;
   const isFull = spotsLeft <= 0;
-  // Paid events always waitlist self-registrations until payment is verified
-  const willWaitlist = isFull || (selectedEvent ? selectedEvent.cost > 0 : false);
   const isWaitlisted = selectedEvent?.amIWaitlisted;
   const canManage = selectedEvent?.canManage || false;
+  // Paid events always waitlist self-registrations until payment is verified —
+  // except event managers, who roster directly (auto-verified) while spots remain
+  const willWaitlist = isFull || (selectedEvent ? selectedEvent.cost > 0 && !canManage : false);
 
   const getOrgAbbreviation = (name: string) => {
     if (!name) return 'Event';

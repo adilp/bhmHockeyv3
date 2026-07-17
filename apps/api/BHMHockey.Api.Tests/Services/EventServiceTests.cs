@@ -780,6 +780,71 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RegisterAsync_ForPaidEvent_AsEventManager_WithSpot_RegistersDirectlyAsVerified()
+    {
+        // Arrange - Paid event; the creator (manager) registers themselves
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 25.00m);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, creator.Id);
+
+        // Assert - Straight to roster, payment auto-verified
+        result.Status.Should().Be("Registered");
+        result.WaitlistPosition.Should().BeNull();
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == creator.Id);
+        registration.Should().NotBeNull();
+        registration!.Status.Should().Be("Registered");
+        registration.PaymentStatus.Should().Be("Verified");
+        registration.PaymentVerifiedAt.Should().NotBeNull();
+        registration.TeamAssignment.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ForPaidEvent_AsEventManager_WhenFull_Waitlists()
+    {
+        // Arrange - Paid event with all skater spots taken by Registered players
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 2, cost: 25.00m);
+        var user1 = await CreateTestUser("user1@example.com");
+        var user2 = await CreateTestUser("user2@example.com");
+        await CreateRegistration(evt.Id, user1.Id);
+        await CreateRegistration(evt.Id, user2.Id);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, creator.Id);
+
+        // Assert - No open spot: manager waitlists like anyone else
+        result.Status.Should().Be("Waitlisted");
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == creator.Id);
+        registration!.Status.Should().Be("Waitlisted");
+        registration.PaymentStatus.Should().Be("Pending");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_ForFreeEvent_AsEventManager_RegistersWithoutPaymentTracking()
+    {
+        // Arrange - Free event; manager self-registration gains no payment fields
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 0m);
+
+        // Act
+        var result = await _sut.RegisterAsync(evt.Id, creator.Id);
+
+        // Assert
+        result.Status.Should().Be("Registered");
+
+        var registration = await _context.EventRegistrations
+            .FirstOrDefaultAsync(r => r.EventId == evt.Id && r.UserId == creator.Id);
+        registration!.PaymentStatus.Should().BeNull();
+        registration.PaymentVerifiedAt.Should().BeNull();
+    }
+
+    [Fact]
     public async Task RegisterAsync_ForPaidEvent_WhenFull_Waitlists()
     {
         // Arrange - Paid event that is full
