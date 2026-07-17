@@ -225,6 +225,10 @@ function OrganizingBadges({ event }: { event: EventDto }) {
   return (
     <View style={styles.organizerStats}>
       <Badge variant="purple">{event.registeredCount}/{event.maxPlayers}</Badge>
+      {/* Organized games no longer appear under My Upcoming Games, so flag the ones the organizer also plays in */}
+      {(event.isRegistered || event.amIWaitlisted) && (
+        <Badge variant="green">Playing</Badge>
+      )}
       {event.cost > 0 && event.unpaidCount !== undefined && event.unpaidCount > 0 && (
         <Badge variant="error">{event.unpaidCount} unpaid</Badge>
       )}
