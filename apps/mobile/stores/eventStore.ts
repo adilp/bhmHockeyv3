@@ -53,6 +53,7 @@ interface EventState {
   searchUsersForEvent: (eventId: string, query: string) => Promise<UserSearchResultDto[]>;
   addUserToEvent: (eventId: string, userId: string, position?: string) => Promise<boolean>;
   createGhostPlayer: (eventId: string, firstName: string, lastName: string, position: 'Goalie' | 'Skater', skillLevel?: string) => Promise<boolean>;
+  updateGhostPlayer: (eventId: string, userId: string, firstName: string, lastName: string, position: 'Goalie' | 'Skater', skillLevel?: string) => Promise<boolean>;
 }
 
 export const useEventStore = create<EventState>((set, get) => ({
@@ -464,6 +465,24 @@ export const useEventStore = create<EventState>((set, get) => ({
       return true;
     } catch (error: any) {
       set({ error: getErrorMessage(error, 'Failed to create guest player') });
+      return false;
+    }
+  },
+
+  // Update a ghost player in place (organizer only) - the roster spot is never released
+  updateGhostPlayer: async (eventId, userId, firstName, lastName, position, skillLevel) => {
+    try {
+      await eventService.updateGhostPlayer(eventId, userId, {
+        firstName,
+        lastName,
+        position,
+        skillLevel: skillLevel as SkillLevel | undefined,
+      });
+      // Refresh event data to get updated registrations
+      await get().fetchEventById(eventId);
+      return true;
+    } catch (error: any) {
+      set({ error: getErrorMessage(error, 'Failed to update guest player') });
       return false;
     }
   },

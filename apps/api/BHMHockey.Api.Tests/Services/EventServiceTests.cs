@@ -3583,6 +3583,279 @@ public class EventServiceTests : IDisposable
 
     #endregion
 
+    #region UpdateGhostPlayerAsync Tests (Guest Player Editing)
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_NameOnlyChange_UpdatesNameWithoutTouchingRegistration()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 25);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", "Silver");
+
+        // Act - change name only (position and skill unchanged)
+        var result = await _sut.UpdateGhostPlayerAsync(
+            evt.Id, organizer.Id, created.User.Id, "Jane", "Smith", "Skater", "Silver");
+
+        // Assert - name updated, everything else untouched, same registration (spot never released)
+        result.Id.Should().Be(created.Id);
+        result.User.FirstName.Should().Be("Jane");
+        result.User.LastName.Should().Be("Smith");
+        result.RegisteredPosition.Should().Be("Skater");
+        result.TeamAssignment.Should().Be(created.TeamAssignment);
+        result.PaymentStatus.Should().Be(created.PaymentStatus);
+        result.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_NonOrganizer_ThrowsUnauthorized()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var nonOrganizer = await CreateTestUser("random@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.UpdateGhostPlayerAsync(
+                evt.Id, nonOrganizer.Id, created.User.Id, "Jane", "Smith", "Skater", null)
+        );
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_RealUser_ThrowsInvalidOperation()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var realPlayer = await CreateTestUser("real@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        await CreateRegistration(evt.Id, realPlayer.Id, "Registered");
+
+        // Act & Assert - real accounts cannot be edited through the ghost endpoint
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UpdateGhostPlayerAsync(
+                evt.Id, organizer.Id, realPlayer.Id, "Jane", "Smith", "Skater", null)
+        );
+        ex.Message.Should().Contain("guest players");
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_NoActiveRegistration_ThrowsInvalidOperation()
+    {
+        // Arrange - ghost exists but is registered on a different event
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt1 = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        var evt2 = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt1.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UpdateGhostPlayerAsync(
+                evt2.Id, organizer.Id, created.User.Id, "Jane", "Smith", "Skater", null)
+        );
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_InvalidPosition_ThrowsException()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UpdateGhostPlayerAsync(
+                evt.Id, organizer.Id, created.User.Id, "John", "Doe", "InvalidPosition", null)
+        );
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_InvalidSkillLevel_ThrowsException()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UpdateGhostPlayerAsync(
+                evt.Id, organizer.Id, created.User.Id, "John", "Doe", "Skater", "InvalidLevel")
+        );
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_SkaterToGoalie_AlwaysAllowed_ReassignsTeam()
+    {
+        // Arrange - full roster (skater spots all taken)
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 1, cost: 0);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Act - Skater -> Goalie frees a skater spot; always allowed even when roster is full
+        var result = await _sut.UpdateGhostPlayerAsync(
+            evt.Id, organizer.Id, created.User.Id, "John", "Doe", "Goalie", null);
+
+        // Assert
+        result.Id.Should().Be(created.Id);
+        result.RegisteredPosition.Should().Be("Goalie");
+        result.Status.Should().Be("Registered");
+        result.TeamAssignment.Should().NotBeNull();  // Recomputed by the balancer
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_GoalieToSkater_RosterFull_ThrowsInvalidOperation()
+    {
+        // Arrange - goalie ghost plus a full skater roster
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 1, cost: 0);
+        var ghostGoalie = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "Ghost", "Goalie", "Goalie", null);
+        var ghostSkater = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "Ghost", "Skater", "Skater", null);
+        ghostSkater.Status.Should().Be("Registered");  // Sanity: skater roster now full
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UpdateGhostPlayerAsync(
+                evt.Id, organizer.Id, ghostGoalie.User.Id, "Ghost", "Goalie", "Skater", null)
+        );
+        ex.Message.Should().Contain("full");
+
+        // Registration unchanged after the failed edit
+        var registration = await _context.EventRegistrations
+            .FirstAsync(r => r.Id == ghostGoalie.Id);
+        registration.RegisteredPosition.Should().Be("Goalie");
+        registration.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_GoalieToSkater_WithSpace_Succeeds()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Goalie", null);
+
+        // Act
+        var result = await _sut.UpdateGhostPlayerAsync(
+            evt.Id, organizer.Id, created.User.Id, "John", "Doe", "Skater", null);
+
+        // Assert
+        result.Id.Should().Be(created.Id);
+        result.RegisteredPosition.Should().Be("Skater");
+        result.Status.Should().Be("Registered");
+        result.TeamAssignment.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_PositionChange_RecomputesTeamViaBalancer()
+    {
+        // Arrange - Black already has a goalie, so a new goalie should balance to White
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+
+        var existingGoalie = await CreateTestUser("goalie@example.com");
+        var goalieReg = await CreateRegistration(evt.Id, existingGoalie.Id, "Registered");
+        goalieReg.RegisteredPosition = "Goalie";
+        goalieReg.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        // Act - Skater -> Goalie
+        var result = await _sut.UpdateGhostPlayerAsync(
+            evt.Id, organizer.Id, created.User.Id, "John", "Doe", "Goalie", null);
+
+        // Assert - balancer puts the second goalie on White
+        result.TeamAssignment.Should().Be("White");
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_NameOnlyChange_DoesNotRecomputeTeam()
+    {
+        // Arrange - put the ghost on White, which the balancer would not pick (Black has fewer skaters)
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+
+        var registration = await _context.EventRegistrations.FirstAsync(r => r.Id == created.Id);
+        registration.TeamAssignment = "White";
+        await _context.SaveChangesAsync();
+
+        // Act - name-only edit
+        var result = await _sut.UpdateGhostPlayerAsync(
+            evt.Id, organizer.Id, created.User.Id, "Jane", "Smith", "Skater", null);
+
+        // Assert - team untouched (balancer would have chosen Black)
+        result.TeamAssignment.Should().Be("White");
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_WaitlistedGhost_UpdatesFields_KeepsWaitlistPosition()
+    {
+        // Arrange - roster full, ghost lands on waitlist
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 1, cost: 0);
+
+        var existingPlayer = await CreateTestUser("existing@example.com");
+        var existingReg = await CreateRegistration(evt.Id, existingPlayer.Id, "Registered");
+        existingReg.TeamAssignment = "Black";
+        await _context.SaveChangesAsync();
+
+        _mockWaitlistService.Setup(w => w.GetNextWaitlistPositionAsync(evt.Id))
+            .ReturnsAsync(1);
+
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", null);
+        created.Status.Should().Be("Waitlisted");
+
+        // Act - edit name, skill, and position (Skater -> Goalie) while waitlisted
+        var result = await _sut.UpdateGhostPlayerAsync(
+            evt.Id, organizer.Id, created.User.Id, "Jane", "Smith", "Goalie", "Gold");
+
+        // Assert - fields updated; waitlist position untouched, no team assigned
+        result.Id.Should().Be(created.Id);
+        result.User.FirstName.Should().Be("Jane");
+        result.RegisteredPosition.Should().Be("Goalie");
+        result.Status.Should().Be("Waitlisted");
+        result.WaitlistPosition.Should().Be(1);
+        result.TeamAssignment.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayerAsync_RebuildsPositionsDict_DefaultsBronze()
+    {
+        // Arrange
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id, maxPlayers: 10, cost: 0);
+        var created = await _sut.CreateGhostPlayerAsync(
+            evt.Id, organizer.Id, "John", "Doe", "Skater", "Gold");
+
+        // Act - switch to Goalie without a skill level
+        await _sut.UpdateGhostPlayerAsync(
+            evt.Id, organizer.Id, created.User.Id, "John", "Doe", "Goalie", null);
+
+        // Assert - single-entry dict keyed by the new position, skill defaults to Bronze (mirrors creation)
+        var ghostUser = await _context.Users.FirstAsync(u => u.Id == created.User.Id);
+        ghostUser.Positions.Should().HaveCount(1);
+        ghostUser.Positions.Should().ContainKey("goalie");
+        ghostUser.Positions!["goalie"].Should().Be("Bronze");
+    }
+
+    #endregion
+
     #region GroupMe Link Tests
 
     private static UpdateEventRequest GroupMeLinkUpdateRequest(string? groupMeLink)

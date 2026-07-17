@@ -855,4 +855,98 @@ public class EventsControllerTests
     }
 
     #endregion
+
+    #region UpdateGhostPlayer Tests
+
+    private EventRegistrationDto CreateGhostRegistrationDto(Guid ghostUserId)
+    {
+        return new EventRegistrationDto(
+            Id: Guid.NewGuid(),
+            EventId: _testEventId,
+            User: new UserDto(
+                Id: ghostUserId,
+                Email: "ghost_abc@placeholder.bhmhockey",
+                FirstName: "Jane",
+                LastName: "Smith",
+                PhoneNumber: null,
+                Positions: new Dictionary<string, string> { { "skater", "Silver" } },
+                VenmoHandle: null,
+                Role: "Player",
+                CreatedAt: DateTime.UtcNow,
+                Badges: null,
+                TotalBadgeCount: 0,
+                IsGhostPlayer: true),
+            Status: "Registered",
+            RegisteredAt: DateTime.UtcNow,
+            RegisteredPosition: "Skater",
+            PaymentStatus: null,
+            PaymentMarkedAt: null,
+            PaymentVerifiedAt: null,
+            TeamAssignment: "Black",
+            RosterOrder: null,
+            WaitlistPosition: null,
+            PromotedAt: null,
+            PaymentDeadlineAt: null,
+            IsWaitlisted: false);
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayer_AsOrganizer_ReturnsOkWithRegistration()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var ghostUserId = Guid.NewGuid();
+        var request = new UpdateGhostPlayerRequest("Jane", "Smith", "Skater", "Silver");
+        var updated = CreateGhostRegistrationDto(ghostUserId);
+        _mockEventService.Setup(s => s.UpdateGhostPlayerAsync(
+                _testEventId, _testUserId, ghostUserId, "Jane", "Smith", "Skater", "Silver"))
+            .ReturnsAsync(updated);
+
+        // Act
+        var result = await _controller.UpdateGhostPlayer(_testEventId, ghostUserId, request);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        okResult.Value.Should().Be(updated);
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayer_BusinessRuleViolation_Returns400WithMessage()
+    {
+        // Arrange - e.g. roster full for skaters on a Goalie -> Skater change
+        SetupAuthenticatedUser();
+        var ghostUserId = Guid.NewGuid();
+        var request = new UpdateGhostPlayerRequest("Jane", "Smith", "Skater", null);
+        var message = "The roster is full for skaters. Free up a skater spot before switching this guest from Goalie to Skater.";
+        _mockEventService.Setup(s => s.UpdateGhostPlayerAsync(
+                _testEventId, _testUserId, ghostUserId, "Jane", "Smith", "Skater", null))
+            .ThrowsAsync(new InvalidOperationException(message));
+
+        // Act
+        var result = await _controller.UpdateGhostPlayer(_testEventId, ghostUserId, request);
+
+        // Assert
+        var badRequest = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value!.ToString().Should().Contain("full for skaters");
+    }
+
+    [Fact]
+    public async Task UpdateGhostPlayer_AsNonManager_ReturnsForbid()
+    {
+        // Arrange
+        SetupAuthenticatedUser();
+        var ghostUserId = Guid.NewGuid();
+        var request = new UpdateGhostPlayerRequest("Jane", "Smith", "Skater", null);
+        _mockEventService.Setup(s => s.UpdateGhostPlayerAsync(
+                _testEventId, _testUserId, ghostUserId, "Jane", "Smith", "Skater", null))
+            .ThrowsAsync(new UnauthorizedAccessException("You don't have permission to manage this event"));
+
+        // Act
+        var result = await _controller.UpdateGhostPlayer(_testEventId, ghostUserId, request);
+
+        // Assert
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    #endregion
 }

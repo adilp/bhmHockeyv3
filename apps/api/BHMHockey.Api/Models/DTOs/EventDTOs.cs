@@ -195,3 +195,11 @@ public record CreateGhostPlayerRequest(
     string Position,                      // "Goalie" or "Skater"
     string? SkillLevel = null             // Optional: "Gold", "Silver", "Bronze", "D-League"
 );
+
+// Request to update a ghost player in place (mirrors CreateGhostPlayerRequest)
+public record UpdateGhostPlayerRequest(
+    string FirstName,
+    string LastName,
+    string Position,                      // "Goalie" or "Skater"
+    string? SkillLevel = null             // Optional: "Gold", "Silver", "Bronze", "D-League"
+);

@@ -76,4 +76,10 @@ public interface IEventService
     /// Ghost players are placeholder accounts for people who don't have the app.
     /// </summary>
     Task<EventRegistrationDto> CreateGhostPlayerAsync(Guid eventId, Guid organizerId, string firstName, string lastName, string position, string? skillLevel);
+
+    /// <summary>
+    /// Update a ghost player's name, position, and skill level in place (organizer only).
+    /// The registration is updated atomically - the roster spot is never released.
+    /// </summary>
+    Task<EventRegistrationDto> UpdateGhostPlayerAsync(Guid eventId, Guid organizerId, Guid ghostUserId, string firstName, string lastName, string position, string? skillLevel);
 }

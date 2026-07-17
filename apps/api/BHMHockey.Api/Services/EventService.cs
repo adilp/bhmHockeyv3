@@ -2077,6 +2077,104 @@ public class EventService : IEventService
     }
 
     /// <summary>
+    /// Update a ghost player's name, position, and skill level in place (organizer only).
+    /// The registration is updated atomically - the roster spot is never released,
+    /// so real players can't grab it mid-edit. No notifications are sent (ghosts have no devices).
+    /// </summary>
+    public async Task<EventRegistrationDto> UpdateGhostPlayerAsync(
+        Guid eventId,
+        Guid organizerId,
+        Guid ghostUserId,
+        string firstName,
+        string lastName,
+        string position,
+        string? skillLevel)
+    {
+        // Load event
+        var evt = await _context.Events
+            .Include(e => e.Registrations)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (evt == null)
+        {
+            throw new InvalidOperationException("Event not found");
+        }
+
+        // Verify organizer can manage this event
+        if (!await CanUserManageEventAsync(evt, organizerId))
+        {
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+        }
+
+        // Validate position and skill level (same rules as creation)
+        var registeredPosition = NormalizePosition(position);
+        var normalizedPositionKey = registeredPosition.ToLowerInvariant();
+        if (!string.IsNullOrEmpty(skillLevel) && !ValidSkillLevels.Contains(skillLevel))
+        {
+            throw new InvalidOperationException($"Invalid skill level: '{skillLevel}'. Valid values: Gold, Silver, Bronze, D-League");
+        }
+
+        // Only ghost players can be edited - real users own their own profiles
+        var ghostUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == ghostUserId);
+        if (ghostUser == null)
+        {
+            throw new InvalidOperationException("Player not found");
+        }
+
+        if (!ghostUser.IsGhostPlayer)
+        {
+            throw new InvalidOperationException("Only guest players can be edited. This player has a real account.");
+        }
+
+        // Must have an active registration on this event
+        var registration = evt.Registrations
+            .FirstOrDefault(r => r.UserId == ghostUserId
+                && (r.Status == "Registered" || r.Status == "Waitlisted"));
+
+        if (registration == null)
+        {
+            throw new InvalidOperationException("This guest player is not registered for this event");
+        }
+
+        // Capacity rule on position change for a rostered ghost:
+        // Skater -> Goalie always allowed (frees a skater spot).
+        // Goalie -> Skater only if there's skater room (goalies don't count against MaxPlayers).
+        var positionChanged = registration.RegisteredPosition != registeredPosition;
+        if (positionChanged && registration.Status == "Registered" && registeredPosition == "Skater")
+        {
+            var skaterCount = evt.Registrations.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie");
+            if (skaterCount >= evt.MaxPlayers)
+            {
+                throw new InvalidOperationException("The roster is full for skaters. Free up a skater spot before switching this guest from Goalie to Skater.");
+            }
+        }
+
+        // Update ghost user fields; rebuild Positions to a single-entry dict (mirrors creation)
+        ghostUser.FirstName = firstName;
+        ghostUser.LastName = lastName;
+        ghostUser.Positions = new Dictionary<string, string>
+        {
+            { normalizedPositionKey, skillLevel ?? "Bronze" }
+        };
+        ghostUser.UpdatedAt = DateTime.UtcNow;
+
+        registration.RegisteredPosition = registeredPosition;
+
+        // Recompute team via the balancer only when a rostered ghost actually changes position
+        if (positionChanged && registration.Status == "Registered")
+        {
+            registration.TeamAssignment = await DetermineTeamAssignmentAsync(eventId, registeredPosition);
+        }
+
+        // Single UPDATE path - the registration row is never deleted, so the spot is never released
+        await _context.SaveChangesAsync();
+
+        registration.User = ghostUser;
+
+        return MapRegistrationToDto(registration);
+    }
+
+    /// <summary>
     /// Notify a user that they have been added directly to an event's roster by an organizer.
     /// </summary>
     private async Task NotifyUserAddedToRosterAsync(Models.Entities.Event evt, Models.Entities.User user, string? teamAssignment)
