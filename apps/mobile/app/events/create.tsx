@@ -29,6 +29,7 @@ export default function CreateEventScreen() {
       visibility: data.visibility,
       skillLevels: data.skillLevels,
       applyAutoRoster: data.applyAutoRoster,
+      groupMeLink: data.groupMeLink || undefined,
     });
 
     if (result) {

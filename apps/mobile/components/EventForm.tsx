@@ -20,6 +20,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import type { EventVisibility, SkillLevel, EventDto, Organization } from '@bhmhockey/shared';
 import { SkillLevelSelector } from './SkillLevelSelector';
 import { useOrganizationStore } from '../stores/organizationStore';
+import { isValidGroupMeLink, GROUPME_LINK_ERROR } from '../utils/groupme';
 import { colors, spacing, radius } from '../theme';
 
 // Platform-specific Picker props for dark theme
@@ -43,6 +44,7 @@ export interface EventFormData {
   visibility: EventVisibility;
   skillLevels?: SkillLevel[];
   applyAutoRoster?: boolean;
+  groupMeLink?: string;  // '' clears the event's own link (inherits org's); trimmed value sets it
 }
 
 interface EventFormProps {
@@ -76,6 +78,7 @@ export function EventForm({
   const [visibility, setVisibility] = useState<EventVisibility>('Public');
   const [skillLevels, setSkillLevels] = useState<SkillLevel[]>([]);
   const [applyAutoRoster, setApplyAutoRoster] = useState(true);
+  const [groupMeLink, setGroupMeLink] = useState('');
 
   // Auto-roster of the selected org (create mode only, admin-only endpoint)
   const autoRoster = useOrganizationStore((state) => state.autoRoster);
@@ -116,6 +119,8 @@ export function EventForm({
       setCost(String(initialData.cost));
       setVisibility(initialData.visibility as EventVisibility);
       setSkillLevels((initialData.skillLevels as SkillLevel[]) || []);
+      // Only pre-fill the event's OWN link - an inherited org link stays blank (blank means inherit)
+      setGroupMeLink(initialData.groupMeLinkSource === 'event' ? initialData.groupMeLink || '' : '');
     }
   }, [initialData]);
 
@@ -220,6 +225,18 @@ export function EventForm({
     ? !!initialData?.organizationId
     : !!selectedOrgId;
 
+  // When the GroupMe field is blank, the event inherits the org's link - name the org for the hint.
+  // Create mode: from the selected org; edit mode: from the resolved link's source on the event.
+  const inheritedGroupMeOrgName = !groupMeLink.trim()
+    ? (mode === 'create'
+        ? (organizations.find(o => o.id === selectedOrgId)?.groupMeLink
+            ? organizations.find(o => o.id === selectedOrgId)?.name
+            : undefined)
+        : (initialData?.groupMeLinkSource === 'organization'
+            ? initialData.organizationName || 'your organization'
+            : undefined))
+    : undefined;
+
   // Get display names for pickers
   const getOrgDisplayName = () => {
     if (!orgSelectionMade) return 'Select...';
@@ -307,6 +324,11 @@ export function EventForm({
       Alert.alert('Error', 'Please enter a cost (0 for free events)');
       return false;
     }
+    // GroupMe link is optional, but if provided must be a valid GroupMe URL
+    if (groupMeLink.trim() && !isValidGroupMeLink(groupMeLink)) {
+      Alert.alert('Error', GROUPME_LINK_ERROR);
+      return false;
+    }
     return true;
   };
 
@@ -325,6 +347,7 @@ export function EventForm({
       visibility,
       skillLevels: skillLevels.length > 0 ? skillLevels : undefined,
       applyAutoRoster: selectedOrgId ? applyAutoRoster : undefined,
+      groupMeLink: groupMeLink.trim(),
     };
 
     await onSubmit(formData);
@@ -523,6 +546,29 @@ export function EventForm({
           </View>
         </View>
 
+
+        {/* GroupMe Link */}
+        <View style={styles.field}>
+          <Text style={styles.label}>GroupMe Link (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={groupMeLink}
+            onChangeText={setGroupMeLink}
+            placeholder="https://groupme.com/join_group/..."
+            placeholderTextColor={colors.text.muted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            returnKeyType="done"
+            onSubmitEditing={() => Keyboard.dismiss()}
+            inputAccessoryViewID={inputAccessoryViewID}
+          />
+          {inheritedGroupMeOrgName && (
+            <Text style={styles.skillNote} allowFontScaling={false}>
+              Using {inheritedGroupMeOrgName}'s GroupMe link
+            </Text>
+          )}
+        </View>
 
         {/* Auto-Roster Toggle (create mode, org events with a non-empty auto-roster) */}
         {mode === 'create' && !!selectedOrgId && autoRosterCount > 0 && (
