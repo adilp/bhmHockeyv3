@@ -552,7 +552,7 @@ public class EventService : IEventService
             {
                 payEligible = await IsWaitlistedRegistrationPayEligibleAsync(evt, waitlistReg);
                 message = payEligible.Value
-                    ? $"You're #{waitlistPosition} on the waitlist. Send your payment to secure your spot - once the organizer verifies it, you'll be added to the roster."
+                    ? $"Once your payment is verified, you'll be moved to the roster. Until then you are #{waitlistPosition} on the waitlist but the event is not yet full."
                     : $"You're #{waitlistPosition} on the waitlist. Don't pay yet - the organizer will reach out if a spot opens.";
             }
             else

@@ -771,7 +771,7 @@ public class EventServiceTests : IDisposable
         // spot is open for their rank, so the message must prompt payment
         result.Status.Should().Be("Waitlisted");
         result.WaitlistPosition.Should().Be(1);
-        result.Message.Should().Contain("Send your payment to secure your spot");
+        result.Message.Should().Contain("Once your payment is verified");
         result.PayEligible.Should().BeTrue();
 
         var registration = await _context.EventRegistrations

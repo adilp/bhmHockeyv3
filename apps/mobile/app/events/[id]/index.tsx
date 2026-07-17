@@ -119,7 +119,8 @@ export default function EventDetailScreen() {
       if (!result) return;
       if (result.status === 'Waitlisted') {
         // Server message is payment-aware: pay-now vs don't-pay-yet
-        Alert.alert('Added to Waitlist', result.message);
+        const title = result.payEligible ? 'Please Send Payment' : 'Added to Waitlist';
+        Alert.alert(title, result.message);
       } else {
         Alert.alert('Success', `You have been registered as a ${position}!`);
       }
