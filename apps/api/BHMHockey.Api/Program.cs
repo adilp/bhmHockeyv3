@@ -85,6 +85,9 @@ if (string.IsNullOrEmpty(jwtSecret))
     if (builder.Environment.IsDevelopment())
     {
         jwtSecret = "dev-secret-key-for-local-development-only-min-32-chars";
+        // Write the fallback back into configuration so services reading Jwt:Secret
+        // (e.g. AuthService token generation) use the same key as token validation
+        builder.Configuration["Jwt:Secret"] = jwtSecret;
         Console.WriteLine("⚠️  WARNING: Using development JWT secret. Set Jwt:Secret in .env for production!");
     }
     else

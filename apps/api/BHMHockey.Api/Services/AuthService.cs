@@ -282,8 +282,12 @@ public class AuthService : IAuthService
 
     private string GenerateJwtToken(User user)
     {
-        var jwtSecret = _configuration["Jwt:Secret"]
-            ?? throw new InvalidOperationException("JWT Secret not configured");
+        var jwtSecret = _configuration["Jwt:Secret"];
+        if (string.IsNullOrWhiteSpace(jwtSecret))
+        {
+            // Empty string counts as missing - a zero-length key would fail signing
+            throw new InvalidOperationException("JWT Secret not configured");
+        }
         var issuer = _configuration["Jwt:Issuer"];
         var audience = _configuration["Jwt:Audience"];
         var expiryMinutes = int.Parse(_configuration["Jwt:ExpiryMinutes"] ?? "60");
