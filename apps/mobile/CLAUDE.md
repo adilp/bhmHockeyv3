@@ -253,7 +253,7 @@ In the roster view (`DraggableRoster`), organizers see payment status badges ins
 | Organizer | `purple` | "Organizer" |
 | Invite Only | `warning` | "Invite Only" |
 
-**Draft Mode Note:** Don't show position numbers or team assignments in badges when `event.isRosterPublished` is false.
+**Draft Mode Note:** Don't show team assignments in badges when `event.isRosterPublished` is false. A player's own waitlist position ("#N Waitlist") is always shown, even pre-publish; the full ordered waitlist shows pre-publish only when the event's `showWaitlistBeforePublish` setting is on and the viewer is registered or waitlisted.
 
 ## Testing
 
