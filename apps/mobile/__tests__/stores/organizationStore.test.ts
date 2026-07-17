@@ -8,6 +8,10 @@ const mockGetAll = jest.fn();
 const mockGetMySubscriptions = jest.fn();
 const mockSubscribe = jest.fn();
 const mockUnsubscribe = jest.fn();
+const mockGetAutoRoster = jest.fn();
+const mockAddAutoRosterMember = jest.fn();
+const mockRemoveAutoRosterMember = jest.fn();
+const mockReorderAutoRoster = jest.fn();
 
 // Mock the api-client module
 jest.mock('@bhmhockey/api-client', () => ({
@@ -16,12 +20,16 @@ jest.mock('@bhmhockey/api-client', () => ({
     getMySubscriptions: mockGetMySubscriptions,
     subscribe: mockSubscribe,
     unsubscribe: mockUnsubscribe,
+    getAutoRoster: mockGetAutoRoster,
+    addAutoRosterMember: mockAddAutoRosterMember,
+    removeAutoRosterMember: mockRemoveAutoRosterMember,
+    reorderAutoRoster: mockReorderAutoRoster,
   },
 }));
 
 // Import after mocking
 import { useOrganizationStore } from '../../stores/organizationStore';
-import type { Organization, OrganizationSubscription } from '@bhmhockey/shared';
+import type { Organization, OrganizationSubscription, AutoRosterMember } from '@bhmhockey/shared';
 
 const createMockOrg = (overrides: Partial<Organization> = {}): Organization => ({
   id: 'org-1',
@@ -44,6 +52,18 @@ const createMockSubscription = (org: Organization): OrganizationSubscription => 
   subscribedAt: new Date().toISOString(),
 });
 
+const createMockAutoRosterMember = (overrides: Partial<AutoRosterMember> = {}): AutoRosterMember => ({
+  id: 'member-1',
+  userId: 'user-1',
+  firstName: 'Test',
+  lastName: 'Player',
+  positions: { skater: 'Silver' },
+  position: 'Skater',
+  sortOrder: 0,
+  addedAt: new Date().toISOString(),
+  ...overrides,
+});
+
 describe('organizationStore', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -51,6 +71,9 @@ describe('organizationStore', () => {
     useOrganizationStore.setState({
       organizations: [],
       mySubscriptions: [],
+      autoRoster: [],
+      autoRosterOrgId: null,
+      members: [],
       isLoading: false,
       error: null,
     });
@@ -235,6 +258,110 @@ describe('organizationStore', () => {
       useOrganizationStore.getState().clearError();
 
       expect(useOrganizationStore.getState().error).toBeNull();
+    });
+  });
+
+  describe('fetchAutoRoster', () => {
+    it('sets autoRoster and org id on successful fetch', async () => {
+      const members = [createMockAutoRosterMember()];
+      mockGetAutoRoster.mockResolvedValue(members);
+
+      await useOrganizationStore.getState().fetchAutoRoster('org-1');
+
+      expect(mockGetAutoRoster).toHaveBeenCalledWith('org-1');
+      expect(useOrganizationStore.getState().autoRoster).toEqual(members);
+      expect(useOrganizationStore.getState().autoRosterOrgId).toBe('org-1');
+    });
+
+    it('sets error on fetch failure', async () => {
+      mockGetAutoRoster.mockRejectedValue(new Error('Forbidden'));
+
+      await useOrganizationStore.getState().fetchAutoRoster('org-1');
+
+      expect(useOrganizationStore.getState().error).toBe('Forbidden');
+    });
+  });
+
+  describe('addAutoRosterMember', () => {
+    it('appends the new member on success', async () => {
+      const existing = createMockAutoRosterMember({ userId: 'user-1', sortOrder: 0 });
+      useOrganizationStore.setState({ autoRoster: [existing], autoRosterOrgId: 'org-1' });
+      const added = createMockAutoRosterMember({ id: 'member-2', userId: 'user-2', sortOrder: 1, position: 'Goalie' });
+      mockAddAutoRosterMember.mockResolvedValue(added);
+
+      const result = await useOrganizationStore.getState().addAutoRosterMember('org-1', 'user-2', 'Goalie');
+
+      expect(result).toBe(true);
+      expect(mockAddAutoRosterMember).toHaveBeenCalledWith('org-1', { userId: 'user-2', position: 'Goalie' });
+      expect(useOrganizationStore.getState().autoRoster).toEqual([existing, added]);
+    });
+
+    it('sets error and returns false on failure', async () => {
+      mockAddAutoRosterMember.mockRejectedValue(new Error('User is already in the auto-roster'));
+
+      const result = await useOrganizationStore.getState().addAutoRosterMember('org-1', 'user-2', 'Skater');
+
+      expect(result).toBe(false);
+      expect(useOrganizationStore.getState().error).toBe('User is already in the auto-roster');
+      expect(useOrganizationStore.getState().autoRoster).toHaveLength(0);
+    });
+  });
+
+  describe('removeAutoRosterMember', () => {
+    it('optimistically removes the member', async () => {
+      const member1 = createMockAutoRosterMember({ userId: 'user-1' });
+      const member2 = createMockAutoRosterMember({ id: 'member-2', userId: 'user-2', sortOrder: 1 });
+      useOrganizationStore.setState({ autoRoster: [member1, member2] });
+      mockRemoveAutoRosterMember.mockResolvedValue(undefined);
+
+      const result = await useOrganizationStore.getState().removeAutoRosterMember('org-1', 'user-1');
+
+      expect(result).toBe(true);
+      expect(useOrganizationStore.getState().autoRoster).toEqual([member2]);
+    });
+
+    it('rolls back on failure', async () => {
+      const member = createMockAutoRosterMember({ userId: 'user-1' });
+      useOrganizationStore.setState({ autoRoster: [member] });
+      mockRemoveAutoRosterMember.mockRejectedValue(new Error('Remove failed'));
+
+      const result = await useOrganizationStore.getState().removeAutoRosterMember('org-1', 'user-1');
+
+      expect(result).toBe(false);
+      expect(useOrganizationStore.getState().autoRoster).toEqual([member]);
+      expect(useOrganizationStore.getState().error).toBe('Remove failed');
+    });
+  });
+
+  describe('reorderAutoRoster', () => {
+    it('applies the server order on success', async () => {
+      const member1 = createMockAutoRosterMember({ userId: 'user-1', sortOrder: 0 });
+      const member2 = createMockAutoRosterMember({ id: 'member-2', userId: 'user-2', sortOrder: 1 });
+      useOrganizationStore.setState({ autoRoster: [member1, member2] });
+      const reordered = [
+        { ...member2, sortOrder: 0 },
+        { ...member1, sortOrder: 1 },
+      ];
+      mockReorderAutoRoster.mockResolvedValue(reordered);
+
+      const result = await useOrganizationStore.getState().reorderAutoRoster('org-1', ['user-2', 'user-1']);
+
+      expect(result).toBe(true);
+      expect(mockReorderAutoRoster).toHaveBeenCalledWith('org-1', ['user-2', 'user-1']);
+      expect(useOrganizationStore.getState().autoRoster.map((m) => m.userId)).toEqual(['user-2', 'user-1']);
+    });
+
+    it('rolls back to the original order on failure', async () => {
+      const member1 = createMockAutoRosterMember({ userId: 'user-1', sortOrder: 0 });
+      const member2 = createMockAutoRosterMember({ id: 'member-2', userId: 'user-2', sortOrder: 1 });
+      useOrganizationStore.setState({ autoRoster: [member1, member2] });
+      mockReorderAutoRoster.mockRejectedValue(new Error('Reorder failed'));
+
+      const result = await useOrganizationStore.getState().reorderAutoRoster('org-1', ['user-2', 'user-1']);
+
+      expect(result).toBe(false);
+      expect(useOrganizationStore.getState().autoRoster.map((m) => m.userId)).toEqual(['user-1', 'user-2']);
+      expect(useOrganizationStore.getState().error).toBe('Reorder failed');
     });
   });
 
