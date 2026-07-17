@@ -23,7 +23,7 @@ import {
 } from '../../../components';
 import type { TabKey } from '../../../components';
 import { colors, spacing } from '../../../theme';
-import type { Position } from '@bhmhockey/shared';
+import type { Position, RegistrationResultDto } from '@bhmhockey/shared';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -113,7 +113,7 @@ export default function EventDetailScreen() {
     }
 
     const showResultMessage = (
-      result: { status: string; waitlistPosition?: number | null; message: string } | null,
+      result: RegistrationResultDto | null,
       position: string
     ) => {
       if (!result) return;
