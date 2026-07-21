@@ -156,13 +156,11 @@ describe('organizationService waivers', () => {
 
       await organizationService.acceptWaiver('org-1', 'waiver-1', {
         participantName: 'Jane Skater',
-        participantDate: '2026-07-21',
       });
 
       expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/waiver/accept', {
         waiverId: 'waiver-1',
         participantName: 'Jane Skater',
-        participantDate: '2026-07-21',
       });
     });
 
@@ -171,23 +169,19 @@ describe('organizationService waivers', () => {
 
       await organizationService.acceptWaiver('org-1', 'waiver-1', {
         participantName: 'Pat Guardian',
-        participantDate: '2026-07-21',
         minorParticipantName: 'Minor Player',
         minorDateOfBirth: '2014-03-05',
         guardianName: 'Pat Guardian',
         guardianSignature: 'Pat Guardian',
-        guardianDate: '2026-07-21',
       });
 
       expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/waiver/accept', {
         waiverId: 'waiver-1',
         participantName: 'Pat Guardian',
-        participantDate: '2026-07-21',
         minorParticipantName: 'Minor Player',
         minorDateOfBirth: '2014-03-05',
         guardianName: 'Pat Guardian',
         guardianSignature: 'Pat Guardian',
-        guardianDate: '2026-07-21',
       });
     });
   });

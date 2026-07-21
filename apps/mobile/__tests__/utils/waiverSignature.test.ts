@@ -12,7 +12,7 @@ import {
 const NOW = new Date(2026, 6, 21); // July 21, 2026 (local)
 
 const validAdultForm = (): WaiverSignatureFormValues => ({
-  ...emptyWaiverSignatureForm(NOW),
+  ...emptyWaiverSignatureForm(),
   participantName: 'Jane Skater',
 });
 
@@ -79,28 +79,27 @@ describe('isPastDate', () => {
 });
 
 describe('emptyWaiverSignatureForm', () => {
-  it('pre-fills both date fields with today and leaves everything else empty', () => {
-    const form = emptyWaiverSignatureForm(NOW);
-    expect(form.participantDate).toBe('07/21/2026');
-    expect(form.guardianDate).toBe('07/21/2026');
-    expect(form.participantName).toBe('');
-    expect(form.minorParticipantName).toBe('');
-    expect(form.minorDateOfBirth).toBe('');
-    expect(form.guardianName).toBe('');
-    expect(form.guardianSignature).toBe('');
+  it('starts with every typed field empty (signature dates are server-stamped, not form fields)', () => {
+    const form = emptyWaiverSignatureForm();
+    expect(form).toEqual({
+      participantName: '',
+      minorParticipantName: '',
+      minorDateOfBirth: '',
+      guardianName: '',
+      guardianSignature: '',
+    });
   });
 });
 
 describe('validateWaiverSignature', () => {
   describe('adult participant', () => {
-    it('accepts a valid adult-only form and builds the payload without minor fields', () => {
+    it('accepts a valid adult-only form and builds the payload without minor fields or dates', () => {
       const result = validateWaiverSignature(validAdultForm(), NOW);
 
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual({});
       expect(result.details).toEqual({
         participantName: 'Jane Skater',
-        participantDate: '2026-07-21',
       });
     });
 
@@ -123,49 +122,28 @@ describe('validateWaiverSignature', () => {
       expect(result.errors.participantName).toBe('Printed name is required');
       expect(result.details).toBeNull();
     });
-
-    it('rejects an invalid participant date', () => {
-      const result = validateWaiverSignature(
-        { ...validAdultForm(), participantDate: '13/45/20' },
-        NOW
-      );
-
-      expect(result.valid).toBe(false);
-      expect(result.errors.participantDate).toBe('Enter a valid date (MM/DD/YYYY)');
-    });
-
-    it('rejects an emptied participant date', () => {
-      const result = validateWaiverSignature({ ...validAdultForm(), participantDate: '' }, NOW);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors.participantDate).toBeDefined();
-    });
   });
 
   describe('Parent/Guardian section (all-or-nothing)', () => {
-    it('accepts a fully filled minor section and includes it in the payload', () => {
+    it('accepts a fully filled minor section and includes it in the payload (no dates)', () => {
       const result = validateWaiverSignature(validMinorForm(), NOW);
 
       expect(result.valid).toBe(true);
       expect(result.details).toEqual({
         participantName: 'Jane Skater',
-        participantDate: '2026-07-21',
         minorParticipantName: 'Minor Player',
         minorDateOfBirth: '2014-03-05',
         guardianName: 'Pat Guardian',
         guardianSignature: 'Pat Guardian',
-        guardianDate: '2026-07-21',
       });
     });
 
-    it('treats an untouched section (only the pre-filled date) as empty', () => {
-      // guardianDate is pre-filled with today, so it must not by itself
-      // activate the all-or-nothing rule
+    it('treats an untouched section as empty', () => {
       const result = validateWaiverSignature(validAdultForm(), NOW);
 
       expect(result.valid).toBe(true);
-      expect(result.details?.guardianDate).toBeUndefined();
       expect(result.details?.minorParticipantName).toBeUndefined();
+      expect(result.details?.minorDateOfBirth).toBeUndefined();
     });
 
     it.each([
@@ -192,20 +170,6 @@ describe('validateWaiverSignature', () => {
           expect(result.errors[key]).toBeDefined();
         }
       }
-    });
-
-    it('requires the guardian date when the section is started and the date was cleared', () => {
-      const result = validateWaiverSignature({ ...validMinorForm(), guardianDate: '' }, NOW);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors.guardianDate).toBe('Date is required to complete this section');
-    });
-
-    it('rejects an invalid guardian date when the section is started', () => {
-      const result = validateWaiverSignature({ ...validMinorForm(), guardianDate: '02/30/2026' }, NOW);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors.guardianDate).toBe('Enter a valid date (MM/DD/YYYY)');
     });
 
     it.each([

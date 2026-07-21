@@ -128,14 +128,14 @@ export interface SetOrganizationWaiverResponse {
 // YYYY-MM-DD. participantName/participantDate are always required; the
 // Parent/Guardian section is all-or-nothing (required if the participant is
 // under 19): either every minor field is present or all are omitted.
+// Signature dates are stamped server-side at acceptance time - the client
+// never sends them.
 export interface WaiverSignatureDetails {
   participantName: string;
-  participantDate: string;      // YYYY-MM-DD
   minorParticipantName?: string;
   minorDateOfBirth?: string;    // YYYY-MM-DD, must be in the past
   guardianName?: string;
   guardianSignature?: string;   // Typed signature (plain text)
-  guardianDate?: string;        // YYYY-MM-DD
 }
 
 // Accept a SPECIFIC waiver version (stale ids are rejected with 400) with the

@@ -25,15 +25,15 @@ public record SetOrganizationWaiverResponse(
 // blank). The Parent/Guardian section is all-or-nothing: either every minor
 // field is provided (participant under 19) or all are omitted (400 when
 // partially filled). Dates are calendar dates (client sends YYYY-MM-DD).
+// Signature dates (adult and guardian) are stamped server-side at acceptance
+// time and are intentionally NOT accepted from the client
 public record AcceptWaiverRequest(
     Guid WaiverId,
     string? ParticipantName,
-    DateTime? ParticipantDate,
     string? MinorParticipantName = null,
     DateTime? MinorDateOfBirth = null,
     string? GuardianName = null,
-    string? GuardianSignature = null,
-    DateTime? GuardianDate = null
+    string? GuardianSignature = null
 );
 
 // Blocking-gate entry: an org where the current user holds an upcoming

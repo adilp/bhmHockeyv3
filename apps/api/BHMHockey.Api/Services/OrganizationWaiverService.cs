@@ -209,25 +209,21 @@ public class OrganizationWaiverService : IOrganizationWaiverService
         {
             Reject("Printed name is required.");
         }
-        if (request.ParticipantDate == null)
-        {
-            Reject("Date is required.");
-        }
 
         var minorName = Clean(request.MinorParticipantName, "Minor participant's printed name");
         var guardianName = Clean(request.GuardianName, "Parent/guardian printed name");
         var guardianSignature = Clean(request.GuardianSignature, "Parent/guardian signature");
 
         var anyMinorField = minorName != null || request.MinorDateOfBirth != null
-            || guardianName != null || guardianSignature != null || request.GuardianDate != null;
+            || guardianName != null || guardianSignature != null;
 
         if (anyMinorField)
         {
             var allMinorFields = minorName != null && request.MinorDateOfBirth != null
-                && guardianName != null && guardianSignature != null && request.GuardianDate != null;
+                && guardianName != null && guardianSignature != null;
             if (!allMinorFields)
             {
-                Reject("The Parent/Guardian section is all-or-nothing: provide the minor's name, date of birth, parent/guardian name, signature, and date - or leave the whole section empty.");
+                Reject("The Parent/Guardian section is all-or-nothing: provide the minor's name, date of birth, parent/guardian name, and signature - or leave the whole section empty.");
             }
             if (AsUtcDate(request.MinorDateOfBirth!.Value) >= DateTime.UtcNow.Date)
             {
@@ -235,14 +231,17 @@ public class OrganizationWaiverService : IOrganizationWaiverService
             }
         }
 
+        // Signature dates are stamped by the server, never taken from the
+        // client - the recorded date is always the actual acceptance date
+        var signedOn = DateTime.UtcNow.Date;
         return new ValidatedSignature(
             participantName!,
-            AsUtcDate(request.ParticipantDate!.Value),
+            signedOn,
             anyMinorField ? minorName : null,
             anyMinorField ? AsUtcDate(request.MinorDateOfBirth!.Value) : null,
             anyMinorField ? guardianName : null,
             anyMinorField ? guardianSignature : null,
-            anyMinorField ? AsUtcDate(request.GuardianDate!.Value) : null
+            anyMinorField ? signedOn : null
         );
     }
 

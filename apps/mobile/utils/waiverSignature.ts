@@ -5,9 +5,10 @@ import type { WaiverSignatureDetails } from '@bhmhockey/shared';
  * client-side validation rules (mirrored server-side in
  * OrganizationWaiverService.ValidateSignatureFields):
  * - Printed name required (non-empty trimmed)
- * - Date required, must parse as a real calendar date
  * - Parent/Guardian section is all-or-nothing; when active, the minor's
  *   date of birth must be a valid date in the past
+ * Signature dates are displayed read-only (always today) and stamped by
+ * the server - they are not part of the form payload.
  */
 
 // A parsed calendar date (no time component, no timezone)
@@ -71,22 +72,18 @@ export function isPastDate(date: CalendarDate, now: Date = new Date()): boolean 
 // Raw form values as typed by the user (all plain text inputs)
 export interface WaiverSignatureFormValues {
   participantName: string;
-  participantDate: string;
   minorParticipantName: string;
   minorDateOfBirth: string;
   guardianName: string;
   guardianSignature: string;
-  guardianDate: string;
 }
 
-export const emptyWaiverSignatureForm = (now: Date = new Date()): WaiverSignatureFormValues => ({
+export const emptyWaiverSignatureForm = (): WaiverSignatureFormValues => ({
   participantName: '',
-  participantDate: todayMMDDYYYY(now),
   minorParticipantName: '',
   minorDateOfBirth: '',
   guardianName: '',
   guardianSignature: '',
-  guardianDate: todayMMDDYYYY(now),
 });
 
 export interface WaiverSignatureValidation {
@@ -102,10 +99,9 @@ const DATE_ERROR = 'Enter a valid date (MM/DD/YYYY)';
  * Validate the acceptance form and build the API payload.
  *
  * The Parent/Guardian group counts as "started" when any of its typed fields
- * (minor name, date of birth, guardian name, signature) is non-empty. The
- * guardian Date field is excluded from that check because it is pre-filled
- * with today - otherwise the group could never be "entirely empty". When the
- * group is empty, no minor fields (including the pre-filled date) are sent.
+ * (minor name, date of birth, guardian name, signature) is non-empty. When
+ * the group is empty, no minor fields are sent. Signature dates are not
+ * validated or sent - the server stamps them at acceptance time.
  */
 export function validateWaiverSignature(
   values: WaiverSignatureFormValues,
@@ -116,10 +112,6 @@ export function validateWaiverSignature(
   const participantName = values.participantName.trim();
   if (!participantName) {
     errors.participantName = 'Printed name is required';
-  }
-  const participantDate = parseDateInput(values.participantDate);
-  if (!participantDate) {
-    errors.participantDate = DATE_ERROR;
   }
 
   const minorParticipantName = values.minorParticipantName.trim();
@@ -134,7 +126,6 @@ export function validateWaiverSignature(
     guardianSignature.length > 0;
 
   let minorDateOfBirth: CalendarDate | null = null;
-  let guardianDate: CalendarDate | null = null;
 
   if (groupStarted) {
     if (!minorParticipantName) {
@@ -156,12 +147,6 @@ export function validateWaiverSignature(
     if (!guardianSignature) {
       errors.guardianSignature = 'Signature is required to complete this section';
     }
-    guardianDate = parseDateInput(values.guardianDate);
-    if (!guardianDate) {
-      errors.guardianDate = values.guardianDate.trim()
-        ? DATE_ERROR
-        : 'Date is required to complete this section';
-    }
   }
 
   if (Object.keys(errors).length > 0) {
@@ -170,14 +155,12 @@ export function validateWaiverSignature(
 
   const details: WaiverSignatureDetails = {
     participantName,
-    participantDate: toIsoDate(participantDate!),
     ...(groupStarted
       ? {
           minorParticipantName,
           minorDateOfBirth: toIsoDate(minorDateOfBirth!),
           guardianName,
           guardianSignature,
-          guardianDate: toIsoDate(guardianDate!),
         }
       : {}),
   };

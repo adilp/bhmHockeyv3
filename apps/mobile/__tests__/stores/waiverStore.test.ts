@@ -24,7 +24,6 @@ import type { PendingWaiver, WaiverSignatureDetails } from '@bhmhockey/shared';
 
 const mockSignature: WaiverSignatureDetails = {
   participantName: 'Jane Skater',
-  participantDate: '2026-07-21',
 };
 
 const createMockPendingWaiver = (overrides: Partial<PendingWaiver> = {}): PendingWaiver => ({
@@ -121,7 +120,6 @@ describe('waiverStore', () => {
         minorDateOfBirth: '2014-03-05',
         guardianName: 'Pat Guardian',
         guardianSignature: 'Pat Guardian',
-        guardianDate: '2026-07-21',
       };
 
       const result = await useWaiverStore.getState().acceptWaiver('org-1', 'waiver-1', minorSignature);

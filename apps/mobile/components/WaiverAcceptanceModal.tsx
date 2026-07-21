@@ -19,6 +19,7 @@ import { getApiUrl } from '../config/api';
 import { parseWaiverSegments } from '../utils/waiverFormat';
 import {
   emptyWaiverSignatureForm,
+  todayMMDDYYYY,
   validateWaiverSignature,
   type WaiverSignatureFormValues,
 } from '../utils/waiverSignature';
@@ -57,6 +58,21 @@ interface SignatureFieldProps {
   /** Renders the entered text in an italic "signature" style */
   signature?: boolean;
   isDate?: boolean;
+}
+
+// Signature dates are always today and are stamped by the server at
+// acceptance time - shown read-only so they cannot be backdated
+function ReadOnlyDateField({ label }: { label: string }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel} allowFontScaling={false}>{label}</Text>
+      <View style={[styles.fieldInput, styles.readOnlyField]}>
+        <Text style={styles.readOnlyFieldText} allowFontScaling={false}>
+          {todayMMDDYYYY()}
+        </Text>
+      </View>
+    </View>
+  );
 }
 
 function SignatureField({
@@ -248,15 +264,7 @@ export function WaiverAcceptanceModal({
                 error={fieldError('participantName')}
                 placeholder="Full legal name"
               />
-              <SignatureField
-                label="Date"
-                value={form.participantDate}
-                onChangeText={setField('participantDate')}
-                onBlur={blurField('participantDate')}
-                error={fieldError('participantDate')}
-                placeholder="MM/DD/YYYY"
-                isDate
-              />
+              <ReadOnlyDateField label="Date" />
 
               <Text style={styles.sectionHeader} allowFontScaling={false}>
                 Parent/Guardian (required if participant is under 19)
@@ -299,15 +307,7 @@ export function WaiverAcceptanceModal({
                 placeholder="Type your full name to sign"
                 signature
               />
-              <SignatureField
-                label="Date"
-                value={form.guardianDate}
-                onChangeText={setField('guardianDate')}
-                onBlur={blurField('guardianDate')}
-                error={fieldError('guardianDate', true)}
-                placeholder="MM/DD/YYYY"
-                isDate
-              />
+              <ReadOnlyDateField label="Date" />
             </View>
           )}
         </ScrollView>
@@ -452,6 +452,13 @@ const styles = StyleSheet.create({
   signatureInput: {
     fontStyle: 'italic',
     fontSize: 18,
+  },
+  readOnlyField: {
+    opacity: 0.7,
+  },
+  readOnlyFieldText: {
+    fontSize: 16,
+    color: colors.text.secondary,
   },
   fieldInputError: {
     borderColor: colors.status.error,

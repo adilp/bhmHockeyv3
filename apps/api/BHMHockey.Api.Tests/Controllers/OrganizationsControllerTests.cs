@@ -594,7 +594,7 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        var request = new AcceptWaiverRequest(Guid.NewGuid(), "Test Participant", DateTime.UtcNow.Date);
+        var request = new AcceptWaiverRequest(Guid.NewGuid(), "Test Participant");
 
         // Act
         var result = await _controller.AcceptWaiver(orgId, request);
@@ -611,7 +611,7 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        var request = new AcceptWaiverRequest(Guid.NewGuid(), "Test Participant", DateTime.UtcNow.Date);
+        var request = new AcceptWaiverRequest(Guid.NewGuid(), "Test Participant");
         _mockWaiverService.Setup(s => s.AcceptWaiverAsync(orgId, request, _testUserId))
             .ThrowsAsync(new InvalidOperationException("This waiver version is no longer current."));
 
@@ -628,7 +628,7 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        var request = new AcceptWaiverRequest(Guid.NewGuid(), "", DateTime.UtcNow.Date);
+        var request = new AcceptWaiverRequest(Guid.NewGuid(), "");
         _mockWaiverService.Setup(s => s.AcceptWaiverAsync(orgId, request, _testUserId))
             .ThrowsAsync(new InvalidOperationException("Printed name is required."));
 
