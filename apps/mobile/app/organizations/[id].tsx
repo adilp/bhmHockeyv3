@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { organizationService } from '@bhmhockey/api-client';
 import { useOrganizationStore } from '../../stores/organizationStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useWaiverStore } from '../../stores/waiverStore';
 import { Badge, SkillLevelBadges, BadgeIconsRow, MemberDetailModal } from '../../components';
 import { colors, spacing, radius } from '../../theme';
 import { shareOrganizationInvite } from '../../utils/share';
@@ -85,24 +86,51 @@ export default function OrganizationDetailScreen() {
       return;
     }
 
-    setIsProcessing(true);
+    if (organization.isSubscribed) {
+      // Leaving uses the leave endpoint (not plain unsubscribe) so upcoming
+      // registrations are cancelled too - same semantics as the waiver gate
+      Alert.alert(
+        'Leave Organization',
+        `Leave ${organization.name}? You will lose your registration for any upcoming events with this organization.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Leave',
+            style: 'destructive',
+            onPress: async () => {
+              setIsProcessing(true);
+              try {
+                const ok = await useWaiverStore.getState().leaveOrganization(organization.id);
+                if (!ok) {
+                  Alert.alert(
+                    'Error',
+                    useWaiverStore.getState().error || 'Failed to leave organization'
+                  );
+                  return;
+                }
+                setOrganization({
+                  ...organization,
+                  isSubscribed: false,
+                  subscriberCount: Math.max(0, organization.subscriberCount - 1),
+                });
+              } finally {
+                setIsProcessing(false);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
 
+    setIsProcessing(true);
     try {
-      if (organization.isSubscribed) {
-        await unsubscribe(organization.id);
-        setOrganization({
-          ...organization,
-          isSubscribed: false,
-          subscriberCount: Math.max(0, organization.subscriberCount - 1),
-        });
-      } else {
-        await subscribe(organization.id);
-        setOrganization({
-          ...organization,
-          isSubscribed: true,
-          subscriberCount: organization.subscriberCount + 1,
-        });
-      }
+      await subscribe(organization.id);
+      setOrganization({
+        ...organization,
+        isSubscribed: true,
+        subscriberCount: organization.subscriberCount + 1,
+      });
     } catch (error) {
       Alert.alert('Error', 'Failed to update subscription');
     } finally {
@@ -221,10 +249,13 @@ export default function OrganizationDetailScreen() {
 
   const isAdmin = organization?.isAdmin;
 
-  // Waiver status - flags are only non-null when the org has an active waiver
-  const waiverActive = members.some(
-    (m) => m.hasAcceptedCurrentWaiver !== null && m.hasAcceptedCurrentWaiver !== undefined
-  );
+  // Waiver status - ADMIN-ONLY visibility (the server also nulls the flags
+  // for non-admin requesters); flags are only non-null when an active waiver exists
+  const waiverActive =
+    !!isAdmin &&
+    members.some(
+      (m) => m.hasAcceptedCurrentWaiver !== null && m.hasAcceptedCurrentWaiver !== undefined
+    );
   const waiverAcceptedCount = members.filter((m) => m.hasAcceptedCurrentWaiver === true).length;
   const waiverNotAcceptedCount = members.filter((m) => m.hasAcceptedCurrentWaiver === false).length;
 
@@ -330,10 +361,10 @@ export default function OrganizationDetailScreen() {
                               {member.firstName} {member.lastName}
                             </Text>
                             {member.isAdmin && <Badge variant="purple">Admin</Badge>}
-                            {member.hasAcceptedCurrentWaiver === true && (
+                            {waiverActive && member.hasAcceptedCurrentWaiver === true && (
                               <Badge variant="green">Waiver ✓</Badge>
                             )}
-                            {member.hasAcceptedCurrentWaiver === false && (
+                            {waiverActive && member.hasAcceptedCurrentWaiver === false && (
                               <Badge variant="warning">No waiver</Badge>
                             )}
                             {isCurrentUser && <Text style={styles.youLabel}>(You)</Text>}
@@ -372,9 +403,9 @@ export default function OrganizationDetailScreen() {
             ) : (
               <Text style={[
                 styles.subscribeButtonText,
-                organization.isSubscribed && styles.subscribedButtonText,
+                organization.isSubscribed && styles.leaveButtonText,
               ]}>
-                {organization.isSubscribed ? 'Joined' : 'Join Organization'}
+                {organization.isSubscribed ? 'Leave Organization' : 'Join Organization'}
               </Text>
             )}
           </TouchableOpacity>
@@ -646,6 +677,9 @@ const styles = StyleSheet.create({
   },
   subscribedButtonText: {
     color: colors.primary.teal,
+  },
+  leaveButtonText: {
+    color: colors.status.error,
   },
   hint: {
     textAlign: 'center',

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
 import type { Organization, OrganizationSubscription, CreateOrganizationRequest, OrganizationMember, AutoRosterMember, Position, OrganizationWaiver } from '@bhmhockey/shared';
+import { useEventStore } from './eventStore';
 
 /** Extract message from ApiError objects or Error instances */
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -130,6 +131,9 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
       await organizationService.subscribe(organizationId);
       // Refresh subscriptions to get full data
       await get().fetchMySubscriptions();
+      // Membership changes event visibility - refresh so the org's events
+      // appear without a manual pull-to-refresh (failure is non-fatal)
+      await useEventStore.getState().fetchEvents().catch(() => {});
     } catch (error) {
       // Rollback optimistic update - restore original state
       set({
@@ -154,6 +158,8 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
 
     try {
       await organizationService.unsubscribe(organizationId);
+      // Membership changes event visibility - keep the events list current
+      await useEventStore.getState().fetchEvents().catch(() => {});
     } catch (error) {
       // Rollback optimistic update
       set({

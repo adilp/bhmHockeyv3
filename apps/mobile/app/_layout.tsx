@@ -5,6 +5,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import * as Notifications from 'expo-notifications';
 import { initializeApiClient } from '@bhmhockey/api-client';
+import type { WaiverSignatureDetails } from '@bhmhockey/shared';
 import { getApiUrl } from '../config/api';
 import { colors } from '../theme';
 import { useAuthStore } from '../stores/authStore';
@@ -197,11 +198,11 @@ function RootLayoutContent() {
   // Accept-or-leave handlers for the blocking gate (one org at a time, queued)
   const currentPendingWaiver = pendingWaivers.length > 0 ? pendingWaivers[0] : null;
 
-  const handleGateAgree = async () => {
+  const handleGateAgree = async (signature: WaiverSignatureDetails) => {
     if (!currentPendingWaiver) return;
     const ok = await useWaiverStore
       .getState()
-      .acceptWaiver(currentPendingWaiver.organizationId, currentPendingWaiver.waiver.id);
+      .acceptWaiver(currentPendingWaiver.organizationId, currentPendingWaiver.waiver.id, signature);
     if (!ok) {
       Alert.alert(
         'Error',

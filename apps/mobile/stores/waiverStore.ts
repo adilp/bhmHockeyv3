@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
-import type { PendingWaiver } from '@bhmhockey/shared';
+import type { PendingWaiver, WaiverSignatureDetails } from '@bhmhockey/shared';
+import { useOrganizationStore } from './organizationStore';
+import { useEventStore } from './eventStore';
 
 /** Extract message from ApiError objects or Error instances */
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -19,7 +21,11 @@ interface WaiverState {
 
   // Actions
   fetchPendingWaivers: () => Promise<void>;
-  acceptWaiver: (organizationId: string, waiverId: string) => Promise<boolean>;
+  acceptWaiver: (
+    organizationId: string,
+    waiverId: string,
+    signature: WaiverSignatureDetails
+  ) => Promise<boolean>;
   leaveOrganization: (organizationId: string) => Promise<boolean>;
   reset: () => void;
 }
@@ -47,10 +53,15 @@ export const useWaiverStore = create<WaiverState>((set, get) => ({
     }
   },
 
-  // Accept a specific waiver version; removes the org from the pending queue
-  acceptWaiver: async (organizationId: string, waiverId: string) => {
+  // Accept a specific waiver version, recording the signature fields captured
+  // on the acceptance form; removes the org from the pending queue
+  acceptWaiver: async (
+    organizationId: string,
+    waiverId: string,
+    signature: WaiverSignatureDetails
+  ) => {
     try {
-      await organizationService.acceptWaiver(organizationId, waiverId);
+      await organizationService.acceptWaiver(organizationId, waiverId, signature);
       set((state) => ({
         pendingWaivers: state.pendingWaivers.filter((p) => p.organizationId !== organizationId),
       }));
@@ -74,6 +85,14 @@ export const useWaiverStore = create<WaiverState>((set, get) => ({
       set((state) => ({
         pendingWaivers: state.pendingWaivers.filter((p) => p.organizationId !== organizationId),
       }));
+      // Leaving changes org membership AND cancels registrations - refresh the
+      // org list and event lists so every screen is current without a manual
+      // pull-to-refresh. Refresh failures don't undo the successful leave.
+      await Promise.all([
+        useOrganizationStore.getState().fetchOrganizations(),
+        useEventStore.getState().fetchEvents(),
+        useEventStore.getState().fetchMyRegistrations(),
+      ]).catch(() => {});
       return true;
     } catch (error) {
       set({ error: getErrorMessage(error, 'Failed to leave organization') });

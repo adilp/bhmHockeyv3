@@ -1,4 +1,5 @@
 using BHMHockey.Api.Data;
+using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Models.Entities;
 using BHMHockey.Api.Services;
 using FluentAssertions;
@@ -128,6 +129,28 @@ public class OrganizationWaiverServiceTests : IDisposable
         _context.EventRegistrations.Add(registration);
         await _context.SaveChangesAsync();
         return registration;
+    }
+
+    /// <summary>
+    /// Minimal valid acceptance request: adult signature fields only.
+    /// </summary>
+    private static AcceptWaiverRequest ValidAcceptRequest(Guid waiverId, string participantName = "Test User")
+    {
+        return new AcceptWaiverRequest(waiverId, participantName);
+    }
+
+    /// <summary>
+    /// Valid acceptance request with the full Parent/Guardian section filled in.
+    /// </summary>
+    private static AcceptWaiverRequest MinorAcceptRequest(Guid waiverId)
+    {
+        return new AcceptWaiverRequest(
+            waiverId,
+            "Test User",
+            MinorParticipantName: "Minor Player",
+            MinorDateOfBirth: DateTime.UtcNow.Date.AddYears(-12),
+            GuardianName: "Parent Guardian",
+            GuardianSignature: "Parent Guardian");
     }
 
     #endregion
@@ -315,7 +338,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         (await _sut.IsAcceptanceRequiredAsync(org.Id, player.Id)).Should().BeTrue();
 
         // Accepted -> not required
-        await _sut.AcceptWaiverAsync(org.Id, v1!.Id, player.Id);
+        await _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(v1!.Id), player.Id);
         (await _sut.IsAcceptanceRequiredAsync(org.Id, player.Id)).Should().BeFalse();
 
         // New version -> required again
@@ -339,7 +362,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         var org = await CreateTestOrganization(admin.Id);
         var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
 
-        await _sut.AcceptWaiverAsync(org.Id, waiver!.Id, player.Id);
+        await _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(waiver!.Id), player.Id);
 
         var acceptance = await _context.WaiverAcceptances
             .FirstOrDefaultAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id);
@@ -355,8 +378,8 @@ public class OrganizationWaiverServiceTests : IDisposable
         var org = await CreateTestOrganization(admin.Id);
         var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
 
-        await _sut.AcceptWaiverAsync(org.Id, waiver!.Id, player.Id);
-        await _sut.AcceptWaiverAsync(org.Id, waiver.Id, player.Id); // No throw
+        await _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(waiver!.Id), player.Id);
+        await _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(waiver.Id), player.Id); // No throw
 
         (await _context.WaiverAcceptances.CountAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id))
             .Should().Be(1);
@@ -371,7 +394,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         var v1 = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
         await _sut.SetWaiverAsync(org.Id, "v2", admin.Id);
 
-        var act = () => _sut.AcceptWaiverAsync(org.Id, v1!.Id, player.Id);
+        var act = () => _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(v1!.Id), player.Id);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*no longer current*");
@@ -387,7 +410,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         var v1 = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
         await _sut.SetWaiverAsync(org.Id, "", admin.Id);
 
-        var act = () => _sut.AcceptWaiverAsync(org.Id, v1!.Id, player.Id);
+        var act = () => _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(v1!.Id), player.Id);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
@@ -402,14 +425,381 @@ public class OrganizationWaiverServiceTests : IDisposable
         var waiverA = await _sut.SetWaiverAsync(orgA.Id, "A v1", admin.Id);
         await _sut.SetWaiverAsync(orgB.Id, "B v1", admin.Id);
 
-        var act = () => _sut.AcceptWaiverAsync(orgB.Id, waiverA!.Id, player.Id);
+        var act = () => _sut.AcceptWaiverAsync(orgB.Id, ValidAcceptRequest(waiverA!.Id), player.Id);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     #endregion
 
+    #region Signature Field Tests
+
+    [Fact]
+    public async Task AcceptWaiverAsync_AdultOnly_StoresParticipantFieldsAndLeavesMinorFieldsNull()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+        var today = DateTime.UtcNow.Date;
+
+        await _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, "Test User"), player.Id);
+
+        var acceptance = await _context.WaiverAcceptances
+            .SingleAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id);
+        acceptance.ParticipantName.Should().Be("Test User");
+        acceptance.ParticipantDate.Should().Be(today);
+        acceptance.ParticipantDate!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        acceptance.MinorParticipantName.Should().BeNull();
+        acceptance.MinorDateOfBirth.Should().BeNull();
+        acceptance.GuardianName.Should().BeNull();
+        acceptance.GuardianSignature.Should().BeNull();
+        acceptance.GuardianDate.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_FullMinorSection_StoresAllSignatureFields()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+        var request = MinorAcceptRequest(waiver!.Id);
+
+        await _sut.AcceptWaiverAsync(org.Id, request, player.Id);
+
+        var acceptance = await _context.WaiverAcceptances
+            .SingleAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id);
+        acceptance.ParticipantName.Should().Be(request.ParticipantName);
+        acceptance.ParticipantDate.Should().Be(DateTime.UtcNow.Date); // server-stamped
+        acceptance.MinorParticipantName.Should().Be(request.MinorParticipantName);
+        acceptance.MinorDateOfBirth.Should().Be(request.MinorDateOfBirth);
+        acceptance.GuardianName.Should().Be(request.GuardianName);
+        acceptance.GuardianSignature.Should().Be(request.GuardianSignature);
+        acceptance.GuardianDate.Should().Be(DateTime.UtcNow.Date); // server-stamped
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task AcceptWaiverAsync_MissingOrBlankParticipantName_Throws(string? participantName)
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        var act = () => _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, participantName), player.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Printed name is required.");
+        (await _context.WaiverAcceptances.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_ParticipantNameTooLong_Throws()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        var act = () => _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, new string('x', 201)), player.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*200 characters or fewer*");
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_TrimsSignatureStrings()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+        var today = DateTime.UtcNow.Date;
+
+        await _sut.AcceptWaiverAsync(
+            org.Id,
+            new AcceptWaiverRequest(
+                waiver!.Id, "  Test User  ",
+                MinorParticipantName: " Minor Player ",
+                MinorDateOfBirth: today.AddYears(-12),
+                GuardianName: " Parent Guardian ",
+                GuardianSignature: " Parent Guardian "),
+            player.Id);
+
+        var acceptance = await _context.WaiverAcceptances
+            .SingleAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id);
+        acceptance.ParticipantName.Should().Be("Test User");
+        acceptance.MinorParticipantName.Should().Be("Minor Player");
+        acceptance.GuardianName.Should().Be("Parent Guardian");
+        acceptance.GuardianSignature.Should().Be("Parent Guardian");
+    }
+
+    // All-or-nothing: each single filled minor field must reject the request
+    [Theory]
+    [InlineData("minorName")]
+    [InlineData("minorDob")]
+    [InlineData("guardianName")]
+    [InlineData("guardianSignature")]
+    public async Task AcceptWaiverAsync_PartialMinorSection_Throws(string filledField)
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+        var today = DateTime.UtcNow.Date;
+        var request = new AcceptWaiverRequest(
+            waiver!.Id, "Test User",
+            MinorParticipantName: filledField == "minorName" ? "Minor Player" : null,
+            MinorDateOfBirth: filledField == "minorDob" ? today.AddYears(-12) : null,
+            GuardianName: filledField == "guardianName" ? "Parent Guardian" : null,
+            GuardianSignature: filledField == "guardianSignature" ? "Parent Guardian" : null);
+
+        var act = () => _sut.AcceptWaiverAsync(org.Id, request, player.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*all-or-nothing*");
+        (await _context.WaiverAcceptances.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_WhitespaceOnlyMinorSection_TreatedAsEmpty()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        // Whitespace-only strings do not activate the all-or-nothing group
+        await _sut.AcceptWaiverAsync(
+            org.Id,
+            new AcceptWaiverRequest(
+                waiver!.Id, "Test User",
+                MinorParticipantName: "   ",
+                GuardianName: " "),
+            player.Id);
+
+        var acceptance = await _context.WaiverAcceptances
+            .SingleAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id);
+        acceptance.MinorParticipantName.Should().BeNull();
+        acceptance.GuardianName.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(0)]   // today is not "in the past"
+    [InlineData(30)]  // future date
+    public async Task AcceptWaiverAsync_MinorDateOfBirthNotInPast_Throws(int daysFromToday)
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+        var request = MinorAcceptRequest(waiver!.Id) with
+        {
+            MinorDateOfBirth = DateTime.UtcNow.Date.AddDays(daysFromToday)
+        };
+
+        var act = () => _sut.AcceptWaiverAsync(org.Id, request, player.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*date of birth must be in the past*");
+        (await _context.WaiverAcceptances.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_ReacceptWithDifferentFields_PreservesOriginalRow()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        await _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, "Test User"), player.Id);
+        // Re-accept the same version with different signature details
+        await _sut.AcceptWaiverAsync(
+            org.Id, MinorAcceptRequest(waiver.Id), player.Id);
+
+        // Immutable audit record: still one row, exactly as first recorded
+        var acceptances = await _context.WaiverAcceptances
+            .Where(a => a.WaiverId == waiver.Id && a.UserId == player.Id)
+            .ToListAsync();
+        acceptances.Should().HaveCount(1);
+        acceptances[0].ParticipantName.Should().Be("Test User");
+        acceptances[0].ParticipantDate.Should().Be(DateTime.UtcNow.Date);
+        acceptances[0].MinorParticipantName.Should().BeNull();
+        acceptances[0].GuardianSignature.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_NewVersion_RecordsNewSignatureFieldsAndKeepsOldRow()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var v1 = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+        await _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(v1!.Id, "Test User"), player.Id);
+
+        var v2 = await _sut.SetWaiverAsync(org.Id, "v2", admin.Id);
+        await _sut.AcceptWaiverAsync(
+            org.Id, MinorAcceptRequest(v2!.Id), player.Id);
+
+        // Each accepted version keeps its own signature row
+        var oldRow = await _context.WaiverAcceptances.SingleAsync(a => a.WaiverId == v1.Id && a.UserId == player.Id);
+        var newRow = await _context.WaiverAcceptances.SingleAsync(a => a.WaiverId == v2.Id && a.UserId == player.Id);
+        oldRow.MinorParticipantName.Should().BeNull();
+        newRow.MinorParticipantName.Should().Be("Minor Player");
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_ParticipantNameNotMatchingProfile_Throws()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com"); // profile name: Test User
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        var act = () => _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, "Someone Else"), player.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*must match the name on your profile: Test User*");
+        (await _context.WaiverAcceptances.CountAsync()).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("test user")]           // case-insensitive
+    [InlineData("TEST USER")]
+    [InlineData("Test   User")]         // internal whitespace normalized
+    [InlineData("  Test User  ")]       // trimmed
+    public async Task AcceptWaiverAsync_ParticipantNameMatchingLoosely_Accepts(string enteredName)
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        await _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, enteredName), player.Id);
+
+        (await _context.WaiverAcceptances.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_InitialsInsteadOfFullName_Throws()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        var act = () => _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, "T. User"), player.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*must match the name on your profile*");
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_UnspecifiedKindDates_NormalizedToUtcMidnight()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+        // JSON date-only values ("2014-03-05") bind with Kind=Unspecified and may
+        // carry a time component from other clients - both must be normalized.
+        // (Signature dates are server-stamped; only the DOB comes from the client.)
+        var unspecifiedDob = DateTime.SpecifyKind(
+            DateTime.UtcNow.Date.AddYears(-12).AddHours(14), DateTimeKind.Unspecified);
+
+        await _sut.AcceptWaiverAsync(
+            org.Id,
+            new AcceptWaiverRequest(
+                waiver!.Id, "Test User",
+                MinorParticipantName: "Minor Player",
+                MinorDateOfBirth: unspecifiedDob,
+                GuardianName: "Parent Guardian",
+                GuardianSignature: "Parent Guardian"),
+            player.Id);
+
+        var acceptance = await _context.WaiverAcceptances
+            .SingleAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id);
+        acceptance.MinorDateOfBirth.Should().Be(unspecifiedDob.Date);
+        acceptance.MinorDateOfBirth!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        acceptance.MinorDateOfBirth.Value.TimeOfDay.Should().Be(TimeSpan.Zero);
+        acceptance.ParticipantDate!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        acceptance.ParticipantDate.Value.TimeOfDay.Should().Be(TimeSpan.Zero);
+    }
+
+    #endregion
+
     #region Pending Waivers Tests
+
+    [Fact]
+    public async Task GetPendingWaiversAsync_SubscriberWithoutRegistrations_Listed()
+    {
+        // Every org MEMBER must be current on the waiver, registrations or not
+        var admin = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(admin.Id, "Waiver Org");
+        await _sut.SetWaiverAsync(org.Id, "waiver text", admin.Id);
+        _context.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = org.Id,
+            UserId = member.Id,
+            SubscribedAt = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+
+        var pending = await _sut.GetPendingWaiversAsync(member.Id);
+
+        pending.Should().HaveCount(1);
+        pending[0].OrganizationId.Should().Be(org.Id);
+    }
+
+    [Fact]
+    public async Task GetPendingWaiversAsync_SubscriberWhoAccepted_NotListed()
+    {
+        var admin = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "waiver text", admin.Id);
+        _context.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = org.Id,
+            UserId = member.Id,
+            SubscribedAt = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+        await _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(waiver!.Id), member.Id);
+
+        var pending = await _sut.GetPendingWaiversAsync(member.Id);
+
+        pending.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPendingWaiversAsync_NonMemberWithoutRegistrations_NotListed()
+    {
+        var admin = await CreateTestUser();
+        var outsider = await CreateTestUser("outsider@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        await _sut.SetWaiverAsync(org.Id, "waiver text", admin.Id);
+
+        var pending = await _sut.GetPendingWaiversAsync(outsider.Id);
+
+        pending.Should().BeEmpty();
+    }
 
     [Fact]
     public async Task GetPendingWaiversAsync_ListsOrgWithUnacceptedWaiverOnUpcomingEvent()
@@ -454,7 +844,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         var waiver = await _sut.SetWaiverAsync(org.Id, "waiver text", admin.Id);
         var evt = await CreateTestEvent(admin.Id, org.Id);
         await CreateRegistration(evt.Id, player.Id);
-        await _sut.AcceptWaiverAsync(org.Id, waiver!.Id, player.Id);
+        await _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(waiver!.Id), player.Id);
 
         var pending = await _sut.GetPendingWaiversAsync(player.Id);
 
@@ -470,7 +860,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         var v1 = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
         var evt = await CreateTestEvent(admin.Id, org.Id);
         await CreateRegistration(evt.Id, player.Id);
-        await _sut.AcceptWaiverAsync(org.Id, v1!.Id, player.Id);
+        await _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(v1!.Id), player.Id);
 
         var v2 = await _sut.SetWaiverAsync(org.Id, "v2", admin.Id);
         var pending = await _sut.GetPendingWaiversAsync(player.Id);

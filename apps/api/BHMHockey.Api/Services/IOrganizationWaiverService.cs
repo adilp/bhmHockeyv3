@@ -20,11 +20,14 @@ public interface IOrganizationWaiverService
     Task<OrganizationWaiverDto?> SetWaiverAsync(Guid organizationId, string? text, Guid userId);
 
     /// <summary>
-    /// Record that the user accepted a SPECIFIC waiver version. Rejects
-    /// (InvalidOperationException) when the id is not the org's current active
-    /// version (stale-version protection). Idempotent when already accepted.
+    /// Record that the user accepted a SPECIFIC waiver version, including the
+    /// signature fields captured at acceptance. Rejects (InvalidOperationException)
+    /// when the id is not the org's current active version (stale-version
+    /// protection), when the participant name/date is missing, or when the
+    /// Parent/Guardian section is partially filled (all-or-nothing). Idempotent
+    /// when already accepted - the original row's signature fields are preserved.
     /// </summary>
-    Task AcceptWaiverAsync(Guid organizationId, Guid waiverId, Guid userId);
+    Task AcceptWaiverAsync(Guid organizationId, AcceptWaiverRequest request, Guid userId);
 
     /// <summary>
     /// Orgs where the user holds an active (Registered/Waitlisted) registration on

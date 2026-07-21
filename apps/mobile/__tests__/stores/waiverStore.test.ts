@@ -20,7 +20,11 @@ jest.mock('@bhmhockey/api-client', () => ({
 
 // Import after mocking
 import { useWaiverStore } from '../../stores/waiverStore';
-import type { PendingWaiver } from '@bhmhockey/shared';
+import type { PendingWaiver, WaiverSignatureDetails } from '@bhmhockey/shared';
+
+const mockSignature: WaiverSignatureDetails = {
+  participantName: 'Jane Skater',
+};
 
 const createMockPendingWaiver = (overrides: Partial<PendingWaiver> = {}): PendingWaiver => ({
   organizationId: 'org-1',
@@ -98,12 +102,30 @@ describe('waiverStore', () => {
       useWaiverStore.setState({ pendingWaivers: [org1, org2] });
       mockAcceptWaiver.mockResolvedValue(undefined);
 
-      const result = await useWaiverStore.getState().acceptWaiver('org-1', 'waiver-1');
+      const result = await useWaiverStore.getState().acceptWaiver('org-1', 'waiver-1', mockSignature);
 
       expect(result).toBe(true);
-      expect(mockAcceptWaiver).toHaveBeenCalledWith('org-1', 'waiver-1');
+      // Signature fields captured on the form are passed straight through
+      expect(mockAcceptWaiver).toHaveBeenCalledWith('org-1', 'waiver-1', mockSignature);
       // Queue advances to the next org
       expect(useWaiverStore.getState().pendingWaivers).toEqual([org2]);
+    });
+
+    it('passes the full Parent/Guardian section through to the API', async () => {
+      useWaiverStore.setState({ pendingWaivers: [createMockPendingWaiver()] });
+      mockAcceptWaiver.mockResolvedValue(undefined);
+      const minorSignature: WaiverSignatureDetails = {
+        ...mockSignature,
+        minorParticipantName: 'Minor Player',
+        minorDateOfBirth: '2014-03-05',
+        guardianName: 'Pat Guardian',
+        guardianSignature: 'Pat Guardian',
+      };
+
+      const result = await useWaiverStore.getState().acceptWaiver('org-1', 'waiver-1', minorSignature);
+
+      expect(result).toBe(true);
+      expect(mockAcceptWaiver).toHaveBeenCalledWith('org-1', 'waiver-1', minorSignature);
     });
 
     it('sets error, refreshes the queue, and returns false on failure', async () => {
@@ -115,7 +137,7 @@ describe('waiverStore', () => {
       })];
       mockGetPendingWaivers.mockResolvedValue(refreshed);
 
-      const result = await useWaiverStore.getState().acceptWaiver('org-1', 'waiver-1');
+      const result = await useWaiverStore.getState().acceptWaiver('org-1', 'waiver-1', mockSignature);
 
       expect(result).toBe(false);
       expect(useWaiverStore.getState().error).toBe('This waiver version is no longer current.');

@@ -124,46 +124,186 @@ public class OrganizationWaiverService : IOrganizationWaiverService
         return trimmed.Length == 0 ? null : MapToDto(waiver);
     }
 
-    public async Task AcceptWaiverAsync(Guid organizationId, Guid waiverId, Guid userId)
+    public async Task AcceptWaiverAsync(Guid organizationId, AcceptWaiverRequest request, Guid userId)
     {
         var active = await GetActiveWaiverAsync(organizationId);
-        if (active == null || active.Id != waiverId)
+        if (active == null || active.Id != request.WaiverId)
         {
             _logger.LogWarning(
                 "Waiver acceptance rejected for organization {OrganizationId}: waiver {WaiverId} is not the current active version",
-                organizationId, waiverId);
+                organizationId, request.WaiverId);
             throw new InvalidOperationException("This waiver version is no longer current. Please review and accept the latest waiver.");
         }
 
+        var signature = ValidateSignatureFields(organizationId, request);
+
+        // The adult printed name is the account holder's attestation - it must
+        // match their profile name (guardian/minor names are other people and
+        // are not checked)
+        var user = await _context.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("User not found");
+        var profileName = $"{user.FirstName} {user.LastName}";
+        if (!NamesMatch(signature.ParticipantName, profileName))
+        {
+            _logger.LogWarning(
+                "Waiver acceptance rejected for user {UserId}: printed name does not match profile name",
+                userId);
+            throw new InvalidOperationException(
+                $"Printed name must match the name on your profile: {profileName}");
+        }
+
         var alreadyAccepted = await _context.WaiverAcceptances
-            .AnyAsync(a => a.WaiverId == waiverId && a.UserId == userId);
+            .AnyAsync(a => a.WaiverId == request.WaiverId && a.UserId == userId);
         if (alreadyAccepted)
         {
-            return; // Idempotent
+            // Idempotent - the original acceptance row (including its signature
+            // fields) is an immutable audit record and is never overwritten
+            return;
         }
 
         _context.WaiverAcceptances.Add(new WaiverAcceptance
         {
             UserId = userId,
-            WaiverId = waiverId
+            WaiverId = request.WaiverId,
+            ParticipantName = signature.ParticipantName,
+            ParticipantDate = signature.ParticipantDate,
+            MinorParticipantName = signature.MinorParticipantName,
+            MinorDateOfBirth = signature.MinorDateOfBirth,
+            GuardianName = signature.GuardianName,
+            GuardianSignature = signature.GuardianSignature,
+            GuardianDate = signature.GuardianDate
         });
         await _context.SaveChangesAsync();
+    }
+
+    // Max stored length for each signature text field (also enforced by EF config)
+    private const int SignatureFieldMaxLength = 200;
+
+    /// <summary>
+    /// Case-insensitive, whitespace-normalized name comparison: "jane  skater"
+    /// matches "Jane Skater"; initials or different names do not. Mirrored
+    /// client-side in apps/mobile/utils/waiverSignature.ts - keep in sync.
+    /// </summary>
+    private static bool NamesMatch(string entered, string profileName)
+    {
+        static string Normalize(string value) => string.Join(' ',
+            value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+        return Normalize(entered) == Normalize(profileName);
+    }
+
+    private record ValidatedSignature(
+        string ParticipantName,
+        DateTime ParticipantDate,
+        string? MinorParticipantName,
+        DateTime? MinorDateOfBirth,
+        string? GuardianName,
+        string? GuardianSignature,
+        DateTime? GuardianDate
+    );
+
+    /// <summary>
+    /// Server-side mirror of the acceptance form rules: participant name/date
+    /// required; Parent/Guardian section all-or-nothing with the minor's date
+    /// of birth in the past. Strings are trimmed and length-capped; dates are
+    /// normalized to calendar dates at UTC midnight.
+    /// </summary>
+    private ValidatedSignature ValidateSignatureFields(Guid organizationId, AcceptWaiverRequest request)
+    {
+        void Reject(string message)
+        {
+            _logger.LogWarning(
+                "Waiver acceptance rejected for organization {OrganizationId}: {Message}",
+                organizationId, message);
+            throw new InvalidOperationException(message);
+        }
+
+        string? Clean(string? value, string label)
+        {
+            var trimmed = value?.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                return null;
+            }
+            if (trimmed.Length > SignatureFieldMaxLength)
+            {
+                Reject($"{label} must be {SignatureFieldMaxLength} characters or fewer.");
+            }
+            return trimmed;
+        }
+
+        var participantName = Clean(request.ParticipantName, "Printed name");
+        if (participantName == null)
+        {
+            Reject("Printed name is required.");
+        }
+
+        var minorName = Clean(request.MinorParticipantName, "Minor participant's printed name");
+        var guardianName = Clean(request.GuardianName, "Parent/guardian printed name");
+        var guardianSignature = Clean(request.GuardianSignature, "Parent/guardian signature");
+
+        var anyMinorField = minorName != null || request.MinorDateOfBirth != null
+            || guardianName != null || guardianSignature != null;
+
+        if (anyMinorField)
+        {
+            var allMinorFields = minorName != null && request.MinorDateOfBirth != null
+                && guardianName != null && guardianSignature != null;
+            if (!allMinorFields)
+            {
+                Reject("The Parent/Guardian section is all-or-nothing: provide the minor's name, date of birth, parent/guardian name, and signature - or leave the whole section empty.");
+            }
+            if (AsUtcDate(request.MinorDateOfBirth!.Value) >= DateTime.UtcNow.Date)
+            {
+                Reject("Minor's date of birth must be in the past.");
+            }
+        }
+
+        // Signature dates are stamped by the server, never taken from the
+        // client - the recorded date is always the actual acceptance date
+        var signedOn = DateTime.UtcNow.Date;
+        return new ValidatedSignature(
+            participantName!,
+            signedOn,
+            anyMinorField ? minorName : null,
+            anyMinorField ? AsUtcDate(request.MinorDateOfBirth!.Value) : null,
+            anyMinorField ? guardianName : null,
+            anyMinorField ? guardianSignature : null,
+            anyMinorField ? signedOn : null
+        );
+    }
+
+    /// <summary>
+    /// Signature dates are calendar dates (the client sends YYYY-MM-DD, which
+    /// binds with Kind=Unspecified). Store them at UTC midnight per the repo's
+    /// all-dates-are-UTC convention (Npgsql rejects non-UTC kinds).
+    /// </summary>
+    private static DateTime AsUtcDate(DateTime value)
+    {
+        return DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
     }
 
     public async Task<List<PendingWaiverDto>> GetPendingWaiversAsync(Guid userId)
     {
         var now = DateTime.UtcNow;
 
-        // Orgs where the user holds an active registration on an upcoming, non-cancelled event
-        var orgIds = await _context.EventRegistrations
+        // Every org the user is a MEMBER of must be current on the waiver...
+        var subscribedOrgIds = await _context.OrganizationSubscriptions
+            .Where(s => s.UserId == userId)
+            .Select(s => s.OrganizationId)
+            .ToListAsync();
+
+        // ...plus orgs where a non-member holds an active registration on an
+        // upcoming, non-cancelled event (e.g. manually added by an organizer)
+        var registeredOrgIds = await _context.EventRegistrations
             .Where(r => r.UserId == userId
                 && (r.Status == "Registered" || r.Status == "Waitlisted")
                 && r.Event.OrganizationId != null
                 && r.Event.EventDate > now
                 && r.Event.Status != "Cancelled")
             .Select(r => r.Event.OrganizationId!.Value)
-            .Distinct()
             .ToListAsync();
+
+        var orgIds = subscribedOrgIds.Union(registeredOrgIds).ToList();
 
         if (orgIds.Count == 0)
         {
