@@ -1265,6 +1265,28 @@ public class OrganizationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetMembersAsync_NonAdminRequester_NeverSeesWaiverFlags()
+    {
+        // Arrange - active waiver with a mix of accepted/unaccepted members
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var otherMember = await CreateTestUser("other@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        await CreateSubscription(org.Id, otherMember.Id);
+        var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(waiver!.Id, "John Doe"), member.Id);
+
+        // Act - a plain subscriber (not an admin) requests the member list
+        var members = await _sut.GetMembersAsync(org.Id, member.Id);
+
+        // Assert - waiver acceptance status is admin-only; every flag is null
+        members.Should().NotBeEmpty();
+        members.Should().OnlyContain(m => m.HasAcceptedCurrentWaiver == null);
+    }
+
+    [Fact]
     public async Task GetMembersAsync_NewVersion_ResetsAcceptanceFlags()
     {
         // Arrange

@@ -402,16 +402,20 @@ public class OrganizationService : IOrganizationService
             .GroupBy(ub => ub.UserId)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        // Waiver status per member - only meaningful when an active waiver exists
-        // (flags stay null otherwise so clients hide the waiver UI entirely)
-        var activeWaiverId = await _waiverService.GetActiveWaiverIdAsync(organizationId);
+        // Waiver status per member - ADMIN-ONLY (like member emails above), and
+        // only meaningful when an active waiver exists. Null flags keep the
+        // client waiver UI hidden entirely.
         HashSet<Guid>? acceptedUserIds = null;
-        if (activeWaiverId.HasValue)
+        if (isAdmin)
         {
-            acceptedUserIds = (await _context.WaiverAcceptances
-                .Where(a => a.WaiverId == activeWaiverId.Value && memberUserIds.Contains(a.UserId))
-                .Select(a => a.UserId)
-                .ToListAsync()).ToHashSet();
+            var activeWaiverId = await _waiverService.GetActiveWaiverIdAsync(organizationId);
+            if (activeWaiverId.HasValue)
+            {
+                acceptedUserIds = (await _context.WaiverAcceptances
+                    .Where(a => a.WaiverId == activeWaiverId.Value && memberUserIds.Contains(a.UserId))
+                    .Select(a => a.UserId)
+                    .ToListAsync()).ToHashSet();
+            }
         }
 
         // Build member DTOs

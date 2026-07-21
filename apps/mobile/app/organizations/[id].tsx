@@ -221,10 +221,13 @@ export default function OrganizationDetailScreen() {
 
   const isAdmin = organization?.isAdmin;
 
-  // Waiver status - flags are only non-null when the org has an active waiver
-  const waiverActive = members.some(
-    (m) => m.hasAcceptedCurrentWaiver !== null && m.hasAcceptedCurrentWaiver !== undefined
-  );
+  // Waiver status - ADMIN-ONLY visibility (the server also nulls the flags
+  // for non-admin requesters); flags are only non-null when an active waiver exists
+  const waiverActive =
+    !!isAdmin &&
+    members.some(
+      (m) => m.hasAcceptedCurrentWaiver !== null && m.hasAcceptedCurrentWaiver !== undefined
+    );
   const waiverAcceptedCount = members.filter((m) => m.hasAcceptedCurrentWaiver === true).length;
   const waiverNotAcceptedCount = members.filter((m) => m.hasAcceptedCurrentWaiver === false).length;
 
@@ -330,10 +333,10 @@ export default function OrganizationDetailScreen() {
                               {member.firstName} {member.lastName}
                             </Text>
                             {member.isAdmin && <Badge variant="purple">Admin</Badge>}
-                            {member.hasAcceptedCurrentWaiver === true && (
+                            {waiverActive && member.hasAcceptedCurrentWaiver === true && (
                               <Badge variant="green">Waiver ✓</Badge>
                             )}
-                            {member.hasAcceptedCurrentWaiver === false && (
+                            {waiverActive && member.hasAcceptedCurrentWaiver === false && (
                               <Badge variant="warning">No waiver</Badge>
                             )}
                             {isCurrentUser && <Text style={styles.youLabel}>(You)</Text>}
