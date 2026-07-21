@@ -30,7 +30,13 @@ export function todayMMDDYYYY(now: Date = new Date()): string {
  * required) into a calendar date. Returns null for anything that is not a
  * real calendar date (e.g. 02/30/2026).
  */
-export function parseDateInput(value: string): CalendarDate | null {
+export function parseDateInput(value: string | null | undefined): CalendarDate | null {
+  // Defensive: this validator guards the blocking waiver gate - a thrown
+  // error here fails the gate OPEN (crash = no gate), so bad input must
+  // return null, never throw
+  if (typeof value !== 'string') {
+    return null;
+  }
   const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
   if (!match) {
     return null;
