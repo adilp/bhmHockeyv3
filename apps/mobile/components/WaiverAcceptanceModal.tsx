@@ -2,29 +2,40 @@ import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   Modal,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  KeyboardAvoidingView,
   Linking,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Platform,
 } from 'react-native';
-import type { OrganizationWaiver } from '@bhmhockey/shared';
+import type { OrganizationWaiver, WaiverSignatureDetails } from '@bhmhockey/shared';
 import { getApiUrl } from '../config/api';
 import { parseWaiverSegments } from '../utils/waiverFormat';
+import {
+  emptyWaiverSignatureForm,
+  validateWaiverSignature,
+  type WaiverSignatureFormValues,
+} from '../utils/waiverSignature';
 import { colors, spacing, radius } from '../theme';
 
 // How close to the bottom (px) counts as "scrolled to the bottom"
 const SCROLL_BOTTOM_THRESHOLD = 24;
+
+// Matches the server-side cap on signature text fields
+const SIGNATURE_FIELD_MAX_LENGTH = 200;
 
 interface WaiverAcceptanceModalProps {
   visible: boolean;
   organizationName: string;
   waiver: OrganizationWaiver;
   /** Called after the user taps Agree (caller performs the accept API call) */
-  onAgree: () => void | Promise<void>;
+  onAgree: (signature: WaiverSignatureDetails) => void | Promise<void>;
   /**
    * Dismissible mode (registration flow): renders a Close button and allows
    * hardware-back dismissal. Omit for the blocking accept-or-leave gate.
@@ -34,9 +45,61 @@ interface WaiverAcceptanceModalProps {
   onLeaveOrganization?: () => void;
 }
 
+type FieldKey = keyof WaiverSignatureFormValues;
+
+interface SignatureFieldProps {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  onBlur: () => void;
+  error?: string;
+  placeholder?: string;
+  /** Renders the entered text in an italic "signature" style */
+  signature?: boolean;
+  isDate?: boolean;
+}
+
+function SignatureField({
+  label,
+  value,
+  onChangeText,
+  onBlur,
+  error,
+  placeholder,
+  signature,
+  isDate,
+}: SignatureFieldProps) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel} allowFontScaling={false}>{label}</Text>
+      <TextInput
+        style={[
+          styles.fieldInput,
+          signature && styles.signatureInput,
+          error != null && styles.fieldInputError,
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        placeholderTextColor={colors.text.muted}
+        maxLength={isDate ? 10 : SIGNATURE_FIELD_MAX_LENGTH}
+        autoCapitalize={isDate ? 'none' : 'words'}
+        autoCorrect={false}
+        allowFontScaling={false}
+      />
+      {error != null && (
+        <Text style={styles.fieldError} allowFontScaling={false}>{error}</Text>
+      )}
+    </View>
+  );
+}
+
 /**
- * Full-screen legal waiver acceptance modal. The Agree button stays disabled
- * until the user has scrolled the waiver text to the bottom (enabled
+ * Full-screen legal waiver acceptance modal. Scrolling the waiver text to the
+ * bottom reveals the signature form (adult participant fields plus an optional
+ * all-or-nothing Parent/Guardian section for minors); the Agree button stays
+ * disabled until the text has been read AND the form validates (enabled
  * immediately when the text fits without scrolling).
  */
 export function WaiverAcceptanceModal({
@@ -49,16 +112,41 @@ export function WaiverAcceptanceModal({
 }: WaiverAcceptanceModalProps) {
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [form, setForm] = useState<WaiverSignatureFormValues>(emptyWaiverSignatureForm);
+  const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({});
   const scrollViewHeightRef = useRef(0);
   const contentHeightRef = useRef(0);
 
-  // A new waiver version (or reopening) requires reading again
+  // A new waiver version (or reopening) requires reading and signing again
   useEffect(() => {
     if (visible) {
       setHasScrolledToBottom(false);
       setIsProcessing(false);
+      setForm(emptyWaiverSignatureForm());
+      setTouched({});
     }
   }, [visible, waiver.id]);
+
+  const validation = validateWaiverSignature(form);
+  const groupStarted =
+    form.minorParticipantName.trim().length > 0 ||
+    form.minorDateOfBirth.trim().length > 0 ||
+    form.guardianName.trim().length > 0 ||
+    form.guardianSignature.trim().length > 0;
+
+  const setField = (key: FieldKey) => (value: string) =>
+    setForm((current) => ({ ...current, [key]: value }));
+  const blurField = (key: FieldKey) => () =>
+    setTouched((current) => ({ ...current, [key]: true }));
+
+  // Inline errors appear once a field has been visited; minor-section errors
+  // also appear as soon as the section is started (the all-or-nothing rule
+  // must be visible without tabbing through every field)
+  const fieldError = (key: FieldKey, inMinorGroup = false): string | undefined => {
+    const error = validation.errors[key];
+    if (!error) return undefined;
+    return touched[key] || (inMinorGroup && groupStarted) ? error : undefined;
+  };
 
   const maybeEnableWithoutScrolling = () => {
     // If the content fits in the viewport there is nothing to scroll - enable
@@ -78,10 +166,13 @@ export function WaiverAcceptanceModal({
     }
   };
 
+  const canAgree = hasScrolledToBottom && validation.valid;
+
   const handleAgree = async () => {
+    if (!validation.details) return;
     setIsProcessing(true);
     try {
-      await onAgree();
+      await onAgree(validation.details);
     } finally {
       setIsProcessing(false);
     }
@@ -98,7 +189,10 @@ export function WaiverAcceptanceModal({
       animationType="slide"
       onRequestClose={onClose ?? (() => {})}
     >
-      <View style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={styles.header}>
           <Text style={styles.title} allowFontScaling={false}>
             Legal Waiver
@@ -118,6 +212,7 @@ export function WaiverAcceptanceModal({
         <ScrollView
           style={styles.textScroll}
           contentContainerStyle={styles.textScrollContent}
+          keyboardShouldPersistTaps="handled"
           onLayout={(event) => {
             scrollViewHeightRef.current = event.nativeEvent.layout.height;
             maybeEnableWithoutScrolling();
@@ -138,6 +233,83 @@ export function WaiverAcceptanceModal({
               )
             )}
           </Text>
+
+          {/* Signature form - revealed once the waiver has been read to the bottom */}
+          {hasScrolledToBottom && (
+            <View style={styles.form}>
+              <Text style={styles.sectionHeader} allowFontScaling={false}>
+                Adult Participant
+              </Text>
+              <SignatureField
+                label="Printed Name"
+                value={form.participantName}
+                onChangeText={setField('participantName')}
+                onBlur={blurField('participantName')}
+                error={fieldError('participantName')}
+                placeholder="Full legal name"
+              />
+              <SignatureField
+                label="Date"
+                value={form.participantDate}
+                onChangeText={setField('participantDate')}
+                onBlur={blurField('participantDate')}
+                error={fieldError('participantDate')}
+                placeholder="MM/DD/YYYY"
+                isDate
+              />
+
+              <Text style={styles.sectionHeader} allowFontScaling={false}>
+                Parent/Guardian (required if participant is under 19)
+              </Text>
+              <Text style={styles.sectionHint} allowFontScaling={false}>
+                Leave this section empty unless the participant is under 19 years
+                of age. If you start it, every field is required.
+              </Text>
+              <SignatureField
+                label="Minor Participant's Printed Name"
+                value={form.minorParticipantName}
+                onChangeText={setField('minorParticipantName')}
+                onBlur={blurField('minorParticipantName')}
+                error={fieldError('minorParticipantName', true)}
+                placeholder="Minor's full legal name"
+              />
+              <SignatureField
+                label="Minor's Date of Birth"
+                value={form.minorDateOfBirth}
+                onChangeText={setField('minorDateOfBirth')}
+                onBlur={blurField('minorDateOfBirth')}
+                error={fieldError('minorDateOfBirth', true)}
+                placeholder="MM/DD/YYYY"
+                isDate
+              />
+              <SignatureField
+                label="Parent/Guardian Printed Name"
+                value={form.guardianName}
+                onChangeText={setField('guardianName')}
+                onBlur={blurField('guardianName')}
+                error={fieldError('guardianName', true)}
+                placeholder="Parent or guardian's full legal name"
+              />
+              <SignatureField
+                label="Parent/Guardian Signature"
+                value={form.guardianSignature}
+                onChangeText={setField('guardianSignature')}
+                onBlur={blurField('guardianSignature')}
+                error={fieldError('guardianSignature', true)}
+                placeholder="Type your full name to sign"
+                signature
+              />
+              <SignatureField
+                label="Date"
+                value={form.guardianDate}
+                onChangeText={setField('guardianDate')}
+                onBlur={blurField('guardianDate')}
+                error={fieldError('guardianDate', true)}
+                placeholder="MM/DD/YYYY"
+                isDate
+              />
+            </View>
+          )}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -149,14 +321,19 @@ export function WaiverAcceptanceModal({
 
           {!hasScrolledToBottom && (
             <Text style={styles.scrollHint} allowFontScaling={false}>
-              Scroll to the bottom to enable Agree
+              Scroll to the bottom to continue
+            </Text>
+          )}
+          {hasScrolledToBottom && !validation.valid && (
+            <Text style={styles.scrollHint} allowFontScaling={false}>
+              Complete the acceptance form above to enable Agree
             </Text>
           )}
 
           <TouchableOpacity
-            style={[styles.agreeButton, (!hasScrolledToBottom || isProcessing) && styles.agreeButtonDisabled]}
+            style={[styles.agreeButton, (!canAgree || isProcessing) && styles.agreeButtonDisabled]}
             onPress={handleAgree}
-            disabled={!hasScrolledToBottom || isProcessing}
+            disabled={!canAgree || isProcessing}
           >
             {isProcessing ? (
               <ActivityIndicator color={colors.bg.darkest} />
@@ -187,7 +364,7 @@ export function WaiverAcceptanceModal({
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -234,6 +411,55 @@ const styles = StyleSheet.create({
   waiverTextBold: {
     fontWeight: '700',
     color: colors.text.primary,
+  },
+  form: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+  },
+  sectionHeader: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  sectionHint: {
+    fontSize: 13,
+    color: colors.text.muted,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  field: {
+    marginBottom: spacing.md,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  fieldInput: {
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text.primary,
+  },
+  // Typed signature rendered in italic to suggest a signature
+  signatureInput: {
+    fontStyle: 'italic',
+    fontSize: 18,
+  },
+  fieldInputError: {
+    borderColor: colors.status.error,
+  },
+  fieldError: {
+    fontSize: 12,
+    color: colors.status.error,
+    marginTop: spacing.xs,
   },
   footer: {
     padding: spacing.lg,

@@ -26,7 +26,7 @@ import {
 } from '../../../components';
 import type { TabKey } from '../../../components';
 import { colors, spacing } from '../../../theme';
-import type { Position, RegistrationResultDto } from '@bhmhockey/shared';
+import type { Position, RegistrationResultDto, WaiverSignatureDetails } from '@bhmhockey/shared';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -224,12 +224,12 @@ export default function EventDetailScreen() {
 
   // Agree in the registration-flow waiver modal: accept, then continue straight
   // into the registration flow (position picker etc.) in the same gesture
-  const handleWaiverAgree = async () => {
+  const handleWaiverAgree = async (signature: WaiverSignatureDetails) => {
     if (!selectedEvent?.organizationId || !orgWaiver) return;
 
     const ok = await useWaiverStore
       .getState()
-      .acceptWaiver(selectedEvent.organizationId, orgWaiver.id);
+      .acceptWaiver(selectedEvent.organizationId, orgWaiver.id, signature);
 
     if (!ok) {
       setWaiverModalVisible(false);

@@ -306,8 +306,11 @@ public class OrganizationsController : ControllerBase
     }
 
     /// <summary>
-    /// Accept a SPECIFIC waiver version. 400 when the id is not the org's current
-    /// active version (stale-version protection). Idempotent when already accepted.
+    /// Accept a SPECIFIC waiver version, recording the signature fields on the
+    /// acceptance row. 400 when the id is not the org's current active version
+    /// (stale-version protection), when the participant name/date is missing,
+    /// or when the Parent/Guardian section is partially filled. Idempotent when
+    /// already accepted (the original signature fields are preserved).
     /// </summary>
     [HttpPost("{id:guid}/waiver/accept")]
     [Authorize]
@@ -317,7 +320,7 @@ public class OrganizationsController : ControllerBase
 
         try
         {
-            await _waiverService.AcceptWaiverAsync(id, request.WaiverId, userId);
+            await _waiverService.AcceptWaiverAsync(id, request, userId);
             return Ok(new { message = "Waiver accepted" });
         }
         catch (InvalidOperationException ex)

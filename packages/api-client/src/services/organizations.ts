@@ -12,6 +12,7 @@ import type {
   SetOrganizationWaiverRequest,
   SetOrganizationWaiverResponse,
   AcceptWaiverRequest,
+  WaiverSignatureDetails,
   PendingWaiver
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
@@ -190,10 +191,16 @@ export const organizationService = {
   },
 
   /**
-   * Accept a SPECIFIC waiver version (400 when the id is stale)
+   * Accept a SPECIFIC waiver version (400 when the id is stale), recording the
+   * signature fields captured on the acceptance form (400 when the participant
+   * name/date is missing or the Parent/Guardian section is partially filled)
    */
-  async acceptWaiver(organizationId: string, waiverId: string): Promise<void> {
-    const request: AcceptWaiverRequest = { waiverId };
+  async acceptWaiver(
+    organizationId: string,
+    waiverId: string,
+    signature: WaiverSignatureDetails
+  ): Promise<void> {
+    const request: AcceptWaiverRequest = { waiverId, ...signature };
     await apiClient.instance.post(`/organizations/${organizationId}/waiver/accept`, request);
   },
 

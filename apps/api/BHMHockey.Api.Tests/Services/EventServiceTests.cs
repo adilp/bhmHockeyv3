@@ -4577,7 +4577,7 @@ public class EventServiceTests : IDisposable
         var org = await CreateTestOrganization(creator.Id);
         var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
         var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
-        await _waiverService.AcceptWaiverAsync(org.Id, waiver!.Id, player.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(waiver!.Id, "Test Participant", DateTime.UtcNow.Date), player.Id);
 
         // Act
         var result = await _sut.RegisterAsync(evt.Id, player.Id);
@@ -4628,7 +4628,7 @@ public class EventServiceTests : IDisposable
         var player = await CreateTestUser("player@example.com");
         var org = await CreateTestOrganization(creator.Id);
         var v1 = await _waiverService.SetWaiverAsync(org.Id, "v1", creator.Id);
-        await _waiverService.AcceptWaiverAsync(org.Id, v1!.Id, player.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(v1!.Id, "Test Participant", DateTime.UtcNow.Date), player.Id);
         await _waiverService.SetWaiverAsync(org.Id, "v2", creator.Id);
         var evt = await CreateTestEvent(creator.Id, org.Id, cost: 0);
 
@@ -4742,7 +4742,7 @@ public class EventServiceTests : IDisposable
         (await _sut.GetByIdAsync(evt.Id, creator.Id))!.RequiresWaiverAcceptance.Should().BeTrue();
 
         // Accepted -> false
-        await _waiverService.AcceptWaiverAsync(org.Id, waiver!.Id, player.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(waiver!.Id, "Test Participant", DateTime.UtcNow.Date), player.Id);
         (await _sut.GetByIdAsync(evt.Id, player.Id))!.RequiresWaiverAcceptance.Should().BeFalse();
 
         // Anonymous -> false
@@ -4783,7 +4783,7 @@ public class EventServiceTests : IDisposable
         await CreateRegistration(evt.Id, accepted.Id);
         await CreateRegistration(evt.Id, unaccepted.Id);
         await CreateRegistration(evt.Id, ghost.Id);
-        await _waiverService.AcceptWaiverAsync(org.Id, waiver!.Id, accepted.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(waiver!.Id, "Test Participant", DateTime.UtcNow.Date), accepted.Id);
 
         // Act
         var registrations = await _sut.GetRegistrationsAsync(evt.Id);

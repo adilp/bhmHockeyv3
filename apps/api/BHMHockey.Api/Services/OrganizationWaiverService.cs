@@ -124,30 +124,136 @@ public class OrganizationWaiverService : IOrganizationWaiverService
         return trimmed.Length == 0 ? null : MapToDto(waiver);
     }
 
-    public async Task AcceptWaiverAsync(Guid organizationId, Guid waiverId, Guid userId)
+    public async Task AcceptWaiverAsync(Guid organizationId, AcceptWaiverRequest request, Guid userId)
     {
         var active = await GetActiveWaiverAsync(organizationId);
-        if (active == null || active.Id != waiverId)
+        if (active == null || active.Id != request.WaiverId)
         {
             _logger.LogWarning(
                 "Waiver acceptance rejected for organization {OrganizationId}: waiver {WaiverId} is not the current active version",
-                organizationId, waiverId);
+                organizationId, request.WaiverId);
             throw new InvalidOperationException("This waiver version is no longer current. Please review and accept the latest waiver.");
         }
 
+        var signature = ValidateSignatureFields(organizationId, request);
+
         var alreadyAccepted = await _context.WaiverAcceptances
-            .AnyAsync(a => a.WaiverId == waiverId && a.UserId == userId);
+            .AnyAsync(a => a.WaiverId == request.WaiverId && a.UserId == userId);
         if (alreadyAccepted)
         {
-            return; // Idempotent
+            // Idempotent - the original acceptance row (including its signature
+            // fields) is an immutable audit record and is never overwritten
+            return;
         }
 
         _context.WaiverAcceptances.Add(new WaiverAcceptance
         {
             UserId = userId,
-            WaiverId = waiverId
+            WaiverId = request.WaiverId,
+            ParticipantName = signature.ParticipantName,
+            ParticipantDate = signature.ParticipantDate,
+            MinorParticipantName = signature.MinorParticipantName,
+            MinorDateOfBirth = signature.MinorDateOfBirth,
+            GuardianName = signature.GuardianName,
+            GuardianSignature = signature.GuardianSignature,
+            GuardianDate = signature.GuardianDate
         });
         await _context.SaveChangesAsync();
+    }
+
+    // Max stored length for each signature text field (also enforced by EF config)
+    private const int SignatureFieldMaxLength = 200;
+
+    private record ValidatedSignature(
+        string ParticipantName,
+        DateTime ParticipantDate,
+        string? MinorParticipantName,
+        DateTime? MinorDateOfBirth,
+        string? GuardianName,
+        string? GuardianSignature,
+        DateTime? GuardianDate
+    );
+
+    /// <summary>
+    /// Server-side mirror of the acceptance form rules: participant name/date
+    /// required; Parent/Guardian section all-or-nothing with the minor's date
+    /// of birth in the past. Strings are trimmed and length-capped; dates are
+    /// normalized to calendar dates at UTC midnight.
+    /// </summary>
+    private ValidatedSignature ValidateSignatureFields(Guid organizationId, AcceptWaiverRequest request)
+    {
+        void Reject(string message)
+        {
+            _logger.LogWarning(
+                "Waiver acceptance rejected for organization {OrganizationId}: {Message}",
+                organizationId, message);
+            throw new InvalidOperationException(message);
+        }
+
+        string? Clean(string? value, string label)
+        {
+            var trimmed = value?.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                return null;
+            }
+            if (trimmed.Length > SignatureFieldMaxLength)
+            {
+                Reject($"{label} must be {SignatureFieldMaxLength} characters or fewer.");
+            }
+            return trimmed;
+        }
+
+        var participantName = Clean(request.ParticipantName, "Printed name");
+        if (participantName == null)
+        {
+            Reject("Printed name is required.");
+        }
+        if (request.ParticipantDate == null)
+        {
+            Reject("Date is required.");
+        }
+
+        var minorName = Clean(request.MinorParticipantName, "Minor participant's printed name");
+        var guardianName = Clean(request.GuardianName, "Parent/guardian printed name");
+        var guardianSignature = Clean(request.GuardianSignature, "Parent/guardian signature");
+
+        var anyMinorField = minorName != null || request.MinorDateOfBirth != null
+            || guardianName != null || guardianSignature != null || request.GuardianDate != null;
+
+        if (anyMinorField)
+        {
+            var allMinorFields = minorName != null && request.MinorDateOfBirth != null
+                && guardianName != null && guardianSignature != null && request.GuardianDate != null;
+            if (!allMinorFields)
+            {
+                Reject("The Parent/Guardian section is all-or-nothing: provide the minor's name, date of birth, parent/guardian name, signature, and date - or leave the whole section empty.");
+            }
+            if (AsUtcDate(request.MinorDateOfBirth!.Value) >= DateTime.UtcNow.Date)
+            {
+                Reject("Minor's date of birth must be in the past.");
+            }
+        }
+
+        return new ValidatedSignature(
+            participantName!,
+            AsUtcDate(request.ParticipantDate!.Value),
+            anyMinorField ? minorName : null,
+            anyMinorField ? AsUtcDate(request.MinorDateOfBirth!.Value) : null,
+            anyMinorField ? guardianName : null,
+            anyMinorField ? guardianSignature : null,
+            anyMinorField ? AsUtcDate(request.GuardianDate!.Value) : null
+        );
+    }
+
+    /// <summary>
+    /// Signature dates are calendar dates (the client sends YYYY-MM-DD, which
+    /// binds with Kind=Unspecified). Store them at UTC midnight per the repo's
+    /// all-dates-are-UTC convention (Npgsql rejects non-UTC kinds).
+    /// </summary>
+    private static DateTime AsUtcDate(DateTime value)
+    {
+        return DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
     }
 
     public async Task<List<PendingWaiverDto>> GetPendingWaiversAsync(Guid userId)

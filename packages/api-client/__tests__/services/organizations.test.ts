@@ -151,13 +151,43 @@ describe('organizationService waivers', () => {
   });
 
   describe('acceptWaiver', () => {
-    it('posts the specific waiver id to the accept endpoint', async () => {
+    it('posts the waiver id and adult signature fields to the accept endpoint', async () => {
       mockPost.mockResolvedValueOnce({});
 
-      await organizationService.acceptWaiver('org-1', 'waiver-1');
+      await organizationService.acceptWaiver('org-1', 'waiver-1', {
+        participantName: 'Jane Skater',
+        participantDate: '2026-07-21',
+      });
 
       expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/waiver/accept', {
         waiverId: 'waiver-1',
+        participantName: 'Jane Skater',
+        participantDate: '2026-07-21',
+      });
+    });
+
+    it('posts the full Parent/Guardian section when provided', async () => {
+      mockPost.mockResolvedValueOnce({});
+
+      await organizationService.acceptWaiver('org-1', 'waiver-1', {
+        participantName: 'Pat Guardian',
+        participantDate: '2026-07-21',
+        minorParticipantName: 'Minor Player',
+        minorDateOfBirth: '2014-03-05',
+        guardianName: 'Pat Guardian',
+        guardianSignature: 'Pat Guardian',
+        guardianDate: '2026-07-21',
+      });
+
+      expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/waiver/accept', {
+        waiverId: 'waiver-1',
+        participantName: 'Pat Guardian',
+        participantDate: '2026-07-21',
+        minorParticipantName: 'Minor Player',
+        minorDateOfBirth: '2014-03-05',
+        guardianName: 'Pat Guardian',
+        guardianSignature: 'Pat Guardian',
+        guardianDate: '2026-07-21',
       });
     });
   });

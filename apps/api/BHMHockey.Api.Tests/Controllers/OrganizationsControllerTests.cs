@@ -594,14 +594,15 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        var waiverId = Guid.NewGuid();
+        var request = new AcceptWaiverRequest(Guid.NewGuid(), "Test Participant", DateTime.UtcNow.Date);
 
         // Act
-        var result = await _controller.AcceptWaiver(orgId, new AcceptWaiverRequest(waiverId));
+        var result = await _controller.AcceptWaiver(orgId, request);
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
-        _mockWaiverService.Verify(s => s.AcceptWaiverAsync(orgId, waiverId, _testUserId), Times.Once);
+        // The full request (waiver id + signature fields) is passed through
+        _mockWaiverService.Verify(s => s.AcceptWaiverAsync(orgId, request, _testUserId), Times.Once);
     }
 
     [Fact]
@@ -610,15 +611,33 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        var staleWaiverId = Guid.NewGuid();
-        _mockWaiverService.Setup(s => s.AcceptWaiverAsync(orgId, staleWaiverId, _testUserId))
+        var request = new AcceptWaiverRequest(Guid.NewGuid(), "Test Participant", DateTime.UtcNow.Date);
+        _mockWaiverService.Setup(s => s.AcceptWaiverAsync(orgId, request, _testUserId))
             .ThrowsAsync(new InvalidOperationException("This waiver version is no longer current."));
 
         // Act
-        var result = await _controller.AcceptWaiver(orgId, new AcceptWaiverRequest(staleWaiverId));
+        var result = await _controller.AcceptWaiver(orgId, request);
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task AcceptWaiver_WithValidationFailure_Returns400WithMessage()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var request = new AcceptWaiverRequest(Guid.NewGuid(), "", DateTime.UtcNow.Date);
+        _mockWaiverService.Setup(s => s.AcceptWaiverAsync(orgId, request, _testUserId))
+            .ThrowsAsync(new InvalidOperationException("Printed name is required."));
+
+        // Act
+        var result = await _controller.AcceptWaiver(orgId, request);
+
+        // Assert
+        var badRequest = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value.Should().BeEquivalentTo(new { message = "Printed name is required." });
     }
 
     [Fact]

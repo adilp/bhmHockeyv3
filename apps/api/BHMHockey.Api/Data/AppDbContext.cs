@@ -187,6 +187,12 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
 
+            // Signature fields (nullable - rows predating signatures keep nulls)
+            entity.Property(e => e.ParticipantName).HasMaxLength(200);
+            entity.Property(e => e.MinorParticipantName).HasMaxLength(200);
+            entity.Property(e => e.GuardianName).HasMaxLength(200);
+            entity.Property(e => e.GuardianSignature).HasMaxLength(200);
+
             // A user accepts each waiver version at most once
             entity.HasIndex(e => new { e.UserId, e.WaiverId }).IsUnique();
 
