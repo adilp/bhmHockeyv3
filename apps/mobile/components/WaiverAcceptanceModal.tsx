@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import type { OrganizationWaiver } from '@bhmhockey/shared';
 import { getApiUrl } from '../config/api';
+import { parseWaiverSegments } from '../utils/waiverFormat';
 import { colors, spacing, radius } from '../theme';
 
 // How close to the bottom (px) counts as "scrolled to the bottom"
@@ -129,7 +130,13 @@ export function WaiverAcceptanceModal({
           scrollEventThrottle={100}
         >
           <Text style={styles.waiverText} allowFontScaling={false}>
-            {waiver.text}
+            {parseWaiverSegments(waiver.text).map((segment, i) =>
+              segment.bold ? (
+                <Text key={i} style={styles.waiverTextBold}>{segment.text}</Text>
+              ) : (
+                <Text key={i}>{segment.text}</Text>
+              )
+            )}
           </Text>
         </ScrollView>
 
@@ -223,6 +230,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     color: colors.text.secondary,
+  },
+  waiverTextBold: {
+    fontWeight: '700',
+    color: colors.text.primary,
   },
   footer: {
     padding: spacing.lg,

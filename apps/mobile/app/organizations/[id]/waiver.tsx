@@ -27,6 +27,18 @@ export default function OrganizationWaiverScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [text, setText] = useState('');
   const [currentVersion, setCurrentVersion] = useState<number | null>(null);
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
+
+  // Wraps the selected text in ** markers (rendered bold in the app and PDF),
+  // or inserts a placeholder at the cursor when nothing is selected
+  const handleBold = () => {
+    const { start, end } = selection;
+    if (end > start) {
+      setText(`${text.slice(0, start)}**${text.slice(start, end)}**${text.slice(end)}`);
+    } else {
+      setText(`${text.slice(0, start)}**bold text**${text.slice(start)}`);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -135,17 +147,31 @@ export default function OrganizationWaiverScreen() {
 
             {/* Waiver text editor */}
             <View style={styles.field}>
-              <Text style={styles.label} allowFontScaling={false}>Waiver Text</Text>
+              <View style={styles.editorHeader}>
+                <Text style={styles.label} allowFontScaling={false}>Waiver Text</Text>
+                <TouchableOpacity
+                  style={styles.boldButton}
+                  onPress={handleBold}
+                  accessibilityLabel="Bold selected text"
+                >
+                  <Text style={styles.boldButtonText} allowFontScaling={false}>B</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={styles.textArea}
                 value={text}
                 onChangeText={setText}
+                onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
                 placeholder="Enter the full waiver text members must accept…"
                 placeholderTextColor={colors.text.muted}
                 multiline
                 textAlignVertical="top"
                 allowFontScaling={false}
               />
+              <Text style={styles.formatHint} allowFontScaling={false}>
+                Select text and tap B — or wrap words in ** — to make them bold in
+                the app and the PDF.
+              </Text>
             </View>
 
             {/* Save Button */}
@@ -202,6 +228,31 @@ const styles = StyleSheet.create({
   },
   field: {
     marginBottom: spacing.lg,
+  },
+  editorHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  boldButton: {
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 2,
+  },
+  boldButtonText: {
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  formatHint: {
+    fontSize: 12,
+    color: colors.text.muted,
+    marginTop: spacing.xs,
+    lineHeight: 16,
   },
   label: {
     fontSize: 12,

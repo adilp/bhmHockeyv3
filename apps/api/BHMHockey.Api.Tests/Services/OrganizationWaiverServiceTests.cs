@@ -605,5 +605,58 @@ public class OrganizationWaiverServiceTests : IDisposable
         (await _sut.GetCurrentWaiverPdfAsync(org.Id)).Should().BeNull();
     }
 
+    [Fact]
+    public async Task GetCurrentWaiverPdfAsync_WithBoldMarkers_StillRendersPdf()
+    {
+        var admin = await CreateTestUser();
+        var org = await CreateTestOrganization(admin.Id);
+        await _sut.SetWaiverAsync(org.Id, "**Section 1**\nBody text with **emphasis** and an unmatched ** marker.", admin.Id);
+
+        var result = await _sut.GetCurrentWaiverPdfAsync(org.Id);
+
+        result.Should().NotBeNull();
+        result!.Value.Content.Length.Should().BeGreaterThan(1000);
+        result.Value.Content.Take(4).Should().Equal((byte)'%', (byte)'P', (byte)'D', (byte)'F');
+    }
+
+    #endregion
+
+    #region Bold Segment Parsing
+
+    [Fact]
+    public void ParseBoldSegments_NoMarkers_ReturnsSinglePlainSegment()
+    {
+        OrganizationWaiverService.ParseBoldSegments("Just a waiver.")
+            .Should().Equal(("Just a waiver.", false));
+    }
+
+    [Fact]
+    public void ParseBoldSegments_SinglePair_BoldsMarkedText()
+    {
+        OrganizationWaiverService.ParseBoldSegments("Read **carefully** please")
+            .Should().Equal(("Read ", false), ("carefully", true), (" please", false));
+    }
+
+    [Fact]
+    public void ParseBoldSegments_MultiplePairs_AlternateCorrectly()
+    {
+        OrganizationWaiverService.ParseBoldSegments("**A** and **B**")
+            .Should().Equal(("A", true), (" and ", false), ("B", true));
+    }
+
+    [Fact]
+    public void ParseBoldSegments_UnmatchedTrailingMarker_RendersLiterally()
+    {
+        OrganizationWaiverService.ParseBoldSegments("Signed **here and more text")
+            .Should().Equal(("Signed ", false), ("**here and more text", false));
+    }
+
+    [Fact]
+    public void ParseBoldSegments_BoldSpanningNewline_Preserved()
+    {
+        OrganizationWaiverService.ParseBoldSegments("**Section 1**\nBody")
+            .Should().Equal(("Section 1", true), ("\nBody", false));
+    }
+
     #endregion
 }

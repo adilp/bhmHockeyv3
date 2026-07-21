@@ -233,8 +233,22 @@ public class OrganizationWaiverService : IOrganizationWaiverService
                     column.Item().PaddingTop(8).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
                 });
 
-                // Body text wraps and paginates automatically
-                page.Content().PaddingVertical(14).Text(waiver.Text).LineHeight(1.4f);
+                // Body text wraps and paginates automatically; **markers** render bold
+                page.Content().PaddingVertical(14).Text(text =>
+                {
+                    text.DefaultTextStyle(style => style.LineHeight(1.4f));
+                    foreach (var (segment, bold) in ParseBoldSegments(waiver.Text))
+                    {
+                        if (bold)
+                        {
+                            text.Span(segment).SemiBold();
+                        }
+                        else
+                        {
+                            text.Span(segment);
+                        }
+                    }
+                });
 
                 page.Footer().AlignCenter().Text(text =>
                 {
@@ -247,6 +261,37 @@ public class OrganizationWaiverService : IOrganizationWaiverService
         });
 
         return document.GeneratePdf();
+    }
+
+    /// <summary>
+    /// Splits waiver text on ** bold markers. Mirrors the mobile parser
+    /// (apps/mobile/utils/waiverFormat.ts) — keep the two in sync. An
+    /// unmatched trailing ** is emitted literally rather than bolding the
+    /// remainder of the document.
+    /// </summary>
+    public static IReadOnlyList<(string Text, bool Bold)> ParseBoldSegments(string text)
+    {
+        var parts = text.Split("**");
+        if (parts.Length == 1)
+        {
+            return new[] { (text, false) };
+        }
+
+        var unbalanced = parts.Length % 2 == 0;
+        var segments = new List<(string, bool)>();
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var isLast = i == parts.Length - 1;
+            if (unbalanced && isLast)
+            {
+                segments.Add(($"**{parts[i]}", false));
+            }
+            else if (parts[i].Length > 0)
+            {
+                segments.Add((parts[i], i % 2 == 1));
+            }
+        }
+        return segments;
     }
 
     private static string SanitizeFileName(string name)
