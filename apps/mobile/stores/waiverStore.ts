@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
 import type { PendingWaiver, WaiverSignatureDetails } from '@bhmhockey/shared';
+import { useOrganizationStore } from './organizationStore';
+import { useEventStore } from './eventStore';
 
 /** Extract message from ApiError objects or Error instances */
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -83,6 +85,14 @@ export const useWaiverStore = create<WaiverState>((set, get) => ({
       set((state) => ({
         pendingWaivers: state.pendingWaivers.filter((p) => p.organizationId !== organizationId),
       }));
+      // Leaving changes org membership AND cancels registrations - refresh the
+      // org list and event lists so every screen is current without a manual
+      // pull-to-refresh. Refresh failures don't undo the successful leave.
+      await Promise.all([
+        useOrganizationStore.getState().fetchOrganizations(),
+        useEventStore.getState().fetchEvents(),
+        useEventStore.getState().fetchMyRegistrations(),
+      ]).catch(() => {});
       return true;
     } catch (error) {
       set({ error: getErrorMessage(error, 'Failed to leave organization') });
