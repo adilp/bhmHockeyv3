@@ -102,3 +102,87 @@ describe('organizationService auto-roster', () => {
     });
   });
 });
+
+const mockWaiver = {
+  id: 'waiver-1',
+  organizationId: 'org-1',
+  text: 'You play at your own risk.',
+  version: 2,
+  createdAt: '2026-07-16T00:00:00Z',
+};
+
+describe('organizationService waivers', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    initializeApiClient({ baseURL: 'http://localhost:5001/api' });
+  });
+
+  describe('getWaiver', () => {
+    it('fetches the current waiver from the correct endpoint', async () => {
+      mockGet.mockResolvedValueOnce({ data: mockWaiver });
+
+      const result = await organizationService.getWaiver('org-1');
+
+      expect(mockGet).toHaveBeenCalledWith('/organizations/org-1/waiver');
+      expect(result).toEqual(mockWaiver);
+    });
+  });
+
+  describe('setWaiver', () => {
+    it('puts the text and returns the new active waiver', async () => {
+      mockPut.mockResolvedValueOnce({ data: { waiver: mockWaiver } });
+
+      const result = await organizationService.setWaiver('org-1', 'You play at your own risk.');
+
+      expect(mockPut).toHaveBeenCalledWith('/organizations/org-1/waiver', {
+        text: 'You play at your own risk.',
+      });
+      expect(result).toEqual(mockWaiver);
+    });
+
+    it('returns null when the waiver was cleared', async () => {
+      mockPut.mockResolvedValueOnce({ data: { waiver: null } });
+
+      const result = await organizationService.setWaiver('org-1', '');
+
+      expect(mockPut).toHaveBeenCalledWith('/organizations/org-1/waiver', { text: '' });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('acceptWaiver', () => {
+    it('posts the specific waiver id to the accept endpoint', async () => {
+      mockPost.mockResolvedValueOnce({});
+
+      await organizationService.acceptWaiver('org-1', 'waiver-1');
+
+      expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/waiver/accept', {
+        waiverId: 'waiver-1',
+      });
+    });
+  });
+
+  describe('getPendingWaivers', () => {
+    it('fetches pending waivers for the current user', async () => {
+      const pending = [
+        { organizationId: 'org-1', organizationName: 'Test Org', waiver: mockWaiver },
+      ];
+      mockGet.mockResolvedValueOnce({ data: pending });
+
+      const result = await organizationService.getPendingWaivers();
+
+      expect(mockGet).toHaveBeenCalledWith('/users/me/pending-waivers');
+      expect(result).toEqual(pending);
+    });
+  });
+
+  describe('leaveOrganization', () => {
+    it('posts to the leave endpoint', async () => {
+      mockPost.mockResolvedValueOnce({});
+
+      await organizationService.leaveOrganization('org-1');
+
+      expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/leave');
+    });
+  });
+});

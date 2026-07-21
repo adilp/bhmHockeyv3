@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Text, TextInput, View, AppState } from 'react-native';
+import { Text, TextInput, View, AppState, Alert } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import * as Notifications from 'expo-notifications';
@@ -9,7 +9,8 @@ import { getApiUrl } from '../config/api';
 import { colors } from '../theme';
 import { useAuthStore } from '../stores/authStore';
 import { useCelebrationStore } from '../stores/celebrationStore';
-import { BadgeCelebrationModal, EnvBanner } from '../components';
+import { useWaiverStore } from '../stores/waiverStore';
+import { BadgeCelebrationModal, EnvBanner, WaiverAcceptanceModal } from '../components';
 import { useBadgeCelebration } from '../hooks';
 import {
   registerForPushNotificationsAsync,
@@ -46,6 +47,8 @@ function RootLayoutContent() {
   const { fetchUncelebrated } = useCelebrationStore();
   const isShowingCelebration = useCelebrationStore((state) => state.isShowingCelebration);
   const { currentBadge, remaining, dismiss, navigateToTrophyCase } = useBadgeCelebration();
+  const pendingWaivers = useWaiverStore((state) => state.pendingWaivers);
+  const fetchPendingWaivers = useWaiverStore((state) => state.fetchPendingWaivers);
 
   useOtaUpdates();
   const notificationListener = useRef<Notifications.Subscription | null>(null);
@@ -167,6 +170,71 @@ function RootLayoutContent() {
     };
   }, [isAuthenticated]);
 
+  // Blocking waiver gate: on app open, foreground, and after login, check for
+  // orgs where the user holds an upcoming registration but hasn't accepted the
+  // current waiver. Non-empty queue renders a non-dismissible modal below.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      useWaiverStore.getState().reset();
+      return;
+    }
+
+    // Fetch on mount / after login
+    fetchPendingWaivers();
+
+    // Re-check whenever the app comes to the foreground
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        fetchPendingWaivers();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isAuthenticated, fetchPendingWaivers]);
+
+  // Accept-or-leave handlers for the blocking gate (one org at a time, queued)
+  const currentPendingWaiver = pendingWaivers.length > 0 ? pendingWaivers[0] : null;
+
+  const handleGateAgree = async () => {
+    if (!currentPendingWaiver) return;
+    const ok = await useWaiverStore
+      .getState()
+      .acceptWaiver(currentPendingWaiver.organizationId, currentPendingWaiver.waiver.id);
+    if (!ok) {
+      Alert.alert(
+        'Error',
+        useWaiverStore.getState().error || 'Failed to accept waiver. Please try again.'
+      );
+    }
+  };
+
+  const handleGateLeave = () => {
+    if (!currentPendingWaiver) return;
+    const { organizationId, organizationName } = currentPendingWaiver;
+    Alert.alert(
+      'Leave Organization',
+      `If you leave ${organizationName} you will lose your registration for any upcoming events. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await useWaiverStore.getState().leaveOrganization(organizationId);
+            if (!ok) {
+              Alert.alert(
+                'Error',
+                useWaiverStore.getState().error || 'Failed to leave organization. Please try again.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // AppState listener for badge celebration queue
   // Checks for uncelebrated badges when app comes to foreground
   useEffect(() => {
@@ -193,6 +261,18 @@ function RootLayoutContent() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.bg.darkest }}>
       <EnvBanner />
+
+      {/* Blocking waiver gate - non-dismissible, one org at a time until the
+          queue is empty. Accept or leave are the only ways forward. */}
+      {isAuthenticated && currentPendingWaiver && (
+        <WaiverAcceptanceModal
+          visible
+          organizationName={currentPendingWaiver.organizationName}
+          waiver={currentPendingWaiver.waiver}
+          onAgree={handleGateAgree}
+          onLeaveOrganization={handleGateLeave}
+        />
+      )}
 
       {/* Badge celebration modal - shown when uncelebrated badges exist */}
       {isShowingCelebration && currentBadge && (

@@ -70,6 +70,8 @@ const createMockEvent = (overrides: Partial<EventDto> = {}): EventDto => ({
   isRosterPublished: true,
   // Waitlist visibility (pre-publish)
   showWaitlistBeforePublish: false,
+  // Waiver gate
+  requiresWaiverAcceptance: false,
   ...overrides,
 });
 

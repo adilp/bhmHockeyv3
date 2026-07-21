@@ -18,6 +18,8 @@ public class AppDbContext : DbContext
     public DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
     public DbSet<OrganizationAdmin> OrganizationAdmins { get; set; }
     public DbSet<OrganizationAutoRosterMember> OrganizationAutoRosterMembers { get; set; }
+    public DbSet<OrganizationWaiver> OrganizationWaivers { get; set; }
+    public DbSet<WaiverAcceptance> WaiverAcceptances { get; set; }
     public DbSet<Event> Events { get; set; }
     public DbSet<EventRegistration> EventRegistrations { get; set; }
     public DbSet<Notification> Notifications { get; set; }
@@ -158,6 +160,48 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.AddedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // OrganizationWaiver configuration - immutable version rows (legal audit trail)
+        modelBuilder.Entity<OrganizationWaiver>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Text).IsRequired();
+
+            // One row per (org, version); latest version is the current waiver
+            entity.HasIndex(e => new { e.OrganizationId, e.Version }).IsUnique();
+
+            entity.HasOne(e => e.Organization)
+                .WithMany()
+                .HasForeignKey(e => e.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // WaiverAcceptance configuration - user accepted a specific waiver version
+        modelBuilder.Entity<WaiverAcceptance>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // A user accepts each waiver version at most once
+            entity.HasIndex(e => new { e.UserId, e.WaiverId }).IsUnique();
+
+            // Index for "who accepted this version" queries (roster/member flags)
+            entity.HasIndex(e => e.WaiverId);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Waiver)
+                .WithMany()
+                .HasForeignKey(e => e.WaiverId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Event configuration

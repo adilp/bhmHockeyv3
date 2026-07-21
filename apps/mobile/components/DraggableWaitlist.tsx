@@ -98,6 +98,11 @@ function WaitlistRow({
       <View style={styles.waitlistUserInfo}>
         <Text style={styles.waitlistUserName} allowFontScaling={false}>
           {registration.user.firstName} {registration.user.lastName}
+          {registration.hasNotAcceptedWaiver ? (
+            <Text style={styles.waiverWarningGlyph} allowFontScaling={false}>
+              {' ⚠'}
+            </Text>
+          ) : null}
         </Text>
         <Text style={styles.waitlistUserMeta} allowFontScaling={false}>
           {registration.registeredPosition || 'Skater'}
@@ -440,6 +445,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
+  },
+  waiverWarningGlyph: {
+    fontSize: 13,
+    color: colors.status.warning,
   },
   waitlistUserMeta: {
     fontSize: 13,

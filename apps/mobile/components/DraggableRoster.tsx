@@ -118,13 +118,19 @@ function PlayerCell({
       {/* Skill level bar on inner edge */}
       <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
 
-      {/* Line 1: Name */}
+      {/* Line 1: Name (with a subtle warning glyph for players who haven't
+          accepted the org's current waiver - real users only, server-computed) */}
       <Text
         style={[styles.playerName, side === 'left' ? styles.playerNameLeft : styles.playerNameRight]}
         numberOfLines={1}
         allowFontScaling={false}
       >
         {fullName}
+        {registration.hasNotAcceptedWaiver ? (
+          <Text style={styles.waiverWarningGlyph} allowFontScaling={false}>
+            {' ⚠'}
+          </Text>
+        ) : null}
       </Text>
       {/* Line 2: Payment status (organizer only, unpaid) or badges/guest */}
       {showPaymentStatus ? (
@@ -660,6 +666,10 @@ const styles = StyleSheet.create({
   },
   playerNameRight: {
     textAlign: 'left',
+  },
+  waiverWarningGlyph: {
+    fontSize: 12,
+    color: colors.status.warning,
   },
   guestLabel: {
     fontSize: 12,

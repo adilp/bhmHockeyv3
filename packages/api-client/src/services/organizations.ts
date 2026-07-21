@@ -7,7 +7,12 @@ import type {
   UpdateOrganizationRequest,
   AddAdminRequest,
   AutoRosterMember,
-  AddAutoRosterMemberRequest
+  AddAutoRosterMemberRequest,
+  OrganizationWaiver,
+  SetOrganizationWaiverRequest,
+  SetOrganizationWaiverResponse,
+  AcceptWaiverRequest,
+  PendingWaiver
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -158,5 +163,54 @@ export const organizationService = {
       { orderedUserIds }
     );
     return response.data;
+  },
+
+  // Waiver methods
+
+  /**
+   * Get the organization's current active waiver (404 when none)
+   */
+  async getWaiver(organizationId: string): Promise<OrganizationWaiver> {
+    const response = await apiClient.instance.get<OrganizationWaiver>(`/organizations/${organizationId}/waiver`);
+    return response.data;
+  },
+
+  /**
+   * Set the organization's waiver (admin only). Creates the next immutable
+   * version; empty text deactivates the waiver. Returns the active waiver
+   * after the save, or null when the waiver was cleared.
+   */
+  async setWaiver(organizationId: string, text: string): Promise<OrganizationWaiver | null> {
+    const request: SetOrganizationWaiverRequest = { text };
+    const response = await apiClient.instance.put<SetOrganizationWaiverResponse>(
+      `/organizations/${organizationId}/waiver`,
+      request
+    );
+    return response.data.waiver;
+  },
+
+  /**
+   * Accept a SPECIFIC waiver version (400 when the id is stale)
+   */
+  async acceptWaiver(organizationId: string, waiverId: string): Promise<void> {
+    const request: AcceptWaiverRequest = { waiverId };
+    await apiClient.instance.post(`/organizations/${organizationId}/waiver/accept`, request);
+  },
+
+  /**
+   * Orgs where the current user holds an upcoming registration but has not
+   * accepted the current waiver (powers the blocking accept-or-leave gate)
+   */
+  async getPendingWaivers(): Promise<PendingWaiver[]> {
+    const response = await apiClient.instance.get<PendingWaiver[]>('/users/me/pending-waivers');
+    return response.data;
+  },
+
+  /**
+   * Leave an organization: unsubscribe AND cancel upcoming registrations in
+   * the org's events (waitlist promotions fire server-side as usual)
+   */
+  async leaveOrganization(organizationId: string): Promise<void> {
+    await apiClient.instance.post(`/organizations/${organizationId}/leave`);
   },
 };

@@ -9,6 +9,9 @@ using BHMHockey.Api.Services.Background;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// QuestPDF (waiver PDF rendering) - community license for open/small projects
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 // Configure for network access (React Native development)
 // Production uses ASPNETCORE_URLS from app.yaml (port 8080)
 if (builder.Environment.IsDevelopment())
@@ -127,6 +130,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IOrganizationService, OrganizationService>();
 builder.Services.AddScoped<IOrganizationAdminService, OrganizationAdminService>();
 builder.Services.AddScoped<IOrganizationAutoRosterService, OrganizationAutoRosterService>();
+builder.Services.AddScoped<IOrganizationWaiverService, OrganizationWaiverService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IWaitlistService, WaitlistService>();

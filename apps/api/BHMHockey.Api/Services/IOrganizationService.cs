@@ -11,6 +11,13 @@ public interface IOrganizationService
     Task<bool> DeleteAsync(Guid id, Guid userId);
     Task<bool> SubscribeAsync(Guid organizationId, Guid userId);
     Task<bool> UnsubscribeAsync(Guid organizationId, Guid userId);
+
+    /// <summary>
+    /// Leave an organization: unsubscribe AND cancel upcoming Registered/Waitlisted
+    /// registrations in the org's events (reusing the standard cancellation path so
+    /// waitlist promotion side effects fire). Past events untouched. Idempotent.
+    /// </summary>
+    Task<bool> LeaveAsync(Guid organizationId, Guid userId);
     Task<List<OrganizationSubscriptionDto>> GetUserSubscriptionsAsync(Guid userId);
     Task<List<OrganizationDto>> GetUserAdminOrganizationsAsync(Guid userId);
     Task<List<OrganizationMemberDto>> GetMembersAsync(Guid organizationId, Guid requesterId);

@@ -22,6 +22,7 @@ public class UsersControllerTests
     private readonly Mock<IBadgeService> _mockBadgeService;
     private readonly Mock<ITournamentTeamMemberService> _mockTournamentTeamMemberService;
     private readonly Mock<ITournamentService> _mockTournamentService;
+    private readonly Mock<IOrganizationWaiverService> _mockWaiverService;
     private readonly UsersController _sut;
 
     public UsersControllerTests()
@@ -32,13 +33,15 @@ public class UsersControllerTests
         _mockBadgeService = new Mock<IBadgeService>();
         _mockTournamentTeamMemberService = new Mock<ITournamentTeamMemberService>();
         _mockTournamentService = new Mock<ITournamentService>();
+        _mockWaiverService = new Mock<IOrganizationWaiverService>();
         _sut = new UsersController(
             _mockUserService.Object,
             _mockOrgService.Object,
             _mockEventService.Object,
             _mockBadgeService.Object,
             _mockTournamentTeamMemberService.Object,
-            _mockTournamentService.Object);
+            _mockTournamentService.Object,
+            _mockWaiverService.Object);
     }
 
     private void SetupControllerWithClaims(IEnumerable<Claim> claims)
@@ -338,6 +341,50 @@ public class UsersControllerTests
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var returnedEvents = okResult.Value as List<EventDto>;
         returnedEvents.Should().BeEmpty();
+    }
+
+    #endregion
+
+    #region Pending Waivers Endpoint Tests
+
+    [Fact]
+    public async Task GetMyPendingWaivers_ReturnsPendingListForCurrentUser()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var claims = new List<Claim> { new Claim("sub", userId.ToString()) };
+        SetupControllerWithClaims(claims);
+        var pending = new List<PendingWaiverDto>
+        {
+            new PendingWaiverDto(
+                Guid.NewGuid(),
+                "Test Org",
+                new OrganizationWaiverDto(Guid.NewGuid(), Guid.NewGuid(), "Waiver text", 2, DateTime.UtcNow))
+        };
+        _mockWaiverService.Setup(s => s.GetPendingWaiversAsync(userId)).ReturnsAsync(pending);
+
+        // Act
+        var result = await _sut.GetMyPendingWaivers();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var returned = okResult.Value.Should().BeAssignableTo<List<PendingWaiverDto>>().Subject;
+        returned.Should().HaveCount(1);
+        returned[0].OrganizationName.Should().Be("Test Org");
+        returned[0].Waiver.Version.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetMyPendingWaivers_WithNoClaims_ReturnsUnauthorized()
+    {
+        // Arrange
+        SetupControllerWithClaims(new List<Claim>());
+
+        // Act
+        var result = await _sut.GetMyPendingWaivers();
+
+        // Assert
+        result.Result.Should().BeOfType<UnauthorizedObjectResult>();
     }
 
     #endregion

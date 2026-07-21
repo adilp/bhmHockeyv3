@@ -97,6 +97,43 @@ export interface OrganizationMember {
   isAdmin: boolean;  // True if this member is an admin of the organization
   badges?: UserBadgeDto[];  // Top 3 badges by displayOrder
   totalBadgeCount?: number;  // Total badges user has earned
+  hasAcceptedCurrentWaiver?: boolean | null;  // null when the org has no active waiver
+}
+
+// ============================================
+// Organization Waiver Types
+// ============================================
+
+// A single (immutable) waiver version - the org's current active waiver
+export interface OrganizationWaiver {
+  id: string;
+  organizationId: string;
+  text: string;
+  version: number;  // Per-org incrementing, starting at 1
+  createdAt: string;
+}
+
+// PUT waiver request - trimmed server-side; empty text deactivates the waiver
+export interface SetOrganizationWaiverRequest {
+  text: string;
+}
+
+// PUT waiver response - waiver is null when no active waiver remains (cleared)
+export interface SetOrganizationWaiverResponse {
+  waiver: OrganizationWaiver | null;
+}
+
+// Accept a SPECIFIC waiver version (stale ids are rejected with 400)
+export interface AcceptWaiverRequest {
+  waiverId: string;
+}
+
+// Blocking-gate entry: an org where the current user holds an upcoming
+// registration but has not accepted the current active waiver
+export interface PendingWaiver {
+  organizationId: string;
+  organizationName: string;
+  waiver: OrganizationWaiver;
 }
 
 export type SkillLevel = 'Gold' | 'Silver' | 'Bronze' | 'D-League';
@@ -254,6 +291,9 @@ export interface EventDto {
   showWaitlistBeforePublish: boolean;  // Registered/waitlisted viewers can see the ordered waitlist before publish
   // Pay-eligibility for the current user's waitlisted registration on paid events
   myWaitlistPaymentEligible?: boolean | null;  // null when not applicable (not waitlisted or free event)
+  // Waiver gate for the current user: org event + active waiver + not accepted
+  // (same rule for everyone with a real account, including managers)
+  requiresWaiverAcceptance: boolean;
   // Slot position labels (organizer feature)
   slotPositionLabels?: Record<number, string>; // Maps slot index to position label (e.g., {1: "C", 2: "LW"})
   // GroupMe chat link, resolved server-side at read time: event override wins, else org's link
@@ -283,6 +323,8 @@ export interface EventRegistrationDto {
   promotedAt?: string;           // When user was promoted from waitlist (ISO date string)
   paymentDeadlineAt?: string;    // Deadline to pay after promotion (ISO date string)
   isWaitlisted: boolean;         // True if Status == "Waitlisted"
+  // True ONLY when: org event + active waiver + real user (not ghost) + no current acceptance
+  hasNotAcceptedWaiver?: boolean;
 }
 
 // Event request types

@@ -12,6 +12,8 @@ const mockGetAutoRoster = jest.fn();
 const mockAddAutoRosterMember = jest.fn();
 const mockRemoveAutoRosterMember = jest.fn();
 const mockReorderAutoRoster = jest.fn();
+const mockGetWaiver = jest.fn();
+const mockSetWaiver = jest.fn();
 
 // Mock the api-client module
 jest.mock('@bhmhockey/api-client', () => ({
@@ -24,12 +26,14 @@ jest.mock('@bhmhockey/api-client', () => ({
     addAutoRosterMember: mockAddAutoRosterMember,
     removeAutoRosterMember: mockRemoveAutoRosterMember,
     reorderAutoRoster: mockReorderAutoRoster,
+    getWaiver: mockGetWaiver,
+    setWaiver: mockSetWaiver,
   },
 }));
 
 // Import after mocking
 import { useOrganizationStore } from '../../stores/organizationStore';
-import type { Organization, OrganizationSubscription, AutoRosterMember } from '@bhmhockey/shared';
+import type { Organization, OrganizationSubscription, AutoRosterMember, OrganizationWaiver } from '@bhmhockey/shared';
 
 const createMockOrg = (overrides: Partial<Organization> = {}): Organization => ({
   id: 'org-1',
@@ -64,6 +68,15 @@ const createMockAutoRosterMember = (overrides: Partial<AutoRosterMember> = {}): 
   ...overrides,
 });
 
+const createMockWaiver = (overrides: Partial<OrganizationWaiver> = {}): OrganizationWaiver => ({
+  id: 'waiver-1',
+  organizationId: 'org-1',
+  text: 'You play at your own risk.',
+  version: 1,
+  createdAt: new Date().toISOString(),
+  ...overrides,
+});
+
 describe('organizationStore', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -74,6 +87,8 @@ describe('organizationStore', () => {
       autoRoster: [],
       autoRosterOrgId: null,
       members: [],
+      waiver: null,
+      waiverOrgId: null,
       isLoading: false,
       error: null,
     });
@@ -362,6 +377,72 @@ describe('organizationStore', () => {
       expect(result).toBe(false);
       expect(useOrganizationStore.getState().autoRoster.map((m) => m.userId)).toEqual(['user-1', 'user-2']);
       expect(useOrganizationStore.getState().error).toBe('Reorder failed');
+    });
+  });
+
+  describe('fetchWaiver', () => {
+    it('sets the waiver and org id on success', async () => {
+      const waiver = createMockWaiver();
+      mockGetWaiver.mockResolvedValue(waiver);
+
+      const result = await useOrganizationStore.getState().fetchWaiver('org-1');
+
+      expect(result).toEqual(waiver);
+      expect(mockGetWaiver).toHaveBeenCalledWith('org-1');
+      expect(useOrganizationStore.getState().waiver).toEqual(waiver);
+      expect(useOrganizationStore.getState().waiverOrgId).toBe('org-1');
+    });
+
+    it('treats a 404 as "no active waiver", not an error', async () => {
+      mockGetWaiver.mockRejectedValue({ message: 'Not found', statusCode: 404 });
+
+      const result = await useOrganizationStore.getState().fetchWaiver('org-1');
+
+      expect(result).toBeNull();
+      expect(useOrganizationStore.getState().waiver).toBeNull();
+      expect(useOrganizationStore.getState().waiverOrgId).toBe('org-1');
+      expect(useOrganizationStore.getState().error).toBeNull();
+    });
+
+    it('sets error on non-404 failure', async () => {
+      mockGetWaiver.mockRejectedValue({ message: 'Server error', statusCode: 500 });
+
+      const result = await useOrganizationStore.getState().fetchWaiver('org-1');
+
+      expect(result).toBeNull();
+      expect(useOrganizationStore.getState().error).toBe('Server error');
+    });
+  });
+
+  describe('saveWaiver', () => {
+    it('stores the new active waiver on success', async () => {
+      const waiver = createMockWaiver({ version: 2 });
+      mockSetWaiver.mockResolvedValue(waiver);
+
+      const result = await useOrganizationStore.getState().saveWaiver('org-1', 'New text');
+
+      expect(result).toBe(true);
+      expect(mockSetWaiver).toHaveBeenCalledWith('org-1', 'New text');
+      expect(useOrganizationStore.getState().waiver).toEqual(waiver);
+    });
+
+    it('stores null when the waiver was cleared', async () => {
+      useOrganizationStore.setState({ waiver: createMockWaiver(), waiverOrgId: 'org-1' });
+      mockSetWaiver.mockResolvedValue(null);
+
+      const result = await useOrganizationStore.getState().saveWaiver('org-1', '');
+
+      expect(result).toBe(true);
+      expect(useOrganizationStore.getState().waiver).toBeNull();
+    });
+
+    it('sets error and returns false on failure', async () => {
+      mockSetWaiver.mockRejectedValue(new Error('Only organization admins can update the waiver'));
+
+      const result = await useOrganizationStore.getState().saveWaiver('org-1', 'New text');
+
+      expect(result).toBe(false);
+      expect(useOrganizationStore.getState().error).toBe('Only organization admins can update the waiver');
     });
   });
 

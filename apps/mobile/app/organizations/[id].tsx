@@ -221,6 +221,13 @@ export default function OrganizationDetailScreen() {
 
   const isAdmin = organization?.isAdmin;
 
+  // Waiver status - flags are only non-null when the org has an active waiver
+  const waiverActive = members.some(
+    (m) => m.hasAcceptedCurrentWaiver !== null && m.hasAcceptedCurrentWaiver !== undefined
+  );
+  const waiverAcceptedCount = members.filter((m) => m.hasAcceptedCurrentWaiver === true).length;
+  const waiverNotAcceptedCount = members.filter((m) => m.hasAcceptedCurrentWaiver === false).length;
+
   return (
     <>
       <Stack.Screen
@@ -290,6 +297,12 @@ export default function OrganizationDetailScreen() {
               <Text style={styles.membersToggle}>{showMembers ? '▲' : '▼'}</Text>
             </TouchableOpacity>
 
+            {showMembers && waiverActive && (
+              <Text style={styles.waiverSummary} allowFontScaling={false}>
+                Waiver: {waiverAcceptedCount} accepted · {waiverNotAcceptedCount} not yet accepted
+              </Text>
+            )}
+
             {showMembers && (
               <View style={styles.membersList}>
                 {isLoadingMembers ? (
@@ -317,6 +330,12 @@ export default function OrganizationDetailScreen() {
                               {member.firstName} {member.lastName}
                             </Text>
                             {member.isAdmin && <Badge variant="purple">Admin</Badge>}
+                            {member.hasAcceptedCurrentWaiver === true && (
+                              <Badge variant="green">Waiver ✓</Badge>
+                            )}
+                            {member.hasAcceptedCurrentWaiver === false && (
+                              <Badge variant="warning">No waiver</Badge>
+                            )}
                             {isCurrentUser && <Text style={styles.youLabel}>(You)</Text>}
                           </View>
                           {/* Show email for admins, badges for everyone */}
@@ -377,6 +396,17 @@ export default function OrganizationDetailScreen() {
           >
             <Ionicons name="settings-outline" size={20} color={colors.text.secondary} />
             <Text style={styles.settingsButtonText}>Event Defaults</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Legal Waiver Button - visible to admins only */}
+        {isAdmin && (
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => router.push(`/organizations/${id}/waiver`)}
+          >
+            <Ionicons name="document-text-outline" size={20} color={colors.text.secondary} />
+            <Text style={styles.settingsButtonText}>Legal Waiver</Text>
           </TouchableOpacity>
         )}
 
@@ -537,6 +567,12 @@ const styles = StyleSheet.create({
   membersList: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
+  },
+  waiverSummary: {
+    fontSize: 13,
+    color: colors.text.muted,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
   },
   noMembers: {
     color: colors.text.muted,
