@@ -744,6 +744,64 @@ public class OrganizationWaiverServiceTests : IDisposable
     #region Pending Waivers Tests
 
     [Fact]
+    public async Task GetPendingWaiversAsync_SubscriberWithoutRegistrations_Listed()
+    {
+        // Every org MEMBER must be current on the waiver, registrations or not
+        var admin = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(admin.Id, "Waiver Org");
+        await _sut.SetWaiverAsync(org.Id, "waiver text", admin.Id);
+        _context.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = org.Id,
+            UserId = member.Id,
+            SubscribedAt = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+
+        var pending = await _sut.GetPendingWaiversAsync(member.Id);
+
+        pending.Should().HaveCount(1);
+        pending[0].OrganizationId.Should().Be(org.Id);
+    }
+
+    [Fact]
+    public async Task GetPendingWaiversAsync_SubscriberWhoAccepted_NotListed()
+    {
+        var admin = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "waiver text", admin.Id);
+        _context.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = org.Id,
+            UserId = member.Id,
+            SubscribedAt = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+        await _sut.AcceptWaiverAsync(org.Id, ValidAcceptRequest(waiver!.Id), member.Id);
+
+        var pending = await _sut.GetPendingWaiversAsync(member.Id);
+
+        pending.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPendingWaiversAsync_NonMemberWithoutRegistrations_NotListed()
+    {
+        var admin = await CreateTestUser();
+        var outsider = await CreateTestUser("outsider@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        await _sut.SetWaiverAsync(org.Id, "waiver text", admin.Id);
+
+        var pending = await _sut.GetPendingWaiversAsync(outsider.Id);
+
+        pending.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task GetPendingWaiversAsync_ListsOrgWithUnacceptedWaiverOnUpcomingEvent()
     {
         var admin = await CreateTestUser();

@@ -286,16 +286,24 @@ public class OrganizationWaiverService : IOrganizationWaiverService
     {
         var now = DateTime.UtcNow;
 
-        // Orgs where the user holds an active registration on an upcoming, non-cancelled event
-        var orgIds = await _context.EventRegistrations
+        // Every org the user is a MEMBER of must be current on the waiver...
+        var subscribedOrgIds = await _context.OrganizationSubscriptions
+            .Where(s => s.UserId == userId)
+            .Select(s => s.OrganizationId)
+            .ToListAsync();
+
+        // ...plus orgs where a non-member holds an active registration on an
+        // upcoming, non-cancelled event (e.g. manually added by an organizer)
+        var registeredOrgIds = await _context.EventRegistrations
             .Where(r => r.UserId == userId
                 && (r.Status == "Registered" || r.Status == "Waitlisted")
                 && r.Event.OrganizationId != null
                 && r.Event.EventDate > now
                 && r.Event.Status != "Cancelled")
             .Select(r => r.Event.OrganizationId!.Value)
-            .Distinct()
             .ToListAsync();
+
+        var orgIds = subscribedOrgIds.Union(registeredOrgIds).ToList();
 
         if (orgIds.Count == 0)
         {
