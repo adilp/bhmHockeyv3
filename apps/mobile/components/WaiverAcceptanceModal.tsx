@@ -15,6 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import type { OrganizationWaiver, WaiverSignatureDetails } from '@bhmhockey/shared';
+import { useAuthStore } from '../stores/authStore';
 import { getApiUrl } from '../config/api';
 import { parseWaiverSegments } from '../utils/waiverFormat';
 import {
@@ -143,7 +144,9 @@ export function WaiverAcceptanceModal({
     }
   }, [visible, waiver.id]);
 
-  const validation = validateWaiverSignature(form);
+  const user = useAuthStore((state) => state.user);
+  const profileName = user ? `${user.firstName} ${user.lastName}` : undefined;
+  const validation = validateWaiverSignature(form, new Date(), profileName);
   const groupStarted =
     form.minorParticipantName.trim().length > 0 ||
     form.minorDateOfBirth.trim().length > 0 ||

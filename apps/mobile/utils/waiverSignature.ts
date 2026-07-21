@@ -96,6 +96,16 @@ export interface WaiverSignatureValidation {
 const DATE_ERROR = 'Enter a valid date (MM/DD/YYYY)';
 
 /**
+ * Case-insensitive, whitespace-normalized comparison - mirrors the server's
+ * OrganizationWaiverService.NamesMatch; keep the two in sync.
+ */
+function namesMatch(entered: string, profileName: string): boolean {
+  const normalize = (value: string) =>
+    value.trim().split(/\s+/).join(' ').toLowerCase();
+  return normalize(entered) === normalize(profileName);
+}
+
+/**
  * Validate the acceptance form and build the API payload.
  *
  * The Parent/Guardian group counts as "started" when any of its typed fields
@@ -105,13 +115,21 @@ const DATE_ERROR = 'Enter a valid date (MM/DD/YYYY)';
  */
 export function validateWaiverSignature(
   values: WaiverSignatureFormValues,
-  now: Date = new Date()
+  now: Date = new Date(),
+  // The account holder's profile name; when provided, the adult printed
+  // name must match it (also enforced server-side)
+  expectedParticipantName?: string
 ): WaiverSignatureValidation {
   const errors: WaiverSignatureValidation['errors'] = {};
 
   const participantName = values.participantName.trim();
   if (!participantName) {
     errors.participantName = 'Printed name is required';
+  } else if (
+    expectedParticipantName &&
+    !namesMatch(participantName, expectedParticipantName)
+  ) {
+    errors.participantName = `Must match the name on your profile: ${expectedParticipantName}`;
   }
 
   const minorParticipantName = values.minorParticipantName.trim();

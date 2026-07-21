@@ -137,6 +137,21 @@ public class OrganizationWaiverService : IOrganizationWaiverService
 
         var signature = ValidateSignatureFields(organizationId, request);
 
+        // The adult printed name is the account holder's attestation - it must
+        // match their profile name (guardian/minor names are other people and
+        // are not checked)
+        var user = await _context.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("User not found");
+        var profileName = $"{user.FirstName} {user.LastName}";
+        if (!NamesMatch(signature.ParticipantName, profileName))
+        {
+            _logger.LogWarning(
+                "Waiver acceptance rejected for user {UserId}: printed name does not match profile name",
+                userId);
+            throw new InvalidOperationException(
+                $"Printed name must match the name on your profile: {profileName}");
+        }
+
         var alreadyAccepted = await _context.WaiverAcceptances
             .AnyAsync(a => a.WaiverId == request.WaiverId && a.UserId == userId);
         if (alreadyAccepted)
@@ -163,6 +178,18 @@ public class OrganizationWaiverService : IOrganizationWaiverService
 
     // Max stored length for each signature text field (also enforced by EF config)
     private const int SignatureFieldMaxLength = 200;
+
+    /// <summary>
+    /// Case-insensitive, whitespace-normalized name comparison: "jane  skater"
+    /// matches "Jane Skater"; initials or different names do not. Mirrored
+    /// client-side in apps/mobile/utils/waiverSignature.ts - keep in sync.
+    /// </summary>
+    private static bool NamesMatch(string entered, string profileName)
+    {
+        static string Normalize(string value) => string.Join(' ',
+            value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+        return Normalize(entered) == Normalize(profileName);
+    }
 
     private record ValidatedSignature(
         string ParticipantName,

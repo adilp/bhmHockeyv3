@@ -122,6 +122,49 @@ describe('validateWaiverSignature', () => {
       expect(result.errors.participantName).toBe('Printed name is required');
       expect(result.details).toBeNull();
     });
+
+    describe('profile name matching', () => {
+      it.each([
+        ['exact', 'Jane Skater'],
+        ['case-insensitive', 'jane skater'],
+        ['extra internal spaces', 'Jane   Skater'],
+        ['padded', '  Jane Skater  '],
+      ])('accepts a %s match against the profile name', (_label, participantName) => {
+        const result = validateWaiverSignature(
+          { ...validAdultForm(), participantName },
+          NOW,
+          'Jane Skater'
+        );
+
+        expect(result.valid).toBe(true);
+      });
+
+      it.each([
+        ['a different name', 'Someone Else'],
+        ['initials', 'J. Skater'],
+        ['first name only', 'Jane'],
+      ])('rejects %s with a must-match error', (_label, participantName) => {
+        const result = validateWaiverSignature(
+          { ...validAdultForm(), participantName },
+          NOW,
+          'Jane Skater'
+        );
+
+        expect(result.valid).toBe(false);
+        expect(result.errors.participantName).toBe(
+          'Must match the name on your profile: Jane Skater'
+        );
+      });
+
+      it('skips the match check when no profile name is provided', () => {
+        const result = validateWaiverSignature(
+          { ...validAdultForm(), participantName: 'Anyone At All' },
+          NOW
+        );
+
+        expect(result.valid).toBe(true);
+      });
+    });
   });
 
   describe('Parent/Guardian section (all-or-nothing)', () => {

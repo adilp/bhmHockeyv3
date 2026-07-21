@@ -134,7 +134,7 @@ public class OrganizationWaiverServiceTests : IDisposable
     /// <summary>
     /// Minimal valid acceptance request: adult signature fields only.
     /// </summary>
-    private static AcceptWaiverRequest ValidAcceptRequest(Guid waiverId, string participantName = "Test Participant")
+    private static AcceptWaiverRequest ValidAcceptRequest(Guid waiverId, string participantName = "Test User")
     {
         return new AcceptWaiverRequest(waiverId, participantName);
     }
@@ -146,7 +146,7 @@ public class OrganizationWaiverServiceTests : IDisposable
     {
         return new AcceptWaiverRequest(
             waiverId,
-            "Guardian As Participant",
+            "Test User",
             MinorParticipantName: "Minor Player",
             MinorDateOfBirth: DateTime.UtcNow.Date.AddYears(-12),
             GuardianName: "Parent Guardian",
@@ -444,11 +444,11 @@ public class OrganizationWaiverServiceTests : IDisposable
         var today = DateTime.UtcNow.Date;
 
         await _sut.AcceptWaiverAsync(
-            org.Id, new AcceptWaiverRequest(waiver!.Id, "Jane Skater"), player.Id);
+            org.Id, new AcceptWaiverRequest(waiver!.Id, "Test User"), player.Id);
 
         var acceptance = await _context.WaiverAcceptances
             .SingleAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id);
-        acceptance.ParticipantName.Should().Be("Jane Skater");
+        acceptance.ParticipantName.Should().Be("Test User");
         acceptance.ParticipantDate.Should().Be(today);
         acceptance.ParticipantDate!.Value.Kind.Should().Be(DateTimeKind.Utc);
         acceptance.MinorParticipantName.Should().BeNull();
@@ -526,7 +526,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         await _sut.AcceptWaiverAsync(
             org.Id,
             new AcceptWaiverRequest(
-                waiver!.Id, "  Jane Skater  ",
+                waiver!.Id, "  Test User  ",
                 MinorParticipantName: " Minor Player ",
                 MinorDateOfBirth: today.AddYears(-12),
                 GuardianName: " Parent Guardian ",
@@ -535,7 +535,7 @@ public class OrganizationWaiverServiceTests : IDisposable
 
         var acceptance = await _context.WaiverAcceptances
             .SingleAsync(a => a.WaiverId == waiver.Id && a.UserId == player.Id);
-        acceptance.ParticipantName.Should().Be("Jane Skater");
+        acceptance.ParticipantName.Should().Be("Test User");
         acceptance.MinorParticipantName.Should().Be("Minor Player");
         acceptance.GuardianName.Should().Be("Parent Guardian");
         acceptance.GuardianSignature.Should().Be("Parent Guardian");
@@ -555,7 +555,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
         var today = DateTime.UtcNow.Date;
         var request = new AcceptWaiverRequest(
-            waiver!.Id, "Jane Skater",
+            waiver!.Id, "Test User",
             MinorParticipantName: filledField == "minorName" ? "Minor Player" : null,
             MinorDateOfBirth: filledField == "minorDob" ? today.AddYears(-12) : null,
             GuardianName: filledField == "guardianName" ? "Parent Guardian" : null,
@@ -580,7 +580,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         await _sut.AcceptWaiverAsync(
             org.Id,
             new AcceptWaiverRequest(
-                waiver!.Id, "Jane Skater",
+                waiver!.Id, "Test User",
                 MinorParticipantName: "   ",
                 GuardianName: " "),
             player.Id);
@@ -621,7 +621,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
 
         await _sut.AcceptWaiverAsync(
-            org.Id, new AcceptWaiverRequest(waiver!.Id, "Original Name"), player.Id);
+            org.Id, new AcceptWaiverRequest(waiver!.Id, "Test User"), player.Id);
         // Re-accept the same version with different signature details
         await _sut.AcceptWaiverAsync(
             org.Id, MinorAcceptRequest(waiver.Id), player.Id);
@@ -631,7 +631,7 @@ public class OrganizationWaiverServiceTests : IDisposable
             .Where(a => a.WaiverId == waiver.Id && a.UserId == player.Id)
             .ToListAsync();
         acceptances.Should().HaveCount(1);
-        acceptances[0].ParticipantName.Should().Be("Original Name");
+        acceptances[0].ParticipantName.Should().Be("Test User");
         acceptances[0].ParticipantDate.Should().Be(DateTime.UtcNow.Date);
         acceptances[0].MinorParticipantName.Should().BeNull();
         acceptances[0].GuardianSignature.Should().BeNull();
@@ -645,16 +645,66 @@ public class OrganizationWaiverServiceTests : IDisposable
         var org = await CreateTestOrganization(admin.Id);
         var v1 = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
         await _sut.AcceptWaiverAsync(
-            org.Id, new AcceptWaiverRequest(v1!.Id, "Old Name"), player.Id);
+            org.Id, new AcceptWaiverRequest(v1!.Id, "Test User"), player.Id);
 
         var v2 = await _sut.SetWaiverAsync(org.Id, "v2", admin.Id);
         await _sut.AcceptWaiverAsync(
-            org.Id, new AcceptWaiverRequest(v2!.Id, "New Name"), player.Id);
+            org.Id, MinorAcceptRequest(v2!.Id), player.Id);
 
+        // Each accepted version keeps its own signature row
         var oldRow = await _context.WaiverAcceptances.SingleAsync(a => a.WaiverId == v1.Id && a.UserId == player.Id);
         var newRow = await _context.WaiverAcceptances.SingleAsync(a => a.WaiverId == v2.Id && a.UserId == player.Id);
-        oldRow.ParticipantName.Should().Be("Old Name");
-        newRow.ParticipantName.Should().Be("New Name");
+        oldRow.MinorParticipantName.Should().BeNull();
+        newRow.MinorParticipantName.Should().Be("Minor Player");
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_ParticipantNameNotMatchingProfile_Throws()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com"); // profile name: Test User
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        var act = () => _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, "Someone Else"), player.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*must match the name on your profile: Test User*");
+        (await _context.WaiverAcceptances.CountAsync()).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("test user")]           // case-insensitive
+    [InlineData("TEST USER")]
+    [InlineData("Test   User")]         // internal whitespace normalized
+    [InlineData("  Test User  ")]       // trimmed
+    public async Task AcceptWaiverAsync_ParticipantNameMatchingLoosely_Accepts(string enteredName)
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        await _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, enteredName), player.Id);
+
+        (await _context.WaiverAcceptances.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AcceptWaiverAsync_InitialsInsteadOfFullName_Throws()
+    {
+        var admin = await CreateTestUser();
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(admin.Id);
+        var waiver = await _sut.SetWaiverAsync(org.Id, "v1", admin.Id);
+
+        var act = () => _sut.AcceptWaiverAsync(
+            org.Id, new AcceptWaiverRequest(waiver!.Id, "T. User"), player.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*must match the name on your profile*");
     }
 
     [Fact]
@@ -673,7 +723,7 @@ public class OrganizationWaiverServiceTests : IDisposable
         await _sut.AcceptWaiverAsync(
             org.Id,
             new AcceptWaiverRequest(
-                waiver!.Id, "Jane Skater",
+                waiver!.Id, "Test User",
                 MinorParticipantName: "Minor Player",
                 MinorDateOfBirth: unspecifiedDob,
                 GuardianName: "Parent Guardian",

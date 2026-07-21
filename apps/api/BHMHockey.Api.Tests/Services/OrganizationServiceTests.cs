@@ -1233,7 +1233,7 @@ public class OrganizationServiceTests : IDisposable
         await CreateSubscription(org.Id, acceptedMember.Id);
         await CreateSubscription(org.Id, unacceptedMember.Id);
         var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
-        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(waiver!.Id, "Test Participant"), acceptedMember.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(waiver!.Id, "John Doe"), acceptedMember.Id);
 
         // Act
         var members = await _sut.GetMembersAsync(org.Id, creator.Id);
@@ -1254,7 +1254,7 @@ public class OrganizationServiceTests : IDisposable
         await CreateSubscription(org.Id, creator.Id);
         await CreateSubscription(org.Id, member.Id);
         var waiver = await _waiverService.SetWaiverAsync(org.Id, "waiver text", creator.Id);
-        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(waiver!.Id, "Test Participant"), member.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(waiver!.Id, "John Doe"), member.Id);
         await _waiverService.SetWaiverAsync(org.Id, "", creator.Id);
 
         // Act
@@ -1274,7 +1274,7 @@ public class OrganizationServiceTests : IDisposable
         await CreateSubscription(org.Id, creator.Id);
         await CreateSubscription(org.Id, member.Id);
         var v1 = await _waiverService.SetWaiverAsync(org.Id, "v1", creator.Id);
-        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(v1!.Id, "Test Participant"), member.Id);
+        await _waiverService.AcceptWaiverAsync(org.Id, new AcceptWaiverRequest(v1!.Id, "John Doe"), member.Id);
         await _waiverService.SetWaiverAsync(org.Id, "v2", creator.Id);
 
         // Act
