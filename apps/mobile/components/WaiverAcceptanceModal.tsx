@@ -158,13 +158,24 @@ export function WaiverAcceptanceModal({
   const blurField = (key: FieldKey) => () =>
     setTouched((current) => ({ ...current, [key]: true }));
 
-  // Inline errors appear once a field has been visited; minor-section errors
-  // also appear as soon as the section is started (the all-or-nothing rule
-  // must be visible without tabbing through every field)
+  // Inline errors appear once a field has content or has been visited;
+  // minor-section errors also appear as soon as the section is started (the
+  // all-or-nothing rule must be visible without tabbing through every field).
+  // Errors must never require a blur the user has no reason to perform -
+  // adult-only signers may never leave the name field.
   const fieldError = (key: FieldKey, inMinorGroup = false): string | undefined => {
     const error = validation.errors[key];
     if (!error) return undefined;
-    return touched[key] || (inMinorGroup && groupStarted) ? error : undefined;
+    const hasContent = form[key].trim().length > 0;
+    return touched[key] || hasContent || (inMinorGroup && groupStarted) ? error : undefined;
+  };
+
+  // Single always-current line under Agree explaining what still blocks it
+  const blockingReason = (): string | null => {
+    if (!hasScrolledToBottom) return 'Scroll to the bottom to enable Agree';
+    if (validation.valid) return null;
+    if (validation.errors.participantName) return validation.errors.participantName;
+    return 'Complete the Parent/Guardian section - every field is required once started';
   };
 
   const maybeEnableWithoutScrolling = () => {
@@ -322,14 +333,9 @@ export function WaiverAcceptanceModal({
             </Text>
           </TouchableOpacity>
 
-          {!hasScrolledToBottom && (
+          {blockingReason() != null && (
             <Text style={styles.scrollHint} allowFontScaling={false}>
-              Scroll to the bottom to continue
-            </Text>
-          )}
-          {hasScrolledToBottom && !validation.valid && (
-            <Text style={styles.scrollHint} allowFontScaling={false}>
-              Complete the acceptance form above to enable Agree
+              {blockingReason()}
             </Text>
           )}
 
