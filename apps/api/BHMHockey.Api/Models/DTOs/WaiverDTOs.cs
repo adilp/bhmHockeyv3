@@ -21,7 +21,7 @@ public record SetOrganizationWaiverResponse(
 
 // Accept a SPECIFIC waiver version (stale ids are rejected with 400).
 // Signature fields are recorded once on the acceptance row (immutable audit
-// data). ParticipantName/ParticipantDate are required (400 when missing or
+// data). ParticipantName is required (400 when missing or
 // blank). The Parent/Guardian section is all-or-nothing: either every minor
 // field is provided (participant under 19) or all are omitted (400 when
 // partially filled). Dates are calendar dates (client sends YYYY-MM-DD).

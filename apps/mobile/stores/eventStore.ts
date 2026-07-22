@@ -3,7 +3,7 @@ import { eventService } from '@bhmhockey/api-client';
 import type { EventDto, CreateEventRequest, Position, TeamAssignment, RegistrationResultDto, PaymentStatus, WaitlistOrderItem, PaymentUpdateResultDto, PublishResultDto, UserSearchResultDto, SkillLevel } from '@bhmhockey/shared';
 
 /** Extract message from ApiError objects or Error instances */
-function getErrorMessage(error: unknown, fallback: string): string {
+export function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
     return (error as any).message || fallback;
   }

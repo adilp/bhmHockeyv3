@@ -2,15 +2,7 @@ import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
 import type { PendingWaiver, WaiverSignatureDetails } from '@bhmhockey/shared';
 import { useOrganizationStore } from './organizationStore';
-import { useEventStore } from './eventStore';
-
-/** Extract message from ApiError objects or Error instances */
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
-    return (error as any).message || fallback;
-  }
-  return fallback;
-}
+import { useEventStore, getErrorMessage } from './eventStore';
 
 interface WaiverState {
   // Orgs where the user holds an upcoming registration but hasn't accepted the

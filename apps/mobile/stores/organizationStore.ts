@@ -1,15 +1,7 @@
 import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
 import type { Organization, OrganizationSubscription, CreateOrganizationRequest, OrganizationMember, AutoRosterMember, Position, OrganizationWaiver } from '@bhmhockey/shared';
-import { useEventStore } from './eventStore';
-
-/** Extract message from ApiError objects or Error instances */
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
-    return (error as any).message || fallback;
-  }
-  return fallback;
-}
+import { useEventStore, getErrorMessage } from './eventStore';
 
 interface OrganizationState {
   organizations: Organization[];

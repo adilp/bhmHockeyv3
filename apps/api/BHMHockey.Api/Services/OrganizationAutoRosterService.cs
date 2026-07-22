@@ -38,7 +38,7 @@ public class OrganizationAutoRosterService : IOrganizationAutoRosterService
     {
         await EnsureAdminAsync(organizationId, requesterId);
 
-        var normalizedPosition = NormalizePosition(position);
+        var normalizedPosition = PositionNormalizer.Normalize(position);
 
         var isSubscriber = await _context.OrganizationSubscriptions
             .AnyAsync(s => s.OrganizationId == organizationId && s.UserId == userId);
@@ -132,17 +132,6 @@ public class OrganizationAutoRosterService : IOrganizationAutoRosterService
             _logger.LogWarning("Auto-roster access denied: user {RequesterId} is not an admin of organization {OrganizationId}", requesterId, organizationId);
             throw new UnauthorizedAccessException("You don't have permission to manage this organization's auto-roster");
         }
-    }
-
-    private static string NormalizePosition(string? position)
-    {
-        var normalized = position?.ToLowerInvariant();
-        if (normalized != "goalie" && normalized != "skater")
-        {
-            throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
-        }
-
-        return normalized == "goalie" ? "Goalie" : "Skater";
     }
 
     private static AutoRosterMemberDto MapToDto(OrganizationAutoRosterMember member)

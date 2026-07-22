@@ -121,21 +121,38 @@ public class EventService : IEventService
         };
 
         _context.Events.Add(evt);
-        await _context.SaveChangesAsync();
 
-        // Load organization for MapToDto if event belongs to one
         if (evt.OrganizationId.HasValue)
         {
-            evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
-
-            // Auto-add the org's regulars before subscribers are notified,
-            // so they're placed before anyone else can register
-            if (request.ApplyAutoRoster)
+            // Create the event and place the org's auto-roster regulars atomically:
+            // a failure mid-placement must not leave a partially-rostered event committed.
+            // Serializable matches the cancellation/promotion paths elsewhere in this service.
+            await using var transaction = await _context.Database
+                .BeginTransactionAsync(IsolationLevel.Serializable);
+            try
             {
-                await ApplyAutoRosterAsync(evt);
+                await _context.SaveChangesAsync();
+
+                // Load organization for MapToDto and auto-roster placement
+                evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
+
+                // Auto-add the org's regulars before subscribers are notified,
+                // so they're placed before anyone else can register
+                if (request.ApplyAutoRoster)
+                {
+                    await ApplyAutoRosterAsync(evt);
+                }
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
             }
 
-            // Notify organization subscribers about the new game
+            // Notify organization subscribers AFTER commit so a rollback can't send a
+            // "New Game" blast for an event that was never persisted
             var orgName = evt.Organization?.Name ?? "An organization";
             var venueText = !string.IsNullOrWhiteSpace(evt.Venue) ? $" - {evt.Venue}" : "";
             // Convert UTC to Central Time for display
@@ -148,6 +165,10 @@ public class EventService : IEventService
                 type: "new_event",
                 eventId: evt.Id
             );
+        }
+        else
+        {
+            await _context.SaveChangesAsync();
         }
 
         return await MapToDto(evt, creatorId);
@@ -2018,18 +2039,14 @@ public class EventService : IEventService
     /// </summary>
     private static string NormalizePosition(string? position)
     {
+        // Organizer adds treat a missing position as Skater; the shared normalizer
+        // validates and canonicalizes anything else.
         if (string.IsNullOrEmpty(position))
         {
             return "Skater";
         }
 
-        var normalized = position.ToLowerInvariant();
-        if (normalized != "goalie" && normalized != "skater")
-        {
-            throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
-        }
-
-        return normalized == "goalie" ? "Goalie" : "Skater";
+        return PositionNormalizer.Normalize(position);
     }
 
     /// <summary>
