@@ -2168,12 +2168,14 @@ public class EventService : IEventService
 
         if (evt == null)
         {
+            _logger.LogWarning("Ghost player update failed: event {EventId} not found", eventId);
             throw new InvalidOperationException("Event not found");
         }
 
         // Verify organizer can manage this event
         if (!await CanUserManageEventAsync(evt, organizerId))
         {
+            _logger.LogWarning("Ghost player update denied: user {OrganizerId} cannot manage event {EventId}", organizerId, eventId);
             throw new UnauthorizedAccessException("You don't have permission to manage this event");
         }
 
@@ -2182,6 +2184,7 @@ public class EventService : IEventService
         var normalizedPositionKey = registeredPosition.ToLowerInvariant();
         if (!string.IsNullOrEmpty(skillLevel) && !ValidSkillLevels.Contains(skillLevel))
         {
+            _logger.LogWarning("Ghost player update rejected for event {EventId}: invalid skill level '{SkillLevel}'", eventId, skillLevel);
             throw new InvalidOperationException($"Invalid skill level: '{skillLevel}'. Valid values: Gold, Silver, Bronze, D-League");
         }
 
@@ -2189,11 +2192,13 @@ public class EventService : IEventService
         var ghostUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == ghostUserId);
         if (ghostUser == null)
         {
+            _logger.LogWarning("Ghost player update failed: player {GhostUserId} not found", ghostUserId);
             throw new InvalidOperationException("Player not found");
         }
 
         if (!ghostUser.IsGhostPlayer)
         {
+            _logger.LogWarning("Ghost player update rejected for event {EventId}: user {GhostUserId} is not a guest player", eventId, ghostUserId);
             throw new InvalidOperationException("Only guest players can be edited. This player has a real account.");
         }
 
@@ -2204,6 +2209,7 @@ public class EventService : IEventService
 
         if (registration == null)
         {
+            _logger.LogWarning("Ghost player update rejected for event {EventId}: guest {GhostUserId} has no active registration", eventId, ghostUserId);
             throw new InvalidOperationException("This guest player is not registered for this event");
         }
 
@@ -2216,6 +2222,7 @@ public class EventService : IEventService
             var skaterCount = evt.Registrations.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie");
             if (skaterCount >= evt.MaxPlayers)
             {
+                _logger.LogWarning("Ghost player update rejected for event {EventId}: roster full, cannot switch guest {GhostUserId} from Goalie to Skater", eventId, ghostUserId);
                 throw new InvalidOperationException("The roster is full for skaters. Free up a skater spot before switching this guest from Goalie to Skater.");
             }
         }

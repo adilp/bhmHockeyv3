@@ -47,7 +47,7 @@ public class OrganizationServiceTests : IDisposable
             _mockWaitlistService.Object,
             _waiverService,
             Mock.Of<ILogger<EventService>>());
-        _sut = new OrganizationService(_context, _adminService, _waiverService, _eventService);
+        _sut = new OrganizationService(_context, _adminService, _waiverService, _eventService, Mock.Of<ILogger<OrganizationService>>());
     }
 
     public void Dispose()

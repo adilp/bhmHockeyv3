@@ -56,7 +56,10 @@ export function AddPlayerModal({
   const [guestSkillLevel, setGuestSkillLevel] = useState<SkillLevel | null>(null);
   const [isCreatingGuest, setIsCreatingGuest] = useState(false);
 
-  const { searchUsersForEvent, addUserToEvent, createGhostPlayer, updateGhostPlayer } = useEventStore();
+  const searchUsersForEvent = useEventStore(state => state.searchUsersForEvent);
+  const addUserToEvent = useEventStore(state => state.addUserToEvent);
+  const createGhostPlayer = useEventStore(state => state.createGhostPlayer);
+  const updateGhostPlayer = useEventStore(state => state.updateGhostPlayer);
 
   const isEditMode = !!editingRegistration;
 

@@ -632,8 +632,10 @@ public class EventsController : ControllerBase
                 eventId, organizerId, userId, request.FirstName, request.LastName, request.Position, request.SkillLevel);
             return Ok(registration);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
+            _logger.LogWarning("Ghost player update denied for event {EventId}, user {UserId}: {Message}",
+                eventId, userId, ex.Message);
             return Forbid();
         }
         catch (InvalidOperationException ex)
