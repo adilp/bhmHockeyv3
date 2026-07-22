@@ -67,9 +67,13 @@ export const colors = {
     Bronze: '#4D3D2E',    // Very muted bronze
     'D-League': '#463D54', // Very muted purple
   },
+
+  // Modal / backdrop scrim
+  overlay: 'rgba(0, 0, 0, 0.7)',
 } as const;
 
 export const spacing = {
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 16,

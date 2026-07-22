@@ -125,7 +125,7 @@ export interface SetOrganizationWaiverResponse {
 
 // Signature fields captured on the acceptance form and recorded once on the
 // acceptance row (immutable audit data). Dates are calendar dates sent as
-// YYYY-MM-DD. participantName/participantDate are always required; the
+// YYYY-MM-DD. participantName is always required; the
 // Parent/Guardian section is all-or-nothing (required if the participant is
 // under 19): either every minor field is present or all are omitted.
 // Signature dates are stamped server-side at acceptance time - the client

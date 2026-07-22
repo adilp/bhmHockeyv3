@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   waitlistPositionBadge: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: radius.round,
     backgroundColor: colors.status.warningSubtle,
     justifyContent: 'center',
     alignItems: 'center',
@@ -251,6 +251,6 @@ const styles = StyleSheet.create({
   waitlistUserMeta: {
     fontSize: 13,
     color: colors.text.muted,
-    marginTop: 2,
+    marginTop: spacing.xxs,
   },
 });

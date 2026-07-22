@@ -235,8 +235,16 @@ public class OrganizationsController : ControllerBase
     public async Task<IActionResult> Leave(Guid id)
     {
         var userId = GetCurrentUserId();
-        await _organizationService.LeaveAsync(id, userId);
-        return Ok(new { message = "You have left the organization" });
+        try
+        {
+            await _organizationService.LeaveAsync(id, userId);
+            return Ok(new { message = "You have left the organization" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Leave organization rejected for organization {OrganizationId}, user {UserId}: {Message}", id, userId, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     // Waiver endpoints

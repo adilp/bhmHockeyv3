@@ -11,18 +11,21 @@ public class OrganizationService : IOrganizationService
     private readonly IOrganizationAdminService _adminService;
     private readonly IOrganizationWaiverService _waiverService;
     private readonly IEventService _eventService;
+    private readonly ILogger<OrganizationService> _logger;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
     public OrganizationService(
         AppDbContext context,
         IOrganizationAdminService adminService,
         IOrganizationWaiverService waiverService,
-        IEventService eventService)
+        IEventService eventService,
+        ILogger<OrganizationService> logger)
     {
         _context = context;
         _adminService = adminService;
         _waiverService = waiverService;
         _eventService = eventService;
+        _logger = logger;
     }
 
     private void ValidateSkillLevels(List<string>? skillLevels)
@@ -296,6 +299,11 @@ public class OrganizationService : IOrganizationService
         }
 
         await UnsubscribeAsync(organizationId, userId);
+
+        _logger.LogInformation(
+            "User {UserId} left organization {OrganizationId}; cancelled {Count} upcoming registration(s)",
+            userId, organizationId, upcomingEventIds.Count);
+
         return true;
     }
 

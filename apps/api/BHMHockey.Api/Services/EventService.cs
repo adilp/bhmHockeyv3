@@ -121,21 +121,38 @@ public class EventService : IEventService
         };
 
         _context.Events.Add(evt);
-        await _context.SaveChangesAsync();
 
-        // Load organization for MapToDto if event belongs to one
         if (evt.OrganizationId.HasValue)
         {
-            evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
-
-            // Auto-add the org's regulars before subscribers are notified,
-            // so they're placed before anyone else can register
-            if (request.ApplyAutoRoster)
+            // Create the event and place the org's auto-roster regulars atomically:
+            // a failure mid-placement must not leave a partially-rostered event committed.
+            // Serializable matches the cancellation/promotion paths elsewhere in this service.
+            await using var transaction = await _context.Database
+                .BeginTransactionAsync(IsolationLevel.Serializable);
+            try
             {
-                await ApplyAutoRosterAsync(evt);
+                await _context.SaveChangesAsync();
+
+                // Load organization for MapToDto and auto-roster placement
+                evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
+
+                // Auto-add the org's regulars before subscribers are notified,
+                // so they're placed before anyone else can register
+                if (request.ApplyAutoRoster)
+                {
+                    await ApplyAutoRosterAsync(evt);
+                }
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
             }
 
-            // Notify organization subscribers about the new game
+            // Notify organization subscribers AFTER commit so a rollback can't send a
+            // "New Game" blast for an event that was never persisted
             var orgName = evt.Organization?.Name ?? "An organization";
             var venueText = !string.IsNullOrWhiteSpace(evt.Venue) ? $" - {evt.Venue}" : "";
             // Convert UTC to Central Time for display
@@ -148,6 +165,10 @@ public class EventService : IEventService
                 type: "new_event",
                 eventId: evt.Id
             );
+        }
+        else
+        {
+            await _context.SaveChangesAsync();
         }
 
         return await MapToDto(evt, creatorId);
@@ -2018,18 +2039,14 @@ public class EventService : IEventService
     /// </summary>
     private static string NormalizePosition(string? position)
     {
+        // Organizer adds treat a missing position as Skater; the shared normalizer
+        // validates and canonicalizes anything else.
         if (string.IsNullOrEmpty(position))
         {
             return "Skater";
         }
 
-        var normalized = position.ToLowerInvariant();
-        if (normalized != "goalie" && normalized != "skater")
-        {
-            throw new InvalidOperationException("Invalid position. Must be 'Goalie' or 'Skater'");
-        }
-
-        return normalized == "goalie" ? "Goalie" : "Skater";
+        return PositionNormalizer.Normalize(position);
     }
 
     /// <summary>
@@ -2168,12 +2185,14 @@ public class EventService : IEventService
 
         if (evt == null)
         {
+            _logger.LogWarning("Ghost player update failed: event {EventId} not found", eventId);
             throw new InvalidOperationException("Event not found");
         }
 
         // Verify organizer can manage this event
         if (!await CanUserManageEventAsync(evt, organizerId))
         {
+            _logger.LogWarning("Ghost player update denied: user {OrganizerId} cannot manage event {EventId}", organizerId, eventId);
             throw new UnauthorizedAccessException("You don't have permission to manage this event");
         }
 
@@ -2182,6 +2201,7 @@ public class EventService : IEventService
         var normalizedPositionKey = registeredPosition.ToLowerInvariant();
         if (!string.IsNullOrEmpty(skillLevel) && !ValidSkillLevels.Contains(skillLevel))
         {
+            _logger.LogWarning("Ghost player update rejected for event {EventId}: invalid skill level '{SkillLevel}'", eventId, skillLevel);
             throw new InvalidOperationException($"Invalid skill level: '{skillLevel}'. Valid values: Gold, Silver, Bronze, D-League");
         }
 
@@ -2189,11 +2209,13 @@ public class EventService : IEventService
         var ghostUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == ghostUserId);
         if (ghostUser == null)
         {
+            _logger.LogWarning("Ghost player update failed: player {GhostUserId} not found", ghostUserId);
             throw new InvalidOperationException("Player not found");
         }
 
         if (!ghostUser.IsGhostPlayer)
         {
+            _logger.LogWarning("Ghost player update rejected for event {EventId}: user {GhostUserId} is not a guest player", eventId, ghostUserId);
             throw new InvalidOperationException("Only guest players can be edited. This player has a real account.");
         }
 
@@ -2204,6 +2226,7 @@ public class EventService : IEventService
 
         if (registration == null)
         {
+            _logger.LogWarning("Ghost player update rejected for event {EventId}: guest {GhostUserId} has no active registration", eventId, ghostUserId);
             throw new InvalidOperationException("This guest player is not registered for this event");
         }
 
@@ -2216,6 +2239,7 @@ public class EventService : IEventService
             var skaterCount = evt.Registrations.Count(r => r.Status == "Registered" && r.RegisteredPosition != "Goalie");
             if (skaterCount >= evt.MaxPlayers)
             {
+                _logger.LogWarning("Ghost player update rejected for event {EventId}: roster full, cannot switch guest {GhostUserId} from Goalie to Skater", eventId, ghostUserId);
                 throw new InvalidOperationException("The roster is full for skaters. Free up a skater spot before switching this guest from Goalie to Skater.");
             }
         }

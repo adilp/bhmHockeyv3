@@ -4,6 +4,7 @@ using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using System.Security.Claims;
 using Xunit;
@@ -41,7 +42,8 @@ public class UsersControllerTests
             _mockBadgeService.Object,
             _mockTournamentTeamMemberService.Object,
             _mockTournamentService.Object,
-            _mockWaiverService.Object);
+            _mockWaiverService.Object,
+            Mock.Of<ILogger<UsersController>>());
     }
 
     private void SetupControllerWithClaims(IEnumerable<Claim> claims)

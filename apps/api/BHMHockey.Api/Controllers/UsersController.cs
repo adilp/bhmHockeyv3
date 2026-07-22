@@ -18,6 +18,7 @@ public class UsersController : ControllerBase
     private readonly ITournamentTeamMemberService _tournamentTeamMemberService;
     private readonly ITournamentService _tournamentService;
     private readonly IOrganizationWaiverService _waiverService;
+    private readonly ILogger<UsersController> _logger;
 
     public UsersController(
         IUserService userService,
@@ -26,7 +27,8 @@ public class UsersController : ControllerBase
         IBadgeService badgeService,
         ITournamentTeamMemberService tournamentTeamMemberService,
         ITournamentService tournamentService,
-        IOrganizationWaiverService waiverService)
+        IOrganizationWaiverService waiverService,
+        ILogger<UsersController> logger)
     {
         _userService = userService;
         _organizationService = organizationService;
@@ -35,6 +37,7 @@ public class UsersController : ControllerBase
         _tournamentTeamMemberService = tournamentTeamMemberService;
         _tournamentService = tournamentService;
         _waiverService = waiverService;
+        _logger = logger;
     }
 
     private Guid GetCurrentUserId()
@@ -189,6 +192,7 @@ public class UsersController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
+            _logger.LogWarning("Pending waivers request unauthorized: {Message}", ex.Message);
             return Unauthorized(new { message = ex.Message });
         }
     }
