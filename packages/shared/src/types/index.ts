@@ -310,6 +310,9 @@ export interface EventDto {
   // Waiver gate for the current user: org event + active waiver + not accepted
   // (same rule for everyone with a real account, including managers)
   requiresWaiverAcceptance: boolean;
+  // Position the current user signed up with ("Goalie"/"Skater"; null when not
+  // signed up) - matters for players who play both
+  myRegisteredPosition?: Position | null;
   // Slot position labels (organizer feature)
   slotPositionLabels?: Record<number, string>; // Maps slot index to position label (e.g., {1: "C", 2: "LW"})
   // GroupMe chat link, resolved server-side at read time: event override wins, else org's link

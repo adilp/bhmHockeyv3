@@ -2682,6 +2682,52 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetByIdAsync_UnpublishedEvent_OwnPositionStillVisible()
+    {
+        // Own signed-up position is not draft-gated (unlike team assignment)
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, isRosterPublished: false);
+        await _sut.RegisterAsync(evt.Id, player.Id);
+
+        var result = await _sut.GetByIdAsync(evt.Id, player.Id);
+
+        result!.IsRosterPublished.Should().BeFalse();
+        result.MyTeamAssignment.Should().BeNull();          // Team hidden during draft
+        result.MyRegisteredPosition.Should().Be("Skater");  // Position still visible
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_RegisteredAsGoalie_ExposesOwnPosition()
+    {
+        // Arrange - dual-position players need to see which role they signed up as
+        var creator = await CreateTestUser("creator@example.com");
+        var goalie = await CreateTestUser(
+            "goalie@example.com",
+            positions: new Dictionary<string, string> { { "goalie", "Gold" }, { "skater", "Silver" } });
+        var evt = await CreateTestEvent(creator.Id);
+        await _sut.RegisterAsync(evt.Id, goalie.Id, "Goalie");
+
+        // Act
+        var result = await _sut.GetByIdAsync(evt.Id, goalie.Id);
+
+        // Assert
+        result!.MyRegisteredPosition.Should().Be("Goalie");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_NotRegistered_OwnPositionIsNull()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var viewer = await CreateTestUser("viewer@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+
+        var result = await _sut.GetByIdAsync(evt.Id, viewer.Id);
+
+        result!.MyRegisteredPosition.Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetByIdAsync_UnpublishedEvent_Organizer_SeesPlacementDetails()
     {
         // Arrange

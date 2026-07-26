@@ -1013,6 +1013,7 @@ public class EventService : IEventService
         // Include both registered AND waitlisted users for payment status
         string? myPaymentStatus = null;
         string? myTeamAssignment = null;
+        string? myRegisteredPosition = null;
         if (currentUserId.HasValue)
         {
             var myRegistration = evt.Registrations?.FirstOrDefault(r => r.UserId == currentUserId.Value && (r.Status == "Registered" || r.Status == "Waitlisted"))
@@ -1021,6 +1022,10 @@ public class EventService : IEventService
             {
                 // Payment status always visible (players need to know their payment state during draft)
                 myPaymentStatus = evt.Cost > 0 ? myRegistration.PaymentStatus : null;
+
+                // Own position always visible - dual-position players need to know
+                // which role they signed up for, published or not
+                myRegisteredPosition = myRegistration.RegisteredPosition;
 
                 // Team assignment only visible if roster is published OR user can manage
                 if (evt.IsRosterPublished || canManage)
@@ -1129,7 +1134,8 @@ public class EventService : IEventService
             groupMeLinkSource,   // "event" | "organization" | null
             evt.ShowWaitlistBeforePublish,  // Waitlist visibility (pre-publish)
             myWaitlistPaymentEligible,      // Pay-eligibility for current user's waitlisted spot
-            requiresWaiverAcceptance        // Waiver gate for the current user
+            requiresWaiverAcceptance,       // Waiver gate for the current user
+            myRegisteredPosition            // Goalie/Skater the user signed up as
         );
     }
 
