@@ -45,7 +45,10 @@ public record EventDto(
     bool? MyWaitlistPaymentEligible = null,  // null when not applicable (not waitlisted or free event)
     // Waiver gate for the current user: org event + active waiver + not accepted
     // (same rule for everyone with a real account, including managers)
-    bool RequiresWaiverAcceptance = false
+    bool RequiresWaiverAcceptance = false,
+    // Position the current user registered/waitlisted with ("Goalie" or "Skater";
+    // null when not signed up) - matters for players who play both
+    string? MyRegisteredPosition = null
 );
 
 public record CreateEventRequest(

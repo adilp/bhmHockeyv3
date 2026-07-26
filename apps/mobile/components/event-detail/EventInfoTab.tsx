@@ -128,6 +128,10 @@ export function EventInfoTab({
                 {event.myWaitlistPosition ? `#${event.myWaitlistPosition} Waitlist` : 'Waitlist'}
               </Badge>
             )}
+            {/* Which position they signed up as - matters for dual-position players */}
+            {(event.isRegistered || event.amIWaitlisted) && event.myRegisteredPosition && (
+              <Badge variant="teal">{event.myRegisteredPosition}</Badge>
+            )}
             {/* Payment status badge for registered/waitlisted users on paid events */}
             {(event.isRegistered || event.amIWaitlisted) && event.cost > 0 && (
               <Badge variant={paymentBadge.variant}>{paymentBadge.text}</Badge>
