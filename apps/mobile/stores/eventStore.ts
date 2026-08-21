@@ -13,6 +13,8 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 interface EventState {
   // State
   events: EventDto[];
+  pastEvents: EventDto[]; // Past games the user organized or played in
+
   myRegistrations: EventDto[];
   selectedEvent: EventDto | null;
   isLoading: boolean;
@@ -22,6 +24,7 @@ interface EventState {
 
   // Actions
   fetchEvents: (organizationId?: string) => Promise<void>;
+  fetchPastEvents: () => Promise<void>;
   fetchEventById: (id: string) => Promise<void>;
   fetchMyRegistrations: () => Promise<void>;
   createEvent: (data: CreateEventRequest) => Promise<EventDto | null>;
@@ -59,6 +62,8 @@ interface EventState {
 export const useEventStore = create<EventState>((set, get) => ({
   // Initial state
   events: [],
+  pastEvents: [],
+
   myRegistrations: [],
   selectedEvent: null,
   isLoading: false,
@@ -79,6 +84,20 @@ export const useEventStore = create<EventState>((set, get) => ({
     } catch (error) {
       set({
         error: getErrorMessage(error, 'Failed to load events'),
+        isLoading: false
+      });
+    }
+  },
+
+  // Past games (server returns only ones the user organized or played in)
+  fetchPastEvents: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const pastEvents = await eventService.getPast();
+      set({ pastEvents, isLoading: false });
+    } catch (error) {
+      set({
+        error: getErrorMessage(error, 'Failed to load past games'),
         isLoading: false
       });
     }

@@ -37,6 +37,14 @@ export const eventService = {
   },
 
   /**
+   * Get the current user's past games (organized or played), newest first
+   */
+  async getPast(): Promise<EventDto[]> {
+    const response = await apiClient.instance.get<EventDto[]>('/events/past');
+    return response.data;
+  },
+
+  /**
    * Get event by ID
    */
   async getById(id: string): Promise<EventDto> {

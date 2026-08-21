@@ -2546,6 +2546,76 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetPastForUserAsync_ReturnsGamesPlayedAndOrganized_NewestFirst()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+
+        var organized = await CreateTestEvent(creator.Id, name: "Organized",
+            eventDate: DateTime.UtcNow.AddDays(-30));
+        var playedIn = await CreateTestEvent(creator.Id, name: "Played",
+            eventDate: DateTime.UtcNow.AddDays(-5));
+        await CreateRegistration(playedIn.Id, player.Id);
+
+        // Act
+        var forPlayer = await _sut.GetPastForUserAsync(player.Id);
+        var forCreator = await _sut.GetPastForUserAsync(creator.Id);
+
+        // Assert - player sees only what they played; creator sees both (they manage them)
+        forPlayer.Should().HaveCount(1);
+        forPlayer[0].Id.Should().Be(playedIn.Id);
+
+        forCreator.Should().HaveCount(2);
+        forCreator[0].Id.Should().Be(playedIn.Id);   // newest first
+        forCreator[1].Id.Should().Be(organized.Id);
+    }
+
+    [Fact]
+    public async Task GetPastForUserAsync_ExcludesUpcomingCancelledAndUninvolvedGames()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var other = await CreateTestUser("other@example.com");
+
+        var upcoming = await CreateTestEvent(creator.Id, name: "Upcoming",
+            eventDate: DateTime.UtcNow.AddDays(7));
+        await CreateRegistration(upcoming.Id, player.Id);
+
+        var cancelled = await CreateTestEvent(creator.Id, name: "Cancelled",
+            eventDate: DateTime.UtcNow.AddDays(-3), status: "Cancelled");
+        await CreateRegistration(cancelled.Id, player.Id);
+
+        // A past game someone else played in
+        var notMine = await CreateTestEvent(creator.Id, name: "Not Mine",
+            eventDate: DateTime.UtcNow.AddDays(-3));
+        await CreateRegistration(notMine.Id, other.Id);
+
+        // Act
+        var result = await _sut.GetPastForUserAsync(player.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPastForUserAsync_WaitlistedButNeverPlayed_Excluded()
+    {
+        // Arrange - waitlisted and never promoted means they did not play
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, eventDate: DateTime.UtcNow.AddDays(-2));
+        await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+
+        // Act
+        var result = await _sut.GetPastForUserAsync(player.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task UpdatePaymentStatusAsync_RegisteredUser_SendsPaymentVerifiedNotification()
     {
         // Arrange - player already on the roster, organizer verifies their payment

@@ -20,7 +20,7 @@ import type { EventDto } from '@bhmhockey/shared';
 import type { EventCardVariant } from '../../components';
 
 // Filter options
-type FilterOption = 'all' | 'available' | 'registered' | 'organizing' | 'waitlisted';
+type FilterOption = 'all' | 'available' | 'registered' | 'organizing' | 'waitlisted' | 'past';
 
 const FILTER_OPTIONS: { key: FilterOption; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -28,6 +28,7 @@ const FILTER_OPTIONS: { key: FilterOption; label: string }[] = [
   { key: 'registered', label: 'Registered' },
   { key: 'waitlisted', label: 'Waitlisted' },
   { key: 'organizing', label: 'Organizing' },
+  { key: 'past', label: 'Past' },
 ];
 
 // Determine card variant based on user's relationship to event
@@ -55,9 +56,11 @@ export default function EventsScreen() {
   const { isAuthenticated, user } = useAuthStore();
   const {
     events,
+    pastEvents,
     isLoading,
     error,
     fetchEvents,
+    fetchPastEvents,
   } = useEventStore();
 
   const [activeFilter, setActiveFilter] = useState<FilterOption>('all');
@@ -66,10 +69,22 @@ export default function EventsScreen() {
     fetchEvents();
   }, []);
 
+  // Past games come from a separate endpoint - fetch when the filter is opened
+  useEffect(() => {
+    if (activeFilter === 'past') {
+      fetchPastEvents();
+    }
+  }, [activeFilter]);
+
   // Filter events based on selected filter and sort by date
   const filteredEvents = useMemo(() => {
     let filtered: EventDto[];
     switch (activeFilter) {
+      case 'past':
+        // Newest first: the most recent game is the one being looked up
+        return [...pastEvents].sort(
+          (a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
+        );
       case 'available':
         filtered = events.filter(e => !e.isRegistered && !e.canManage && !e.amIWaitlisted);
         break;
@@ -87,7 +102,7 @@ export default function EventsScreen() {
     }
     // Sort by event date ascending (earliest first)
     return filtered.sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
-  }, [events, activeFilter]);
+  }, [events, pastEvents, activeFilter]);
 
   const handleEventPress = (eventId: string) => {
     router.push(`/events/${eventId}`);
@@ -212,6 +227,12 @@ export default function EventsScreen() {
               icon="calendar-outline"
               title="No Registered Events"
               message="Events you've registered for will appear here."
+            />
+          ) : activeFilter === 'past' ? (
+            <EmptyState
+              icon="time-outline"
+              title="No Past Games"
+              message="Games you've played in or organized will appear here after they finish."
             />
           ) : activeFilter === 'waitlisted' ? (
             <EmptyState

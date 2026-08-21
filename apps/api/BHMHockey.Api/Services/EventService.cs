@@ -331,6 +331,41 @@ public class EventService : IEventService
         };
     }
 
+    /// <summary>
+    /// Past games the user was part of: ones they manage, plus ones they were
+    /// actually rostered for. Waitlisted-but-never-promoted is excluded - they
+    /// did not play. Newest first, since recent games are what get looked up.
+    /// </summary>
+    public async Task<List<EventDto>> GetPastForUserAsync(Guid currentUserId)
+    {
+        var now = DateTime.UtcNow;
+
+        var events = await _context.Events
+            .Include(e => e.Organization)
+            .Include(e => e.Registrations)
+            .Where(e => e.Status != "Cancelled" && e.EventDate < now)
+            .OrderByDescending(e => e.EventDate)
+            .ToListAsync();
+
+        var played = await _context.EventRegistrations
+            .Where(r => r.UserId == currentUserId && r.Status == "Registered")
+            .Select(r => r.EventId)
+            .ToListAsync();
+        var playedIds = played.ToHashSet();
+
+        var result = new List<EventDto>();
+        foreach (var evt in events)
+        {
+            if (!playedIds.Contains(evt.Id) && !await CanUserManageEventAsync(evt, currentUserId))
+            {
+                continue;
+            }
+            result.Add(await MapToDto(evt, currentUserId));
+        }
+
+        return result;
+    }
+
     public async Task<List<EventDto>> GetByOrganizationAsync(Guid organizationId, Guid? currentUserId = null)
     {
         // Check if user is subscribed to this organization
