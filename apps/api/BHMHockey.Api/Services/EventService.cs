@@ -373,6 +373,76 @@ public class EventService : IEventService
         return result;
     }
 
+    /// <summary>
+    /// Calendar file for a game. Generated server-side so a phone can open it
+    /// straight from a URL - iOS hands a downloaded .ics to Calendar, which is
+    /// the reliable way in without a native calendar module.
+    /// </summary>
+    public async Task<(string Content, string FileName)?> GetCalendarIcsAsync(Guid eventId)
+    {
+        var evt = await _context.Events
+            .Include(e => e.Organization)
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.Status != "Cancelled");
+
+        if (evt == null)
+        {
+            return null;
+        }
+
+        var title = evt.Name
+            ?? (evt.Organization != null ? $"{evt.Organization.Name} Hockey" : "Hockey Game");
+
+        var details = new List<string>();
+        if (evt.Organization != null) details.Add(evt.Organization.Name);
+        if (evt.Cost > 0) details.Add($"Cost: ${evt.Cost:0.00}");
+        if (!string.IsNullOrWhiteSpace(evt.Description)) details.Add(evt.Description!);
+
+        var start = DateTime.SpecifyKind(evt.EventDate, DateTimeKind.Utc);
+        var end = start.AddMinutes(evt.Duration > 0 ? evt.Duration : 60);
+
+        var lines = new List<string>
+        {
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//BHM Hockey//Events//EN",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+            "BEGIN:VEVENT",
+            // Stable UID: re-adding an updated game replaces the entry rather
+            // than creating a duplicate
+            $"UID:{evt.Id}@bhmhockey",
+            $"DTSTAMP:{Stamp(DateTime.UtcNow)}",
+            $"DTSTART:{Stamp(start)}",
+            $"DTEND:{Stamp(end)}",
+            $"SUMMARY:{EscapeIcs(title)}"
+        };
+        if (!string.IsNullOrWhiteSpace(evt.Venue)) lines.Add($"LOCATION:{EscapeIcs(evt.Venue!)}");
+        if (details.Count > 0) lines.Add($"DESCRIPTION:{EscapeIcs(string.Join("\n", details))}");
+        lines.Add("END:VEVENT");
+        lines.Add("END:VCALENDAR");
+
+        return (string.Join("\r\n", lines), $"{SlugifyForFileName(title)}.ics");
+    }
+
+    /// <summary>Compact UTC stamp required by RFC 5545: 20260725T223000Z</summary>
+    private static string Stamp(DateTime utc) => utc.ToString("yyyyMMdd'T'HHmmss'Z'");
+
+    /// <summary>RFC 5545 escaping: backslash, semicolon, comma, and newlines</summary>
+    private static string EscapeIcs(string value) => value
+        .Replace("\\", "\\\\")
+        .Replace(";", "\\;")
+        .Replace(",", "\\,")
+        .Replace("\r\n", "\\n")
+        .Replace("\n", "\\n");
+
+    private static string SlugifyForFileName(string value)
+    {
+        var slug = new string(value.Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-').ToArray());
+        while (slug.Contains("--")) slug = slug.Replace("--", "-");
+        slug = slug.Trim('-');
+        return string.IsNullOrEmpty(slug) ? "game" : slug;
+    }
+
     public async Task<List<EventDto>> GetByOrganizationAsync(Guid organizationId, Guid? currentUserId = null)
     {
         // Check if user is subscribed to this organization

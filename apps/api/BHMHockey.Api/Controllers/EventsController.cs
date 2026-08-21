@@ -3,6 +3,7 @@ using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Models.Exceptions;
 using BHMHockey.Api.Services;
 using Microsoft.AspNetCore.Authorization;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BHMHockey.Api.Controllers;
@@ -90,6 +91,30 @@ public class EventsController : ControllerBase
     {
         var currentUserId = GetCurrentUserId();
         return Ok(await _eventService.GetPastForUserAsync(currentUserId));
+    }
+
+    /// <summary>
+    /// Calendar file for a game. Unauthenticated on purpose: the phone's
+    /// calendar fetches this URL outside the app, and it exposes only what an
+    /// invitee already sees - name, time, venue, cost.
+    /// </summary>
+    [HttpGet("{id:guid}/calendar")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetCalendarIcs(Guid id)
+    {
+        var ics = await _eventService.GetCalendarIcsAsync(id);
+
+        if (ics == null)
+        {
+            _logger.LogWarning("Calendar file requested for missing or cancelled event {EventId}", id);
+            return NotFound(new { message = "Event not found" });
+        }
+
+        // Inline, and the route deliberately has no .ics extension: iOS routes a
+        // URL ending in .ics to "Add Subscription Calendar" (a polling feed)
+        // instead of importing the single event.
+        Response.Headers.ContentDisposition = $"inline; filename=\"{ics.Value.FileName}\"";
+        return File(Encoding.UTF8.GetBytes(ics.Value.Content), "text/calendar");
     }
 
     /// <summary>

@@ -1,53 +1,31 @@
 import { Platform, ActionSheetIOS, Alert, Linking } from 'react-native';
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import type { EventDto } from '@bhmhockey/shared';
-import {
-  buildIcs,
-  calendarTitle,
-  googleCalendarUrl,
-  outlookCalendarUrl,
-  type CalendarTarget,
-} from './calendarFormat';
+import { getApiUrl } from '../config/api';
+import { googleCalendarUrl, outlookCalendarUrl, type CalendarTarget } from './calendarFormat';
 
 /**
- * Adds a game to the phone's calendar without a native calendar module:
- * Apple gets an .ics through the share sheet, Google and Outlook get
- * pre-filled web links. All JS, so it ships over the air.
+ * Adds a game to the phone's calendar without a native calendar module.
+ * Apple opens the server-generated .ics in the browser, which is what
+ * triggers iOS's own "Add to Calendar" import - Calendar is not a share
+ * sheet destination, so sharing the file goes nowhere. Google and Outlook
+ * take pre-filled web links.
  */
 
 export type { CalendarTarget };
 
-/** Filename-safe slug so the shared file reads as the game, not a guid */
-function icsFileName(event: EventDto): string {
-  const slug = calendarTitle(event)
-    .replace(/[^a-z0-9]+/gi, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase() || 'game';
-  return `${slug}.ics`;
-}
-
-async function shareIcs(event: EventDto): Promise<void> {
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('Sharing is not available on this device');
-  }
-  // expo-file-system v19 API: the legacy helpers throw at runtime
-  const file = new File(Paths.cache, icsFileName(event));
-  file.create({ overwrite: true });
-  file.write(buildIcs(event));
-  await Sharing.shareAsync(file.uri, {
-    UTI: 'com.apple.ical.ics',
-    mimeType: 'text/calendar',
-    dialogTitle: 'Add to Calendar',
-  });
+/** Public endpoint, no .ics extension: iOS treats a .ics URL as a calendar
+ *  subscription feed rather than a single event to import. */
+function icsUrl(event: EventDto): string {
+  return `${getApiUrl()}/events/${event.id}/calendar`;
 }
 
 export async function addToCalendar(event: EventDto, target: CalendarTarget): Promise<void> {
-  if (target === 'apple') {
-    await shareIcs(event);
-    return;
-  }
-  const url = target === 'google' ? googleCalendarUrl(event) : outlookCalendarUrl(event);
+  const url =
+    target === 'apple'
+      ? icsUrl(event)
+      : target === 'google'
+        ? googleCalendarUrl(event)
+        : outlookCalendarUrl(event);
   await Linking.openURL(url);
 }
 

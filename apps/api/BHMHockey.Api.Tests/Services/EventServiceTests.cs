@@ -2546,6 +2546,76 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetCalendarIcsAsync_ReturnsAValidSingleEventCalendar()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, name: "Sunday Skate",
+            eventDate: new DateTime(2026, 7, 25, 22, 30, 0, DateTimeKind.Utc), cost: 19m);
+        evt.Duration = 90;
+        evt.Venue = "Pelham Civic Complex";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetCalendarIcsAsync(evt.Id);
+
+        // Assert
+        result.Should().NotBeNull();
+        var ics = result!.Value.Content;
+        ics.Should().StartWith("BEGIN:VCALENDAR");
+        ics.TrimEnd().Should().EndWith("END:VCALENDAR");
+        ics.Should().Contain("DTSTART:20260725T223000Z");
+        ics.Should().Contain("DTEND:20260726T000000Z");        // +90 minutes
+        ics.Should().Contain($"UID:{evt.Id}@bhmhockey");        // stable, so re-adding updates
+        ics.Should().Contain("SUMMARY:Sunday Skate");
+        ics.Should().Contain("LOCATION:Pelham Civic Complex");
+        ics.Should().Contain("Cost: $19.00");
+        ics.Should().Contain("\r\n");
+        result.Value.FileName.Should().Be("sunday-skate.ics");
+    }
+
+    [Fact]
+    public async Task GetCalendarIcsAsync_EscapesReservedCharacters()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, name: "Skate, Session; One", cost: 0m);
+        evt.Venue = "Rink A, Door 3";
+        await _context.SaveChangesAsync();
+
+        // Act
+        var ics = (await _sut.GetCalendarIcsAsync(evt.Id))!.Value.Content;
+
+        // Assert - commas and semicolons must not break the field structure
+        ics.Should().Contain(@"SUMMARY:Skate\, Session\; One");
+        ics.Should().Contain(@"LOCATION:Rink A\, Door 3");
+    }
+
+    [Fact]
+    public async Task GetCalendarIcsAsync_UsesAnHourWhenDurationIsUnset()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id,
+            eventDate: new DateTime(2026, 7, 25, 22, 30, 0, DateTimeKind.Utc));
+        evt.Duration = 0;
+        await _context.SaveChangesAsync();
+
+        var ics = (await _sut.GetCalendarIcsAsync(evt.Id))!.Value.Content;
+
+        ics.Should().Contain("DTEND:20260725T233000Z");
+    }
+
+    [Fact]
+    public async Task GetCalendarIcsAsync_MissingOrCancelledEvent_ReturnsNull()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var cancelled = await CreateTestEvent(creator.Id, status: "Cancelled");
+
+        (await _sut.GetCalendarIcsAsync(Guid.NewGuid())).Should().BeNull();
+        (await _sut.GetCalendarIcsAsync(cancelled.Id)).Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetPastForUserAsync_ReturnsGamesPlayedAndOrganized_NewestFirst()
     {
         // Arrange

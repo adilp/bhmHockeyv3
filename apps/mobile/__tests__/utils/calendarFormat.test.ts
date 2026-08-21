@@ -1,6 +1,5 @@
 import type { EventDto } from '@bhmhockey/shared';
 import {
-  buildIcs,
   calendarTitle,
   googleCalendarUrl,
   outlookCalendarUrl,
@@ -32,58 +31,6 @@ describe('calendarTitle', () => {
   it('falls back to a generic title for unnamed standalone events', () => {
     expect(calendarTitle(makeEvent({ name: undefined, organizationName: undefined })))
       .toBe('Hockey Game');
-  });
-});
-
-describe('buildIcs', () => {
-  it('wraps a single VEVENT in a VCALENDAR', () => {
-    const ics = buildIcs(makeEvent());
-    expect(ics.startsWith('BEGIN:VCALENDAR')).toBe(true);
-    expect(ics.trimEnd().endsWith('END:VCALENDAR')).toBe(true);
-    expect(ics).toContain('BEGIN:VEVENT');
-    expect(ics).toContain('END:VEVENT');
-  });
-
-  it('uses compact UTC stamps and applies the duration to the end time', () => {
-    const ics = buildIcs(makeEvent());
-    expect(ics).toContain('DTSTART:20260725T223000Z');
-    expect(ics).toContain('DTEND:20260726T000000Z'); // +90 minutes
-  });
-
-  it('defaults to an hour when duration is missing', () => {
-    const ics = buildIcs(makeEvent({ duration: 0 }));
-    expect(ics).toContain('DTEND:20260725T233000Z');
-  });
-
-  it('keys the entry on the event id so re-adding updates instead of duplicating', () => {
-    expect(buildIcs(makeEvent())).toContain('UID:e1f2a3b4-0000-0000-0000-000000000001@bhmhockey');
-  });
-
-  it('includes venue and cost', () => {
-    const ics = buildIcs(makeEvent());
-    expect(ics).toContain('LOCATION:Pelham Civic Complex');
-    expect(ics).toContain('Cost: $19.00');
-  });
-
-  it('escapes commas, semicolons and newlines per RFC 5545', () => {
-    const ics = buildIcs(makeEvent({
-      name: 'Skate, Session; One',
-      venue: 'Rink A\nDoor 3',
-      organizationName: undefined,
-      cost: 0,
-    }));
-    expect(ics).toContain('SUMMARY:Skate\\, Session\; One');
-    expect(ics).toContain('LOCATION:Rink A\\nDoor 3');
-  });
-
-  it('omits optional lines when there is nothing to put in them', () => {
-    const ics = buildIcs(makeEvent({ venue: undefined, organizationName: undefined, cost: 0 }));
-    expect(ics).not.toContain('LOCATION:');
-    expect(ics).not.toContain('DESCRIPTION:');
-  });
-
-  it('uses CRLF line endings', () => {
-    expect(buildIcs(makeEvent())).toContain('\r\n');
   });
 });
 

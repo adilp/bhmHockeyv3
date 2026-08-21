@@ -8,6 +8,7 @@ public interface IEventService
     Task<List<EventDto>> GetAllAsync(Guid? currentUserId = null);
     Task<List<EventDto>> GetByOrganizationAsync(Guid organizationId, Guid? currentUserId = null);
     Task<List<EventDto>> GetPastForUserAsync(Guid currentUserId);
+    Task<(string Content, string FileName)?> GetCalendarIcsAsync(Guid eventId);
     Task<EventDto?> GetByIdAsync(Guid id, Guid? currentUserId = null);
     Task<EventDto?> UpdateAsync(Guid id, UpdateEventRequest request, Guid userId);
     Task<bool> DeleteAsync(Guid id, Guid userId);

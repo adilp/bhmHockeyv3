@@ -1,7 +1,7 @@
 import type { EventDto } from '@bhmhockey/shared';
 
 /**
- * Calendar formatting: ICS text and web template URLs. Kept free of
+ * Calendar link building for Google and Outlook. Kept free of
  * react-native and expo imports so it can be unit tested directly - the
  * platform side (share sheet, deep links) lives in ./calendar.
  */
@@ -31,38 +31,6 @@ export function calendarDescription(event: EventDto): string {
   if (event.cost > 0) parts.push(`Cost: $${event.cost.toFixed(2)}`);
   if (event.description) parts.push(event.description);
   return parts.join('\n');
-}
-
-/** Escape per RFC 5545: backslash, semicolon and comma are literals; newlines encoded */
-function escapeIcsText(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\;')
-    .replace(/,/g, '\\,')
-    .replace(/\r?\n/g, '\\n');
-}
-
-export function buildIcs(event: EventDto, now: Date = new Date()): string {
-  const { start, end } = eventWindow(event);
-  // Stable UID: re-adding an updated game replaces the entry instead of duplicating it
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//BHM Hockey//Events//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    'BEGIN:VEVENT',
-    `UID:${event.id}@bhmhockey`,
-    `DTSTAMP:${toStamp(now)}`,
-    `DTSTART:${toStamp(start)}`,
-    `DTEND:${toStamp(end)}`,
-    `SUMMARY:${escapeIcsText(calendarTitle(event))}`,
-  ];
-  if (event.venue) lines.push(`LOCATION:${escapeIcsText(event.venue)}`);
-  const description = calendarDescription(event);
-  if (description) lines.push(`DESCRIPTION:${escapeIcsText(description)}`);
-  lines.push('END:VEVENT', 'END:VCALENDAR');
-  return lines.join('\r\n');
 }
 
 export function googleCalendarUrl(event: EventDto): string {
