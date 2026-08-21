@@ -21,6 +21,7 @@ import { BadgeIconsRow } from './badges';
 import { Badge } from './Badge';
 import { buildRosterSlots, buildRosterOrderItems, type RosterSlot } from './DraggableRoster.utils';
 import { getPaymentBadgeInfo } from '../utils/payment';
+import { dLeagueTeamColor } from '../utils/dLeagueTeam';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const ROW_HEIGHT = 94; // 88px cell + 6px gap
@@ -85,6 +86,23 @@ function SkillBar({ level, color, side }: { level: SkillLevel | null; color: str
   );
 }
 
+// D-League team color, shown toward the middle of the roster so both
+// columns' dots sit near the center divider (mirrors SkillBar)
+function TeamDot({ teamName, side }: { teamName?: string | null; side: 'left' | 'right' }) {
+  const color = dLeagueTeamColor(teamName);
+  if (!color) return null;
+
+  return (
+    <View
+      style={[
+        styles.teamDot,
+        side === 'left' ? styles.teamDotInnerLeft : styles.teamDotInnerRight,
+        { backgroundColor: color },
+      ]}
+    />
+  );
+}
+
 function PlayerCell({
   registration,
   side,
@@ -117,6 +135,9 @@ function PlayerCell({
     >
       {/* Skill level bar on inner edge */}
       <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
+
+      {/* D-League team color, above the name and toward the center */}
+      <TeamDot teamName={user.dLeagueTeam} side={side} />
 
       {/* Line 1: Name (with a subtle warning glyph for players who haven't
           accepted the org's current waiver - real users only, server-computed) */}
@@ -202,6 +223,9 @@ function DragOverlay({
       >
         {/* Skill level bar on inner edge */}
         <SkillBar level={skillInfo.level} color={skillInfo.color} side={side} />
+
+        {/* D-League team color, above the name and toward the center */}
+        <TeamDot teamName={registration.user.dLeagueTeam} side={side} />
 
         {/* Line 1: Name */}
         <Text
@@ -699,6 +723,22 @@ const styles = StyleSheet.create({
   },
   skillBarRight: {
     left: 4,
+  },
+  teamDot: {
+    position: 'absolute',
+    top: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: colors.bg.darkest,
+  },
+  // The skill bar occupies 4-24px from the inner edge; the dot sits beside it
+  teamDotInnerLeft: {
+    right: 30,
+  },
+  teamDotInnerRight: {
+    left: 30,
   },
   skillBarText: {
     fontSize: 9,

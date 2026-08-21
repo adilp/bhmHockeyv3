@@ -2,22 +2,13 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { DLEAGUE_TEAMS } from '@bhmhockey/shared';
 import type { DLeagueTeam } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../theme';
+import { dLeagueTeamColor } from '../utils/dLeagueTeam';
 
 interface DLeagueTeamSelectorProps {
   value: DLeagueTeam | null;
   onChange: (team: DLeagueTeam | null) => void;
   disabled?: boolean;
 }
-
-// Jersey colors, mapped to something visible on the dark theme
-const TEAM_COLORS: Record<string, string> = {
-  Red: '#E5484D',
-  Blue: '#3E9BFF',
-  Gold: '#E0B341',
-  Orange: '#F0761A',
-  White: '#E6EDF3',
-  Black: '#6E7681', // pure black would disappear against the card
-};
 
 /**
  * Optional team picker for D-League players. Tapping the selected team
@@ -36,7 +27,7 @@ export function DLeagueTeamSelector({ value, onChange, disabled = false }: DLeag
             disabled={disabled}
             activeOpacity={0.7}
           >
-            <View style={[styles.dot, { backgroundColor: TEAM_COLORS[team.color] }]} />
+            <View style={[styles.dot, { backgroundColor: dLeagueTeamColor(team.name) ?? colors.text.muted }]} />
             <Text
               style={[styles.label, selected && styles.labelSelected]}
               allowFontScaling={false}
