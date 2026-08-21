@@ -4,6 +4,7 @@ import { SkillLevelBadges } from '../SkillLevelBadges';
 import { Badge } from '../Badge';
 import { colors, spacing, radius } from '../../theme';
 import { getPaymentBadgeInfo } from '../../utils/payment';
+import { promptAddToCalendar } from '../../utils/calendar';
 
 interface EventInfoTabProps {
   event: EventDto;
@@ -351,6 +352,23 @@ export function EventInfoTab({
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════
+          ADD TO CALENDAR (rostered players - always available, so players who
+          skipped the prompt at registration or were auto-rostered can still add it)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {event.isRegistered && (
+        <View style={styles.calendarSection}>
+          <TouchableOpacity
+            style={styles.calendarButton}
+            onPress={() => promptAddToCalendar(event)}
+          >
+            <Text style={styles.calendarButtonText} allowFontScaling={false}>
+              Add to Calendar
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
           CANCEL REGISTRATION (for registered/waitlisted users)
           ═══════════════════════════════════════════════════════════════════ */}
       {(event.isRegistered || event.amIWaitlisted) && (
@@ -617,6 +635,22 @@ const styles = StyleSheet.create({
   cancelSection: {
     marginTop: spacing.lg,
     alignItems: 'center',
+  },
+  calendarSection: {
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.lg,
+  },
+  calendarButton: {
+    borderWidth: 1,
+    borderColor: colors.primary.teal,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  calendarButtonText: {
+    color: colors.primary.teal,
+    fontSize: 16,
+    fontWeight: '600',
   },
   cancelButton: {
     paddingVertical: spacing.sm,
