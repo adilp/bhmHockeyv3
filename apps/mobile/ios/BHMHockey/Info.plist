@@ -53,9 +53,7 @@
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
     </array>
-    <key>NSCalendarsUsageDescription</key>
-	<string>BHM Hockey adds games you're rostered for to your calendar.</string>
-	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>BHM Hockey adds games you're rostered for to your calendar.</string>
 	<key>NSUserNotificationsUsageDescription</key>
     <string>BHM Hockey sends notifications about new events, registration updates, and payment reminders.</string>

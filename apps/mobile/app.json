@@ -26,7 +26,6 @@
           "remote-notification"
         ],
         "NSUserNotificationsUsageDescription": "BHM Hockey sends notifications about new events, registration updates, and payment reminders.",
-        "NSCalendarsUsageDescription": "BHM Hockey adds games you're rostered for to your calendar.",
         "NSCalendarsWriteOnlyAccessUsageDescription": "BHM Hockey adds games you're rostered for to your calendar."
       }
     },
@@ -50,12 +49,6 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#00D9C0"
-        }
-      ],
-      [
-        "expo-calendar",
-        {
-          "calendarPermission": "BHM Hockey adds games you're rostered for to your calendar."
         }
       ]
     ],

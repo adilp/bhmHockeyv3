@@ -1,12 +1,14 @@
-import { Platform, ActionSheetIOS, Alert, Linking } from 'react-native';
+import { Alert } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import type { EventDto } from '@bhmhockey/shared';
 
 /**
- * Adds a game to the phone's calendar with expo-calendar, which writes to the
- * device's calendar store directly - no browser hop, no .ics file. Accounts
- * the user has set up on the phone (iCloud, Gmail, Outlook) all appear here,
- * so "which calendar" is a real choice rather than three guesses.
+ * Adds a game to the phone's calendar through the OS-provided event sheet.
+ *
+ * Deliberately uses createEventInCalendarAsync rather than createEventAsync:
+ * the system UI does the writing after the user confirms, so the app never
+ * needs calendar permission and never gains read access to anyone's events.
+ * The user also picks which calendar (iCloud, Gmail, Outlook) in that sheet.
  */
 
 function eventWindow(event: EventDto): { start: Date; end: Date } {
@@ -29,95 +31,24 @@ export function calendarNotes(event: EventDto): string {
   return parts.join('\n');
 }
 
-/** Calendars the user can actually write to, newest accounts included */
-async function writableCalendars(): Promise<Calendar.Calendar[]> {
-  const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-  return calendars.filter((c) => c.allowsModifications);
-}
-
-async function createEvent(event: EventDto, calendarId: string): Promise<void> {
-  const { start, end } = eventWindow(event);
-  await Calendar.createEventAsync(calendarId, {
-    title: calendarTitle(event),
-    startDate: start,
-    endDate: end,
-    location: event.venue ?? undefined,
-    notes: calendarNotes(event) || undefined,
-    timeZone: 'UTC', // start/end are absolute instants; the OS renders them locally
-  });
-}
-
-function confirmAdded(calendarTitleName?: string) {
-  Alert.alert(
-    'Added to Calendar',
-    calendarTitleName ? `The game was added to "${calendarTitleName}".` : 'The game was added to your calendar.'
-  );
-}
-
-function permissionDenied() {
-  Alert.alert(
-    'Calendar Access Needed',
-    'Allow calendar access in Settings to add games to your calendar.',
-    [
-      { text: 'Not Now', style: 'cancel' },
-      { text: 'Open Settings', onPress: () => Linking.openSettings() },
-    ]
-  );
-}
-
-/**
- * Asks for calendar permission, then adds the game. When the phone has more
- * than one writable calendar the user picks which one.
- */
+/** Opens the system's new-event sheet pre-filled with the game */
 export async function promptAddToCalendar(event: EventDto): Promise<void> {
+  const { start, end } = eventWindow(event);
+
   try {
-    const { status } = await Calendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') {
-      permissionDenied();
-      return;
-    }
-
-    const calendars = await writableCalendars();
-    if (calendars.length === 0) {
-      Alert.alert(
-        'No Calendar Available',
-        'This device has no calendar that can be written to. Add an account in the Calendar app first.'
-      );
-      return;
-    }
-
-    if (calendars.length === 1) {
-      await createEvent(event, calendars[0].id);
-      confirmAdded(calendars[0].title);
-      return;
-    }
-
-    const labels = calendars.map((c) => c.title || c.source?.name || 'Calendar');
-    const pick = async (index: number) => {
-      try {
-        await createEvent(event, calendars[index].id);
-        confirmAdded(labels[index]);
-      } catch {
-        Alert.alert('Could Not Add to Calendar', 'Something went wrong saving the game. Please try again.');
-      }
-    };
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Cancel', ...labels], cancelButtonIndex: 0, title: 'Add to which calendar?' },
-        (index) => {
-          if (index === 0) return;
-          pick(index - 1);
-        }
-      );
-      return;
-    }
-
-    Alert.alert('Add to which calendar?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      ...labels.map((label, i) => ({ text: label, onPress: () => pick(i) })),
-    ]);
+    await Calendar.createEventInCalendarAsync({
+      title: calendarTitle(event),
+      startDate: start,
+      endDate: end,
+      location: event.venue ?? undefined,
+      notes: calendarNotes(event) || undefined,
+    });
+    // No confirmation alert: the system sheet already shows the result, and
+    // on Android the action is always reported as 'done' regardless of choice
   } catch {
-    Alert.alert('Could Not Add to Calendar', 'Something went wrong reaching your calendar. Please try again.');
+    Alert.alert(
+      'Could Not Add to Calendar',
+      'Something went wrong opening your calendar. Please try again.'
+    );
   }
 }
