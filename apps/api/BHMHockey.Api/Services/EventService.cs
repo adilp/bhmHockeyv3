@@ -340,26 +340,33 @@ public class EventService : IEventService
     {
         var now = DateTime.UtcNow;
 
-        var events = await _context.Events
-            .Include(e => e.Organization)
-            .Include(e => e.Registrations)
-            .Where(e => e.Status != "Cancelled" && e.EventDate < now)
-            .OrderByDescending(e => e.EventDate)
-            .ToListAsync();
-
-        var played = await _context.EventRegistrations
+        // Rostered games count as "played"; waitlisted-but-never-promoted does not
+        var playedIds = await _context.EventRegistrations
             .Where(r => r.UserId == currentUserId && r.Status == "Registered")
             .Select(r => r.EventId)
             .ToListAsync();
-        var playedIds = played.ToHashSet();
+
+        var adminOrgIds = await _context.OrganizationAdmins
+            .Where(a => a.UserId == currentUserId)
+            .Select(a => a.OrganizationId)
+            .ToListAsync();
+
+        // Mirrors CanUserManageEventAsync (org admin for org events, creator for
+        // standalone) but as one query instead of a permission check per event
+        var events = await _context.Events
+            .Include(e => e.Organization)
+            .Include(e => e.Registrations)
+            .Where(e => e.Status != "Cancelled"
+                && e.EventDate < now
+                && (playedIds.Contains(e.Id)
+                    || (e.OrganizationId == null && e.CreatorId == currentUserId)
+                    || (e.OrganizationId != null && adminOrgIds.Contains(e.OrganizationId.Value))))
+            .OrderByDescending(e => e.EventDate)
+            .ToListAsync();
 
         var result = new List<EventDto>();
         foreach (var evt in events)
         {
-            if (!playedIds.Contains(evt.Id) && !await CanUserManageEventAsync(evt, currentUserId))
-            {
-                continue;
-            }
             result.Add(await MapToDto(evt, currentUserId));
         }
 
