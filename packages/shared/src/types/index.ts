@@ -7,6 +7,7 @@ export interface User {
   phoneNumber?: string;
   positions?: UserPositions;  // Multi-position support
   venmoHandle?: string;
+  dLeagueTeam?: DLeagueTeam | null;  // Only meaningful for D-League players
   role: UserRole;
   pushToken?: string;
   isActive: boolean;
@@ -153,6 +154,15 @@ export interface PendingWaiver {
 }
 
 export type SkillLevel = 'Gold' | 'Silver' | 'Bronze' | 'D-League';
+
+/** A D-League team. Optional - a D-League player may not be on a team. */
+export type DLeagueTeam =
+  | 'Bombers'
+  | 'Knuckleheads'
+  | 'Killer Bees'
+  | 'Molar Bears'
+  | 'Lawdog'
+  | 'Bandits';
 
 // Auto-roster types - org "regulars" auto-added to new org events
 export interface AutoRosterMember {
@@ -478,6 +488,8 @@ export interface UpdateUserProfileRequest {
   phoneNumber?: string;
   positions?: UserPositions;  // Multi-position support
   venmoHandle?: string;
+  // Cleared automatically by the server when no position is D-League
+  dLeagueTeam?: DLeagueTeam | null;
 }
 
 // Registration request with optional position

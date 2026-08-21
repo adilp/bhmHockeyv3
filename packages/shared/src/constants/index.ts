@@ -1,6 +1,19 @@
 // Skill levels
 export const SKILL_LEVELS = ['Gold', 'Silver', 'Bronze', 'D-League'] as const;
 
+// D-League teams. Optional: a D-League player may or may not be on a team.
+// The color is the team's jersey color, shown as a dot beside the name.
+export const DLEAGUE_TEAMS = [
+  { name: 'Bombers', color: 'Red' },
+  { name: 'Knuckleheads', color: 'Blue' },
+  { name: 'Killer Bees', color: 'Gold' },
+  { name: 'Molar Bears', color: 'Orange' },
+  { name: 'Lawdog', color: 'White' },
+  { name: 'Bandits', color: 'Black' },
+] as const;
+
+export const DLEAGUE_TEAM_NAMES = DLEAGUE_TEAMS.map((t) => t.name);
+
 // Positions (simplified to Goalie and Skater)
 export const POSITIONS = ['Goalie', 'Skater'] as const;
 

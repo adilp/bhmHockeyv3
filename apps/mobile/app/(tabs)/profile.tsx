@@ -14,11 +14,12 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
-import type { User, SkillLevel, UserBadgeDto } from '@bhmhockey/shared';
+import type { User, SkillLevel, UserBadgeDto, DLeagueTeam } from '@bhmhockey/shared';
 import {
   FormSection,
   FormInput,
   PositionSelector,
+  DLeagueTeamSelector,
   buildPositionsFromState,
   createStateFromPositions,
   TrophyCase,
@@ -52,6 +53,7 @@ export default function ProfileScreen() {
   const [isLoadingBadges, setIsLoadingBadges] = useState(false);
   const [badgeSaveError, setBadgeSaveError] = useState<string | null>(null);
   const badgeSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dLeagueTeam, setDLeagueTeam] = useState<DLeagueTeam | null>(null);
   const previousBadgeOrderRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -61,6 +63,7 @@ export default function ProfileScreen() {
       setLastName(authUser.lastName);
       setPhoneNumber(authUser.phoneNumber || '');
       setVenmoHandle(authUser.venmoHandle || '');
+      setDLeagueTeam(authUser.dLeagueTeam ?? null);
 
       // Load positions using helper
       const positionState = createStateFromPositions(authUser.positions);
@@ -148,6 +151,10 @@ export default function ProfileScreen() {
     }, BADGE_SAVE_DEBOUNCE_MS);
   }, [badges, authUser, setAuthUser]);
 
+  // The team picker only applies to D-League players
+  const playsDLeague =
+    (isGoalie && goalieSkill === 'D-League') || (isSkater && skaterSkill === 'D-League');
+
   const handleSave = async () => {
     if (!isGoalie && !isSkater) {
       Alert.alert('Error', 'Please select at least one position (Goalie or Skater)');
@@ -165,6 +172,7 @@ export default function ProfileScreen() {
         phoneNumber: phoneNumber || undefined,
         positions,
         venmoHandle: venmoHandle || undefined,
+        dLeagueTeam: playsDLeague ? dLeagueTeam : null,
       };
 
       const updatedUser = await userService.updateProfile(updates);
@@ -324,6 +332,16 @@ export default function ProfileScreen() {
             disabled={saving}
           />
         </FormSection>
+
+        {playsDLeague && (
+          <FormSection title="D-League Team" hint="Optional - select your team if you're on one">
+            <DLeagueTeamSelector
+              value={dLeagueTeam}
+              onChange={setDLeagueTeam}
+              disabled={saving}
+            />
+          </FormSection>
+        )}
 
         <FormSection title="Payment">
           <FormInput

@@ -12,6 +12,12 @@ public class UserService : IUserService
     private static readonly HashSet<string> ValidPositionKeys = new() { "goalie", "skater" };
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
+    // Optional D-League team affiliations
+    private static readonly HashSet<string> ValidDLeagueTeams = new()
+    {
+        "Bombers", "Knuckleheads", "Killer Bees", "Molar Bears", "Lawdog", "Bandits"
+    };
+
     public UserService(AppDbContext context)
     {
         _context = context;
@@ -34,7 +40,8 @@ public class UserService : IUserService
             user.CreatedAt,
             null, // Badges
             0,    // TotalBadgeCount
-            user.IsGhostPlayer
+            user.IsGhostPlayer,
+            user.DLeagueTeam
         );
     }
 
@@ -66,6 +73,31 @@ public class UserService : IUserService
         if (request.VenmoHandle != null)
             user.VenmoHandle = request.VenmoHandle;
 
+        if (request.DLeagueTeam != null)
+        {
+            var team = request.DLeagueTeam.Trim();
+            if (team.Length == 0)
+            {
+                user.DLeagueTeam = null;
+            }
+            else
+            {
+                if (!ValidDLeagueTeams.Contains(team))
+                {
+                    throw new InvalidOperationException(
+                        $"Invalid D-League team: '{team}'. Valid values: {string.Join(", ", ValidDLeagueTeams)}");
+                }
+                user.DLeagueTeam = team;
+            }
+        }
+
+        // A team only means something for a D-League player - drop it when they
+        // no longer play at that level so stale affiliations don't linger
+        if (!PlaysDLeague(user.Positions))
+        {
+            user.DLeagueTeam = null;
+        }
+
         user.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -82,13 +114,19 @@ public class UserService : IUserService
             user.CreatedAt,
             null, // Badges
             0,    // TotalBadgeCount
-            user.IsGhostPlayer
+            user.IsGhostPlayer,
+            user.DLeagueTeam
         );
     }
 
     /// <summary>
     /// Validates position dictionary: keys must be "goalie" or "skater", values must be valid skill levels.
     /// </summary>
+    private static bool PlaysDLeague(Dictionary<string, string>? positions)
+    {
+        return positions != null && positions.Values.Any(skill => skill == "D-League");
+    }
+
     private void ValidatePositions(Dictionary<string, string> positions)
     {
         if (positions.Count == 0)
