@@ -81,6 +81,18 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Get the current user's past games (organized or played). Newest first.
+    /// The main events list only returns upcoming events.
+    /// </summary>
+    [Authorize]
+    [HttpGet("past")]
+    public async Task<ActionResult<List<EventDto>>> GetPast()
+    {
+        var currentUserId = GetCurrentUserId();
+        return Ok(await _eventService.GetPastForUserAsync(currentUserId));
+    }
+
+    /// <summary>
     /// Get a single event by ID.
     /// If authenticated, includes registration status for current user.
     /// </summary>

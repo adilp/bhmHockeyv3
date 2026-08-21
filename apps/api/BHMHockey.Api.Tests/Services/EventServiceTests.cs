@@ -2546,6 +2546,255 @@ public class EventServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetPastForUserAsync_ReturnsGamesPlayedAndOrganized_NewestFirst()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+
+        var organized = await CreateTestEvent(creator.Id, name: "Organized",
+            eventDate: DateTime.UtcNow.AddDays(-30));
+        var playedIn = await CreateTestEvent(creator.Id, name: "Played",
+            eventDate: DateTime.UtcNow.AddDays(-5));
+        await CreateRegistration(playedIn.Id, player.Id);
+
+        // Act
+        var forPlayer = await _sut.GetPastForUserAsync(player.Id);
+        var forCreator = await _sut.GetPastForUserAsync(creator.Id);
+
+        // Assert - player sees only what they played; creator sees both (they manage them)
+        forPlayer.Should().HaveCount(1);
+        forPlayer[0].Id.Should().Be(playedIn.Id);
+
+        forCreator.Should().HaveCount(2);
+        forCreator[0].Id.Should().Be(playedIn.Id);   // newest first
+        forCreator[1].Id.Should().Be(organized.Id);
+    }
+
+    [Fact]
+    public async Task GetPastForUserAsync_ExcludesUpcomingCancelledAndUninvolvedGames()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var other = await CreateTestUser("other@example.com");
+
+        var upcoming = await CreateTestEvent(creator.Id, name: "Upcoming",
+            eventDate: DateTime.UtcNow.AddDays(7));
+        await CreateRegistration(upcoming.Id, player.Id);
+
+        var cancelled = await CreateTestEvent(creator.Id, name: "Cancelled",
+            eventDate: DateTime.UtcNow.AddDays(-3), status: "Cancelled");
+        await CreateRegistration(cancelled.Id, player.Id);
+
+        // A past game someone else played in
+        var notMine = await CreateTestEvent(creator.Id, name: "Not Mine",
+            eventDate: DateTime.UtcNow.AddDays(-3));
+        await CreateRegistration(notMine.Id, other.Id);
+
+        // Act
+        var result = await _sut.GetPastForUserAsync(player.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPastForUserAsync_WaitlistedButNeverPlayed_Excluded()
+    {
+        // Arrange - waitlisted and never promoted means they did not play
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, eventDate: DateTime.UtcNow.AddDays(-2));
+        await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+
+        // Act
+        var result = await _sut.GetPastForUserAsync(player.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_RegisteredUser_SendsPaymentVerifiedNotification()
+    {
+        // Arrange - player already on the roster, organizer verifies their payment
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        player.PushToken = "ExponentPushToken[test]";
+        await _context.SaveChangesAsync();
+
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 20m);
+        var registration = await CreateRegistration(evt.Id, player.Id);
+        registration.PaymentStatus = "MarkedPaid";
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", creator.Id);
+
+        // Assert
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                player.PushToken,
+                "Payment Received",
+                It.Is<string>(b => b.Contains("verified")),
+                It.IsAny<object>(),
+                player.Id,
+                "payment_verified",
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_RegisteredUserWithoutPushToken_StillRecordsNotification()
+    {
+        // Arrange - no push token: the in-app notification must still be created
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 20m);
+        var registration = await CreateRegistration(evt.Id, player.Id);
+        registration.PaymentStatus = "MarkedPaid";
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", creator.Id);
+
+        // Assert - dispatched with the userId so the notification is persisted
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(),
+                "Payment Received",
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                player.Id,
+                "payment_verified",
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdatePaymentStatusAsync_FreeEvent_SendsNoPaymentNotification()
+    {
+        // Arrange - nothing was paid, so "Payment Received" would be nonsense
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 0m);
+        var registration = await CreateRegistration(evt.Id, player.Id);
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.UpdatePaymentStatusAsync(evt.Id, registration.Id, "Verified", creator.Id);
+
+        // Assert
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(),
+                "Payment Received",
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task CancelRegistrationAsync_RosteredPlayer_NotifiesCreatorWithPlayerName()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        creator.PushToken = "ExponentPushToken[creator]";
+        var player = await CreateTestUser("player@example.com");
+        player.FirstName = "Marcus";
+        player.LastName = "Reilly";
+        await _context.SaveChangesAsync();
+
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10);
+        var registration = await CreateRegistration(evt.Id, player.Id);
+        registration.RegisteredPosition = "Goalie";
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.CancelRegistrationAsync(evt.Id, player.Id);
+
+        // Assert - the name and position are in the message
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                creator.PushToken,
+                "Player Dropped",
+                It.Is<string>(b => b.Contains("Marcus Reilly") && b.Contains("Goalie")),
+                It.IsAny<object>(),
+                creator.Id,
+                "player_dropped",
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelRegistrationAsync_WaitlistedPlayer_DoesNotNotifyManagers()
+    {
+        // Arrange - leaving the waitlist frees no roster spot
+        var creator = await CreateTestUser("creator@example.com");
+        creator.PushToken = "ExponentPushToken[creator]";
+        var player = await CreateTestUser("player@example.com");
+        await _context.SaveChangesAsync();
+
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10);
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.CancelRegistrationAsync(evt.Id, player.Id);
+
+        // Assert
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(),
+                "Player Dropped",
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task CancelRegistrationAsync_ManagerDropsThemselves_DoesNotNotifyThemselves()
+    {
+        // Arrange - the creator is registered in their own game and drops out
+        var creator = await CreateTestUser("creator@example.com");
+        creator.PushToken = "ExponentPushToken[creator]";
+        await _context.SaveChangesAsync();
+
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10);
+        var registration = await CreateRegistration(evt.Id, creator.Id);
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.CancelRegistrationAsync(evt.Id, creator.Id);
+
+        // Assert - no self-notification
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(),
+                "Player Dropped",
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<string?>(),
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task UpdatePaymentStatusAsync_WaitlistedUserPromoted_SendsNotification()
     {
         // Arrange

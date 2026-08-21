@@ -331,6 +331,48 @@ public class EventService : IEventService
         };
     }
 
+    /// <summary>
+    /// Past games the user was part of: ones they manage, plus ones they were
+    /// actually rostered for. Waitlisted-but-never-promoted is excluded - they
+    /// did not play. Newest first, since recent games are what get looked up.
+    /// </summary>
+    public async Task<List<EventDto>> GetPastForUserAsync(Guid currentUserId)
+    {
+        var now = DateTime.UtcNow;
+
+        // Rostered games count as "played"; waitlisted-but-never-promoted does not
+        var playedIds = await _context.EventRegistrations
+            .Where(r => r.UserId == currentUserId && r.Status == "Registered")
+            .Select(r => r.EventId)
+            .ToListAsync();
+
+        var adminOrgIds = await _context.OrganizationAdmins
+            .Where(a => a.UserId == currentUserId)
+            .Select(a => a.OrganizationId)
+            .ToListAsync();
+
+        // Mirrors CanUserManageEventAsync (org admin for org events, creator for
+        // standalone) but as one query instead of a permission check per event
+        var events = await _context.Events
+            .Include(e => e.Organization)
+            .Include(e => e.Registrations)
+            .Where(e => e.Status != "Cancelled"
+                && e.EventDate < now
+                && (playedIds.Contains(e.Id)
+                    || (e.OrganizationId == null && e.CreatorId == currentUserId)
+                    || (e.OrganizationId != null && adminOrgIds.Contains(e.OrganizationId.Value))))
+            .OrderByDescending(e => e.EventDate)
+            .ToListAsync();
+
+        var result = new List<EventDto>();
+        foreach (var evt in events)
+        {
+            result.Add(await MapToDto(evt, currentUserId));
+        }
+
+        return result;
+    }
+
     public async Task<List<EventDto>> GetByOrganizationAsync(Guid organizationId, Guid? currentUserId = null)
     {
         // Check if user is subscribed to this organization
@@ -709,6 +751,7 @@ public class EventService : IEventService
     public async Task<bool> CancelRegistrationAsync(Guid eventId, Guid userId)
     {
         var registration = await _context.EventRegistrations
+            .Include(r => r.User)
             .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
 
         if (registration == null) return false;
@@ -751,6 +794,12 @@ public class EventService : IEventService
             {
                 await _waitlistService.SendPendingNotificationsAsync(
                     promotionResult.PendingNotifications);
+            }
+
+            // Managers need to know a spot opened, and who left it
+            if (wasRegistered)
+            {
+                await NotifyManagersPlayerDroppedAsync(registration);
             }
 
             return true;
@@ -1281,7 +1330,8 @@ public class EventService : IEventService
         bool promoted = false;
 
         // Track notification action to send AFTER commit
-        // 0 = none, 1 = promoted from waitlist, 2 = verified but roster full
+        // 0 = none, 1 = promoted from waitlist, 2 = verified but roster full,
+        // 3 = payment verified for a player already on the roster
         int notificationAction = 0;
 
         if (paymentStatus == "Verified")
@@ -1339,6 +1389,7 @@ public class EventService : IEventService
             {
                 // User is already registered, just verify payment
                 message = "Payment verified successfully";
+                notificationAction = 3;
                 await _context.SaveChangesAsync();
             }
         }
@@ -1362,6 +1413,11 @@ public class EventService : IEventService
         {
             // Payment verified but roster full
             await NotifyUserPaymentVerifiedButFullAsync(evt, registration.User);
+        }
+        else if (notificationAction == 3)
+        {
+            // Payment verified for a player already on the roster
+            await NotifyUserPaymentVerifiedAsync(evt, registration.User);
         }
 
         // Create the registration DTO for response
@@ -1427,6 +1483,83 @@ public class EventService : IEventService
             type: "payment_verified_waitlist",
             organizationId: evt.OrganizationId,
             eventId: evt.Id);
+    }
+
+    /// <summary>
+    /// Confirms a verified payment to a player already on the roster.
+    /// Not gated on roster publication: payment status is visible to players
+    /// during draft mode too, and this says nothing about roster placement.
+    /// Sent even without a push token so the in-app notification is recorded.
+    /// </summary>
+    private async Task NotifyUserPaymentVerifiedAsync(Event evt, User user)
+    {
+        if (evt.Cost <= 0)
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+
+        await _notificationService.SendPushNotificationAsync(
+            user.PushToken ?? string.Empty,
+            "Payment Received",
+            $"Your payment for {eventName} has been verified. You're all set!",
+            new { eventId = evt.Id.ToString(), type = "payment_verified" },
+            userId: user.Id,
+            type: "payment_verified",
+            organizationId: evt.OrganizationId,
+            eventId: evt.Id);
+    }
+
+    /// <summary>
+    /// Tells whoever manages the event that a rostered player dropped, by name.
+    /// Not gated on roster publication: managers fill spots during draft mode too.
+    /// Sent even without a push token so the in-app notification is recorded.
+    /// The player who dropped is never notified about their own drop.
+    /// </summary>
+    private async Task NotifyManagersPlayerDroppedAsync(EventRegistration registration)
+    {
+        var evt = await _context.Events
+            .FirstOrDefaultAsync(e => e.Id == registration.EventId);
+        if (evt == null)
+        {
+            return;
+        }
+
+        // Org events are managed by every org admin; standalone events by the creator
+        var managerIds = evt.OrganizationId.HasValue
+            ? await _context.OrganizationAdmins
+                .Where(a => a.OrganizationId == evt.OrganizationId.Value)
+                .Select(a => a.UserId)
+                .ToListAsync()
+            : new List<Guid> { evt.CreatorId };
+
+        var recipients = await _context.Users
+            .Where(u => managerIds.Contains(u.Id) && u.Id != registration.UserId)
+            .ToListAsync();
+
+        if (recipients.Count == 0)
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+        var playerName = $"{registration.User.FirstName} {registration.User.LastName}".Trim();
+        if (string.IsNullOrEmpty(playerName)) playerName = registration.User.Email;
+        var position = registration.RegisteredPosition ?? "Skater";
+
+        foreach (var manager in recipients)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                manager.PushToken ?? string.Empty,
+                "Player Dropped",
+                $"{playerName} ({position}) dropped out of {eventName}.",
+                new { eventId = evt.Id.ToString(), type = "player_dropped" },
+                userId: manager.Id,
+                type: "player_dropped",
+                organizationId: evt.OrganizationId,
+                eventId: evt.Id);
+        }
     }
 
     // Team assignment methods

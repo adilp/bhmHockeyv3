@@ -7,6 +7,7 @@ public interface IEventService
     Task<EventDto> CreateAsync(CreateEventRequest request, Guid creatorId);
     Task<List<EventDto>> GetAllAsync(Guid? currentUserId = null);
     Task<List<EventDto>> GetByOrganizationAsync(Guid organizationId, Guid? currentUserId = null);
+    Task<List<EventDto>> GetPastForUserAsync(Guid currentUserId);
     Task<EventDto?> GetByIdAsync(Guid id, Guid? currentUserId = null);
     Task<EventDto?> UpdateAsync(Guid id, UpdateEventRequest request, Guid userId);
     Task<bool> DeleteAsync(Guid id, Guid userId);
