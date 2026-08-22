@@ -1515,6 +1515,54 @@ public class EventService : IEventService
     }
 
     /// <summary>
+    /// Tells a player the organizer moved them off the waitlist onto the roster.
+    /// On a paid event the spot is theirs to confirm rather than secured, so the
+    /// message is a payment prompt. Payment deadlines are not auto-enforced
+    /// (the organizer decides), so the wording says the spot MAY pass on.
+    /// Not gated on roster publication: the payment ask is time sensitive and
+    /// payment state is already visible to players during draft.
+    /// Sent even without a push token so the in-app notification is recorded.
+    /// </summary>
+    private async Task NotifyPlayerMovedToRosterAsync(
+        Event evt,
+        EventRegistration registration,
+        int? previousWaitlistPosition,
+        Guid organizerId)
+    {
+        var user = registration.User;
+
+        // Ghosts have no account to notify, and an organizer moving themselves
+        // already knows they did it
+        if (user == null || user.IsGhostPlayer || user.Id == organizerId)
+        {
+            return;
+        }
+
+        var eventName = evt.Name ?? $"Event on {evt.EventDate:MMM d}";
+        var place = previousWaitlistPosition.HasValue
+            ? $" You were #{previousWaitlistPosition.Value} on the waitlist."
+            : string.Empty;
+
+        // Already-verified players owe nothing - don't ask them to pay again
+        var needsPayment = evt.Cost > 0 && registration.PaymentStatus != "Verified";
+
+        var title = needsPayment ? "A Spot Opened - Send Payment" : "You're On the Roster";
+        var body = needsPayment
+            ? $"A spot opened up for {eventName}.{place} Send your ${evt.Cost:0.00} payment to confirm your spot - otherwise it may go to the next player on the waitlist."
+            : $"A spot opened up for {eventName}.{place} You're on the roster.";
+
+        await _notificationService.SendPushNotificationAsync(
+            user.PushToken ?? string.Empty,
+            title,
+            body,
+            new { eventId = evt.Id.ToString(), type = "moved_to_roster" },
+            userId: user.Id,
+            type: "moved_to_roster",
+            organizationId: evt.OrganizationId,
+            eventId: evt.Id);
+    }
+
+    /// <summary>
     /// Tells whoever manages the event that a rostered player dropped, by name.
     /// Not gated on roster publication: managers fill spots during draft mode too.
     /// Sent even without a push token so the in-app notification is recorded.
@@ -1703,6 +1751,9 @@ public class EventService : IEventService
                 return new MoveResultDto(false, "Roster is full", null);
         }
 
+        // Their place in line, captured before the move clears it
+        var previousWaitlistPosition = registration.WaitlistPosition;
+
         // Perform the move
         registration.Status = "Registered";
         registration.WaitlistPosition = null;
@@ -1720,7 +1771,9 @@ public class EventService : IEventService
         // Renumber remaining waitlist
         await _waitlistService.UpdateWaitlistPositionsAsync(eventId);
 
-        // Build response DTO (no notification during draft - ShouldSendRosterNotification returns false)
+        // Tell them a spot opened - on paid events this is their prompt to pay
+        await NotifyPlayerMovedToRosterAsync(evt, registration, previousWaitlistPosition, organizerId);
+
         var dto = MapRegistrationToDto(registration);
         return new MoveResultDto(true, "Player moved to roster", dto);
     }
