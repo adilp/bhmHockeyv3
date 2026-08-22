@@ -96,6 +96,120 @@ public class UserServiceTests : IDisposable
     #region UpdateProfile Tests
 
     [Fact]
+    public async Task UpdateProfileAsync_DLeaguePlayer_StoresTeam()
+    {
+        // Arrange
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "D-League" } });
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: "Killer Bees");
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().Be("Killer Bees");
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_TeamIsOptional_StaysNullWhenNotSet()
+    {
+        // Arrange - D-League player who never picks a team
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "D-League" } });
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: "Jane", LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: null);
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_EmptyTeam_ClearsIt()
+    {
+        // Arrange
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "D-League" } });
+        user.DLeagueTeam = "Bandits";
+        await _context.SaveChangesAsync();
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: "");
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_UnknownTeam_Throws()
+    {
+        // Arrange
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "D-League" } });
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: "Mighty Ducks");
+
+        // Act
+        var act = () => _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Invalid D-League team*");
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_LeavingDLeague_ClearsStaleTeam()
+    {
+        // Arrange - on a team, then moves up to Silver
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "D-League" } });
+        user.DLeagueTeam = "Molar Bears";
+        await _context.SaveChangesAsync();
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: new Dictionary<string, string> { { "skater", "Silver" } },
+            VenmoHandle: null, DLeagueTeam: null);
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert - the affiliation does not linger
+        result.DLeagueTeam.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_NonDLeaguePlayer_CannotKeepATeam()
+    {
+        // Arrange - a Gold skater sending a team is ignored, not stored
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "Gold" } });
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: "Bombers");
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().BeNull();
+    }
+
+    [Fact]
     public async Task UpdateProfileAsync_WithPartialData_OnlyUpdatesProvidedFields()
     {
         // Arrange

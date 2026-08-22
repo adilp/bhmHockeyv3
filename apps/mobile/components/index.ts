@@ -27,6 +27,7 @@ export { FormSection } from './FormSection';
 export { FormInput } from './FormInput';
 export { PositionSelector, buildPositionsFromState, createStateFromPositions } from './PositionSelector';
 export type { PositionState } from './PositionSelector';
+export { DLeagueTeamSelector } from './DLeagueTeamSelector';
 
 // Utility components
 export { EnvBanner } from './EnvBanner';

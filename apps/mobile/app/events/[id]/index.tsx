@@ -16,6 +16,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useOrganizationStore } from '../../../stores/organizationStore';
 import { useWaiverStore } from '../../../stores/waiverStore';
 import { openVenmoPayment } from '../../../utils/venmo';
+import { promptAddToCalendar } from '../../../utils/calendar';
 import {
   SegmentedControl,
   EventInfoTab,
@@ -118,7 +119,22 @@ export default function EventDetailScreen() {
         const title = result.payEligible ? 'Please Send Payment' : 'Added to Waitlist';
         Alert.alert(title, result.message);
       } else {
-        Alert.alert('Success', `You have been registered as a ${position}!`);
+        Alert.alert(
+          'Success',
+          `You have been registered as a ${position}!`,
+          [
+            { text: 'Not Now', style: 'cancel' },
+            {
+              text: 'Add to Calendar',
+              onPress: () => {
+                // selectedEvent is stale here (register just mutated it), so
+                // read the fresh copy the store wrote
+                const current = useEventStore.getState().selectedEvent;
+                if (current) promptAddToCalendar(current);
+              },
+            },
+          ]
+        );
       }
     };
 

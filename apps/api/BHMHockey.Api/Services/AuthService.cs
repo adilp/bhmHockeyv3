@@ -334,7 +334,8 @@ public class AuthService : IAuthService
             user.CreatedAt,
             null, // Badges
             0,    // TotalBadgeCount
-            user.IsGhostPlayer
+            user.IsGhostPlayer,
+            user.DLeagueTeam
         );
     }
 }

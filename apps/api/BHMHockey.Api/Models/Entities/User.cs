@@ -18,6 +18,10 @@ public class User
 
     public string Role { get; set; } = "Player"; // Player, Organizer, Admin
     public bool IsActive { get; set; } = true;
+    // D-League team (optional, and only meaningful for D-League players).
+    // Cleared automatically when no position is D-League.
+    public string? DLeagueTeam { get; set; }
+
     public bool IsGhostPlayer { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

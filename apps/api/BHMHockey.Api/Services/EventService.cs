@@ -850,7 +850,8 @@ public class EventService : IEventService
                     r.User.CreatedAt,
                     topBadges,      // Top 3 badges
                     totalCount,     // Total badge count
-                    r.User.IsGhostPlayer
+                    r.User.IsGhostPlayer,
+                    r.User.DLeagueTeam
                 ),
                 r.Status,
                 r.RegisteredAt,
@@ -900,7 +901,8 @@ public class EventService : IEventService
                     r.User.CreatedAt,
                     topBadges,      // Top 3 badges
                     totalCount,     // Total badge count
-                    r.User.IsGhostPlayer
+                    r.User.IsGhostPlayer,
+                    r.User.DLeagueTeam
                 ),
                 r.Status,
                 r.RegisteredAt,
@@ -1436,7 +1438,8 @@ public class EventService : IEventService
                 registration.User.CreatedAt,
                 null,  // Badges not included in payment update response
                 0,     // Total badge count not included
-                registration.User.IsGhostPlayer
+                registration.User.IsGhostPlayer,
+                registration.User.DLeagueTeam
             ),
             registration.Status,
             registration.RegisteredAt,
@@ -1858,7 +1861,8 @@ public class EventService : IEventService
                 registration.User.CreatedAt,
                 null,  // Badges not included in move response
                 0,     // Total badge count not included
-                registration.User.IsGhostPlayer
+                registration.User.IsGhostPlayer,
+                registration.User.DLeagueTeam
             ),
             registration.Status,
             registration.RegisteredAt,

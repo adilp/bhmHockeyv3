@@ -25,7 +25,8 @@
         "UIBackgroundModes": [
           "remote-notification"
         ],
-        "NSUserNotificationsUsageDescription": "BHM Hockey sends notifications about new events, registration updates, and payment reminders."
+        "NSUserNotificationsUsageDescription": "BHM Hockey sends notifications about new events, registration updates, and payment reminders.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "BHM Hockey adds games you're rostered for to your calendar."
       }
     },
     "android": {
