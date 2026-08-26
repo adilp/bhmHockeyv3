@@ -10,6 +10,8 @@ public class Organization
     public string? Location { get; set; }
     public List<string>? SkillLevels { get; set; } // Gold, Silver, Bronze, D-League (multiple allowed)
     public bool IsActive { get; set; } = true;
+    // Private orgs stay visible when browsing, but joining requires admin approval
+    public bool IsPrivate { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

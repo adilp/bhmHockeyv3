@@ -128,6 +128,7 @@ export async function getLastNotificationResponse(): Promise<Notifications.Notif
 interface NotificationData {
   type?: string;
   eventId?: string;
+  organizationId?: string;
   [key: string]: any;
 }
 
@@ -171,6 +172,21 @@ export function handleNotificationData(data: NotificationData | null) {
       // Organizer payment reminder - navigate to event detail (defaults to roster tab for organizers)
       if (data.eventId) {
         router.push(`/events/${data.eventId}`);
+      }
+      break;
+
+    case 'join_request':
+      // Admin notification - the join requests screen for that org
+      if (data.organizationId) {
+        router.push(`/organizations/${data.organizationId}/join-requests`);
+      }
+      break;
+
+    case 'join_request_approved':
+    case 'join_request_denied':
+      // Requester notification - the org page shows the outcome
+      if (data.organizationId) {
+        router.push(`/organizations/${data.organizationId}`);
       }
       break;
 

@@ -11,6 +11,7 @@ public class OrganizationService : IOrganizationService
     private readonly IOrganizationAdminService _adminService;
     private readonly IOrganizationWaiverService _waiverService;
     private readonly IEventService _eventService;
+    private readonly IOrganizationJoinRequestService _joinRequestService;
     private readonly ILogger<OrganizationService> _logger;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
@@ -19,12 +20,14 @@ public class OrganizationService : IOrganizationService
         IOrganizationAdminService adminService,
         IOrganizationWaiverService waiverService,
         IEventService eventService,
+        IOrganizationJoinRequestService joinRequestService,
         ILogger<OrganizationService> logger)
     {
         _context = context;
         _adminService = adminService;
         _waiverService = waiverService;
         _eventService = eventService;
+        _joinRequestService = joinRequestService;
         _logger = logger;
     }
 
@@ -118,7 +121,8 @@ public class OrganizationService : IOrganizationService
             DefaultVenue = request.DefaultVenue,
             DefaultVisibility = request.DefaultVisibility,
             DefaultShowWaitlistBeforePublish = request.DefaultShowWaitlistBeforePublish,
-            GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink)
+            GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink),
+            IsPrivate = request.IsPrivate ?? false
         };
 
         _context.Organizations.Add(organization);
@@ -215,6 +219,8 @@ public class OrganizationService : IOrganizationService
         if (request.DefaultVenue != null) organization.DefaultVenue = request.DefaultVenue;
         if (request.DefaultVisibility != null) organization.DefaultVisibility = request.DefaultVisibility;
         if (request.DefaultShowWaitlistBeforePublish != null) organization.DefaultShowWaitlistBeforePublish = request.DefaultShowWaitlistBeforePublish;
+        // Flipping privacy never touches existing memberships - members are grandfathered in
+        if (request.IsPrivate != null) organization.IsPrivate = request.IsPrivate.Value;
         // Empty/whitespace clears the link (Normalize returns null); null leaves it unchanged
         if (request.GroupMeLink != null) organization.GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink);
 
@@ -242,12 +248,27 @@ public class OrganizationService : IOrganizationService
         return true;
     }
 
-    public async Task<bool> SubscribeAsync(Guid organizationId, Guid userId)
+    /// <summary>
+    /// Join an organization. Public orgs subscribe instantly (unchanged); private
+    /// orgs get a Pending join request instead - no subscription until an admin
+    /// approves it.
+    /// </summary>
+    public async Task<SubscribeOutcome> SubscribeAsync(Guid organizationId, Guid userId)
     {
         var exists = await _context.OrganizationSubscriptions
             .AnyAsync(s => s.OrganizationId == organizationId && s.UserId == userId);
 
-        if (exists) return false;
+        if (exists) return SubscribeOutcome.AlreadySubscribed;
+
+        var isPrivate = await _context.Organizations
+            .Where(o => o.Id == organizationId)
+            .Select(o => o.IsPrivate)
+            .FirstOrDefaultAsync();
+
+        if (isPrivate)
+        {
+            return await _joinRequestService.RequestJoinAsync(organizationId, userId);
+        }
 
         var subscription = new OrganizationSubscription
         {
@@ -258,7 +279,7 @@ public class OrganizationService : IOrganizationService
         _context.OrganizationSubscriptions.Add(subscription);
         await _context.SaveChangesAsync();
 
-        return true;
+        return SubscribeOutcome.Subscribed;
     }
 
     public async Task<bool> UnsubscribeAsync(Guid organizationId, Guid userId)
@@ -270,6 +291,10 @@ public class OrganizationService : IOrganizationService
 
         _context.OrganizationSubscriptions.Remove(subscription);
         await _context.SaveChangesAsync();
+
+        // Leaving is not the same as being denied - drop the approved request so
+        // the user can request to join again later
+        await _joinRequestService.ClearApprovedRequestAsync(organizationId, userId);
 
         return true;
     }
@@ -480,6 +505,20 @@ public class OrganizationService : IOrganizationService
         var isAdmin = currentUserId.HasValue &&
             await _adminService.IsUserAdminAsync(org.Id, currentUserId.Value);
 
+        var myJoinRequestStatus = currentUserId.HasValue
+            ? await _context.OrganizationJoinRequests
+                .Where(r => r.OrganizationId == org.Id && r.UserId == currentUserId.Value)
+                .Select(r => r.Status)
+                .FirstOrDefaultAsync()
+            : null;
+
+        // ADMIN-ONLY (same privacy discipline as the member waiver flags):
+        // non-admins must never learn how many people are waiting.
+        int? pendingJoinRequestCount = isAdmin
+            ? await _context.OrganizationJoinRequests
+                .CountAsync(r => r.OrganizationId == org.Id && r.Status == OrganizationJoinRequestStatus.Pending)
+            : null;
+
         return new OrganizationDto(
             org.Id,
             org.Name,
@@ -499,7 +538,10 @@ public class OrganizationService : IOrganizationService
             org.DefaultVenue,
             org.DefaultVisibility,
             org.GroupMeLink,
-            org.DefaultShowWaitlistBeforePublish
+            org.DefaultShowWaitlistBeforePublish,
+            org.IsPrivate,
+            myJoinRequestStatus,
+            pendingJoinRequestCount
         );
     }
 }

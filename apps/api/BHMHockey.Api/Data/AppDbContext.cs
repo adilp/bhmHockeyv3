@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<OrganizationAdmin> OrganizationAdmins { get; set; }
     public DbSet<OrganizationAutoRosterMember> OrganizationAutoRosterMembers { get; set; }
     public DbSet<OrganizationWaiver> OrganizationWaivers { get; set; }
+    public DbSet<OrganizationJoinRequest> OrganizationJoinRequests { get; set; }
     public DbSet<WaiverAcceptance> WaiverAcceptances { get; set; }
     public DbSet<Event> Events { get; set; }
     public DbSet<EventRegistration> EventRegistrations { get; set; }
@@ -159,6 +160,32 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.AddedByUser)
                 .WithMany()
                 .HasForeignKey(e => e.AddedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // OrganizationJoinRequest configuration - one reusable row per (org, user)
+        modelBuilder.Entity<OrganizationJoinRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
+
+            // One request row per user per org; its Status moves through the flow
+            entity.HasIndex(e => new { e.OrganizationId, e.UserId }).IsUnique();
+
+            entity.HasOne(e => e.Organization)
+                .WithMany()
+                .HasForeignKey(e => e.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // SetNull so deleting the deciding admin cannot destroy the record
+            entity.HasOne(e => e.DecidedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.DecidedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 

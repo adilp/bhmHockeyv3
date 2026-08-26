@@ -68,6 +68,31 @@ export interface Organization {
   defaultVisibility?: EventVisibility | null;
   defaultShowWaitlistBeforePublish?: boolean | null;  // Pre-fills showWaitlistBeforePublish on new events
   groupMeLink?: string | null;  // Org-wide GroupMe chat link (events fall back to this)
+  // Privacy - private orgs stay visible when browsing but joining needs admin approval
+  isPrivate: boolean;
+  myJoinRequestStatus?: JoinRequestStatus | null;  // Current user's join request, null when none
+  pendingJoinRequestCount?: number | null;  // ADMIN-ONLY - null for everyone else
+}
+
+// A user's join request for a private organization
+export type JoinRequestStatus = 'Pending' | 'Approved' | 'Denied';
+
+export interface OrganizationJoinRequest {
+  id: string;
+  organizationId: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  status: JoinRequestStatus;
+  requestedAt: string;
+  decidedAt?: string | null;
+}
+
+// POST /organizations/{id}/subscribe response - public orgs subscribe instantly,
+// private orgs land in JoinRequestPending
+export interface SubscribeResult {
+  status: 'Subscribed' | 'JoinRequestPending';
+  message: string;
 }
 
 // Organization admin info
@@ -207,6 +232,7 @@ export interface CreateOrganizationRequest {
   defaultVisibility?: EventVisibility | null;
   defaultShowWaitlistBeforePublish?: boolean | null;
   groupMeLink?: string | null;  // Org-wide GroupMe chat link
+  isPrivate?: boolean | null;  // null/undefined defaults to public
 }
 
 export interface UpdateOrganizationRequest {
@@ -224,6 +250,7 @@ export interface UpdateOrganizationRequest {
   defaultVisibility?: EventVisibility | null;
   defaultShowWaitlistBeforePublish?: boolean | null;  // null/undefined leaves it unchanged
   groupMeLink?: string | null;  // Empty/whitespace clears the link; null/undefined leaves it unchanged
+  isPrivate?: boolean | null;  // null/undefined leaves it unchanged
 }
 
 // Event types
@@ -519,7 +546,10 @@ export type NotificationType =
   | 'payment_reminder'
   | 'game_reminder'
   | 'organizer_payment_reminder'
-  | 'not_full_reminder';
+  | 'not_full_reminder'
+  | 'join_request'
+  | 'join_request_approved'
+  | 'join_request_denied';
 
 export interface Notification {
   id: string;

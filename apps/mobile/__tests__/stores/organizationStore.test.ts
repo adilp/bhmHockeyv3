@@ -14,6 +14,9 @@ const mockRemoveAutoRosterMember = jest.fn();
 const mockReorderAutoRoster = jest.fn();
 const mockGetWaiver = jest.fn();
 const mockSetWaiver = jest.fn();
+const mockGetJoinRequests = jest.fn();
+const mockApproveJoinRequest = jest.fn();
+const mockDenyJoinRequest = jest.fn();
 
 // Mock the api-client module
 jest.mock('@bhmhockey/api-client', () => ({
@@ -28,12 +31,15 @@ jest.mock('@bhmhockey/api-client', () => ({
     reorderAutoRoster: mockReorderAutoRoster,
     getWaiver: mockGetWaiver,
     setWaiver: mockSetWaiver,
+    getJoinRequests: mockGetJoinRequests,
+    approveJoinRequest: mockApproveJoinRequest,
+    denyJoinRequest: mockDenyJoinRequest,
   },
 }));
 
 // Import after mocking
 import { useOrganizationStore } from '../../stores/organizationStore';
-import type { Organization, OrganizationSubscription, AutoRosterMember, OrganizationWaiver } from '@bhmhockey/shared';
+import type { Organization, OrganizationSubscription, AutoRosterMember, OrganizationWaiver, OrganizationJoinRequest } from '@bhmhockey/shared';
 
 const createMockOrg = (overrides: Partial<Organization> = {}): Organization => ({
   id: 'org-1',
@@ -45,7 +51,20 @@ const createMockOrg = (overrides: Partial<Organization> = {}): Organization => (
   subscriberCount: 5,
   isSubscribed: false,
   isAdmin: false,
+  isPrivate: false,
   createdAt: new Date().toISOString(),
+  ...overrides,
+});
+
+const createMockJoinRequest = (overrides: Partial<OrganizationJoinRequest> = {}): OrganizationJoinRequest => ({
+  id: 'req-1',
+  organizationId: 'org-1',
+  userId: 'user-9',
+  firstName: 'Jane',
+  lastName: 'Doe',
+  status: 'Pending',
+  requestedAt: new Date().toISOString(),
+  decidedAt: null,
   ...overrides,
 });
 
@@ -89,6 +108,9 @@ describe('organizationStore', () => {
       members: [],
       waiver: null,
       waiverOrgId: null,
+      joinRequests: [],
+      joinRequestsOrgId: null,
+      joinRequestsStatus: 'Pending',
       isLoading: false,
       error: null,
     });
@@ -187,12 +209,129 @@ describe('organizationStore', () => {
     it('refreshes subscriptions after successful subscribe', async () => {
       const org = createMockOrg({ id: 'org-1' });
       useOrganizationStore.setState({ organizations: [org] });
-      mockSubscribe.mockResolvedValue(undefined);
+      mockSubscribe.mockResolvedValue({ status: 'Subscribed', message: 'Successfully subscribed' });
       mockGetMySubscriptions.mockResolvedValue([createMockSubscription(org)]);
 
       await useOrganizationStore.getState().subscribe('org-1');
 
       expect(mockGetMySubscriptions).toHaveBeenCalled();
+    });
+
+    it('does not optimistically subscribe on a private org', async () => {
+      const org = createMockOrg({ id: 'org-1', isPrivate: true, subscriberCount: 5 });
+      useOrganizationStore.setState({ organizations: [org] });
+
+      let resolveSubscribe: (value: unknown) => void;
+      mockSubscribe.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSubscribe = resolve;
+        })
+      );
+
+      const subscribePromise = useOrganizationStore.getState().subscribe('org-1');
+
+      const midFlight = useOrganizationStore.getState().organizations.find((o) => o.id === 'org-1');
+      expect(midFlight?.isSubscribed).toBe(false);
+      expect(midFlight?.subscriberCount).toBe(5);
+
+      resolveSubscribe!({ status: 'JoinRequestPending', message: 'Request sent' });
+      await subscribePromise;
+    });
+
+    it('marks the join request pending on a private org', async () => {
+      const org = createMockOrg({ id: 'org-1', isPrivate: true });
+      useOrganizationStore.setState({ organizations: [org] });
+      mockSubscribe.mockResolvedValue({ status: 'JoinRequestPending', message: 'Request sent' });
+
+      const result = await useOrganizationStore.getState().subscribe('org-1');
+
+      expect(result?.status).toBe('JoinRequestPending');
+      const updated = useOrganizationStore.getState().organizations.find((o) => o.id === 'org-1');
+      expect(updated?.myJoinRequestStatus).toBe('Pending');
+      expect(updated?.isSubscribed).toBe(false);
+      // No membership, so no subscription refresh
+      expect(mockGetMySubscriptions).not.toHaveBeenCalled();
+    });
+
+    it('returns null and sets the error when a denied user tries again', async () => {
+      const org = createMockOrg({ id: 'org-1', isPrivate: true, myJoinRequestStatus: 'Denied' });
+      useOrganizationStore.setState({ organizations: [org] });
+      mockSubscribe.mockRejectedValue({ message: 'Your request to join this organization was declined.' });
+
+      const result = await useOrganizationStore.getState().subscribe('org-1');
+
+      expect(result).toBeNull();
+      expect(useOrganizationStore.getState().error).toBe(
+        'Your request to join this organization was declined.'
+      );
+    });
+  });
+
+  describe('join requests', () => {
+    it('fetches pending requests by default and remembers the filter', async () => {
+      const request = createMockJoinRequest();
+      mockGetJoinRequests.mockResolvedValue([request]);
+
+      await useOrganizationStore.getState().fetchJoinRequests('org-1');
+
+      expect(mockGetJoinRequests).toHaveBeenCalledWith('org-1', 'Pending');
+      expect(useOrganizationStore.getState().joinRequests).toEqual([request]);
+      expect(useOrganizationStore.getState().joinRequestsOrgId).toBe('org-1');
+      expect(useOrganizationStore.getState().joinRequestsStatus).toBe('Pending');
+    });
+
+    it('sets error on fetch failure', async () => {
+      mockGetJoinRequests.mockRejectedValue(new Error('Forbidden'));
+
+      await useOrganizationStore.getState().fetchJoinRequests('org-1');
+
+      expect(useOrganizationStore.getState().error).toBe('Forbidden');
+    });
+
+    it('approves and refreshes with the filter the screen is showing', async () => {
+      useOrganizationStore.setState({ joinRequestsStatus: 'All' });
+      mockApproveJoinRequest.mockResolvedValue(undefined);
+      mockGetJoinRequests.mockResolvedValue([]);
+      mockGetAll.mockResolvedValue([]);
+
+      const result = await useOrganizationStore.getState().approveJoinRequest('org-1', 'user-9');
+
+      expect(result).toBe(true);
+      expect(mockApproveJoinRequest).toHaveBeenCalledWith('org-1', 'user-9');
+      expect(mockGetJoinRequests).toHaveBeenCalledWith('org-1', 'All');
+      // Membership changed - the org list must not stay stale
+      expect(mockGetAll).toHaveBeenCalled();
+    });
+
+    it('sets error and returns false when approve fails', async () => {
+      mockApproveJoinRequest.mockRejectedValue(new Error('Not an admin'));
+
+      const result = await useOrganizationStore.getState().approveJoinRequest('org-1', 'user-9');
+
+      expect(result).toBe(false);
+      expect(useOrganizationStore.getState().error).toBe('Not an admin');
+    });
+
+    it('denies and refreshes the lists', async () => {
+      mockDenyJoinRequest.mockResolvedValue(undefined);
+      mockGetJoinRequests.mockResolvedValue([]);
+      mockGetAll.mockResolvedValue([]);
+
+      const result = await useOrganizationStore.getState().denyJoinRequest('org-1', 'user-9');
+
+      expect(result).toBe(true);
+      expect(mockDenyJoinRequest).toHaveBeenCalledWith('org-1', 'user-9');
+      expect(mockGetJoinRequests).toHaveBeenCalledWith('org-1', 'Pending');
+      expect(mockGetAll).toHaveBeenCalled();
+    });
+
+    it('sets error and returns false when deny fails', async () => {
+      mockDenyJoinRequest.mockRejectedValue(new Error('Not an admin'));
+
+      const result = await useOrganizationStore.getState().denyJoinRequest('org-1', 'user-9');
+
+      expect(result).toBe(false);
+      expect(useOrganizationStore.getState().error).toBe('Not an admin');
     });
   });
 

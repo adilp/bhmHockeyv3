@@ -14,6 +14,7 @@ public class OrganizationsController : ControllerBase
     private readonly IOrganizationAdminService _adminService;
     private readonly IOrganizationAutoRosterService _autoRosterService;
     private readonly IOrganizationWaiverService _waiverService;
+    private readonly IOrganizationJoinRequestService _joinRequestService;
     private readonly ILogger<OrganizationsController> _logger;
 
     public OrganizationsController(
@@ -21,12 +22,14 @@ public class OrganizationsController : ControllerBase
         IOrganizationAdminService adminService,
         IOrganizationAutoRosterService autoRosterService,
         IOrganizationWaiverService waiverService,
+        IOrganizationJoinRequestService joinRequestService,
         ILogger<OrganizationsController> logger)
     {
         _organizationService = organizationService;
         _adminService = adminService;
         _autoRosterService = autoRosterService;
         _waiverService = waiverService;
+        _joinRequestService = joinRequestService;
         _logger = logger;
     }
 
@@ -161,21 +164,40 @@ public class OrganizationsController : ControllerBase
     }
 
     /// <summary>
-    /// Subscribe to an organization. Requires authentication.
+    /// Join an organization. Public orgs subscribe instantly; private orgs create a
+    /// join request an admin must approve. Requires authentication.
     /// </summary>
     [HttpPost("{id:guid}/subscribe")]
     [Authorize]
     public async Task<IActionResult> Subscribe(Guid id)
     {
         var userId = GetCurrentUserId();
-        var success = await _organizationService.SubscribeAsync(id, userId);
 
-        if (!success)
+        try
         {
-            return BadRequest(new { message = "Already subscribed to this organization" });
-        }
+            var outcome = await _organizationService.SubscribeAsync(id, userId);
 
-        return Ok(new { message = "Successfully subscribed" });
+            switch (outcome)
+            {
+                case SubscribeOutcome.Subscribed:
+                    return Ok(new SubscribeResponse("Subscribed", "Successfully subscribed"));
+
+                case SubscribeOutcome.JoinRequestCreated:
+                    return Ok(new SubscribeResponse("JoinRequestPending", "Your request to join was sent to the organizers."));
+
+                case SubscribeOutcome.JoinRequestAlreadyPending:
+                    return Ok(new SubscribeResponse("JoinRequestPending", "Your request to join is already awaiting approval."));
+
+                default:
+                    _logger.LogWarning("Subscribe rejected for organization {OrganizationId}, user {UserId}: already subscribed", id, userId);
+                    return BadRequest(new { message = "Already subscribed to this organization" });
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Subscribe rejected for organization {OrganizationId}, user {UserId}: {Message}", id, userId, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -243,6 +265,105 @@ public class OrganizationsController : ControllerBase
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning("Leave organization rejected for organization {OrganizationId}, user {UserId}: {Message}", id, userId, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // Join request endpoints - private orgs require admin approval to join
+
+    /// <summary>
+    /// List an organization's join requests. Only admins can access. Defaults to
+    /// Pending; pass status=Denied (or Approved, or All) to revisit past decisions.
+    /// </summary>
+    [HttpGet("{id:guid}/join-requests")]
+    [Authorize]
+    public async Task<ActionResult<List<OrganizationJoinRequestDto>>> GetJoinRequests(Guid id, [FromQuery] string? status = "Pending")
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            // "All" is the explicit opt-out from status filtering
+            var filter = string.Equals(status, "All", StringComparison.OrdinalIgnoreCase) ? null : status;
+            var requests = await _joinRequestService.GetRequestsAsync(id, userId, filter);
+            return Ok(requests);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Get join requests denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Get join requests rejected for organization {OrganizationId}: {Message}", id, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Approve a join request: subscribes the user and notifies them. Only admins
+    /// can approve. Works on a denied request too, so an accidental deny is recoverable.
+    /// </summary>
+    [HttpPost("{id:guid}/join-requests/{requestUserId:guid}/approve")]
+    [Authorize]
+    public async Task<IActionResult> ApproveJoinRequest(Guid id, Guid requestUserId)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var approved = await _joinRequestService.ApproveAsync(id, requestUserId, userId);
+
+            if (!approved)
+            {
+                _logger.LogWarning("Approve join request failed for organization {OrganizationId}: no request from user {RequestUserId}", id, requestUserId);
+                return NotFound(new { message = "No join request found for that user" });
+            }
+
+            return Ok(new { message = "Join request approved" });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Approve join request denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Approve join request rejected for organization {OrganizationId}: {Message}", id, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Deny a join request and notify the requester. Only admins can deny. The
+    /// denied user cannot request again, but an admin can still approve the row.
+    /// </summary>
+    [HttpPost("{id:guid}/join-requests/{requestUserId:guid}/deny")]
+    [Authorize]
+    public async Task<IActionResult> DenyJoinRequest(Guid id, Guid requestUserId)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var denied = await _joinRequestService.DenyAsync(id, requestUserId, userId);
+
+            if (!denied)
+            {
+                _logger.LogWarning("Deny join request failed for organization {OrganizationId}: no request from user {RequestUserId}", id, requestUserId);
+                return NotFound(new { message = "No join request found for that user" });
+            }
+
+            return Ok(new { message = "Join request denied" });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Deny join request denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Deny join request rejected for organization {OrganizationId}: {Message}", id, ex.Message);
             return BadRequest(new { message = ex.Message });
         }
     }
