@@ -9,7 +9,11 @@ public interface IOrganizationService
     Task<OrganizationDto?> GetByIdAsync(Guid id, Guid? currentUserId = null);
     Task<OrganizationDto?> UpdateAsync(Guid id, UpdateOrganizationRequest request, Guid userId);
     Task<bool> DeleteAsync(Guid id, Guid userId);
-    Task<bool> SubscribeAsync(Guid organizationId, Guid userId);
+    /// <summary>
+    /// Join an organization. Public orgs subscribe instantly; private orgs create
+    /// or reuse a Pending join request instead - the outcome says which happened.
+    /// </summary>
+    Task<SubscribeOutcome> SubscribeAsync(Guid organizationId, Guid userId);
     Task<bool> UnsubscribeAsync(Guid organizationId, Guid userId);
 
     /// <summary>

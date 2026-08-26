@@ -23,6 +23,8 @@ public class OrganizationServiceTests : IDisposable
     private readonly OrganizationWaiverService _waiverService;
     private readonly Mock<IWaitlistService> _mockWaitlistService;
     private readonly EventService _eventService;
+    private readonly Mock<INotificationService> _mockNotificationService;
+    private readonly OrganizationJoinRequestService _joinRequestService;
     private readonly OrganizationService _sut;
 
     public OrganizationServiceTests()
@@ -47,7 +49,14 @@ public class OrganizationServiceTests : IDisposable
             _mockWaitlistService.Object,
             _waiverService,
             Mock.Of<ILogger<EventService>>());
-        _sut = new OrganizationService(_context, _adminService, _waiverService, _eventService, Mock.Of<ILogger<OrganizationService>>());
+        _mockNotificationService = new Mock<INotificationService>();
+        // Real join request service so private-org joins go through the real flow
+        _joinRequestService = new OrganizationJoinRequestService(
+            _context,
+            _adminService,
+            _mockNotificationService.Object,
+            Mock.Of<ILogger<OrganizationJoinRequestService>>());
+        _sut = new OrganizationService(_context, _adminService, _waiverService, _eventService, _joinRequestService, Mock.Of<ILogger<OrganizationService>>());
     }
 
     public void Dispose()
@@ -83,7 +92,8 @@ public class OrganizationServiceTests : IDisposable
         string? description = "Test Description",
         string? location = "Boston",
         List<string>? skillLevels = null,
-        bool isActive = true)
+        bool isActive = true,
+        bool isPrivate = false)
     {
         var org = new Organization
         {
@@ -94,6 +104,7 @@ public class OrganizationServiceTests : IDisposable
             SkillLevels = skillLevels ?? new List<string> { "Gold" },
             CreatorId = creatorId,
             IsActive = isActive,
+            IsPrivate = isPrivate,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -145,7 +156,7 @@ public class OrganizationServiceTests : IDisposable
         var result = await _sut.SubscribeAsync(org.Id, user.Id);
 
         // Assert
-        result.Should().BeTrue();
+        result.Should().Be(SubscribeOutcome.Subscribed);
         var subscription = await _context.OrganizationSubscriptions
             .FirstOrDefaultAsync(s => s.OrganizationId == org.Id && s.UserId == user.Id);
         subscription.Should().NotBeNull();
@@ -163,7 +174,7 @@ public class OrganizationServiceTests : IDisposable
         var result = await _sut.SubscribeAsync(org.Id, user.Id);
 
         // Assert
-        result.Should().BeFalse();
+        result.Should().Be(SubscribeOutcome.AlreadySubscribed);
 
         // Verify no duplicate was created
         var subscriptionCount = await _context.OrganizationSubscriptions
@@ -1304,6 +1315,242 @@ public class OrganizationServiceTests : IDisposable
 
         // Assert - v1 acceptance does not carry over to v2
         members.Single(m => m.Id == member.Id).HasAcceptedCurrentWaiver.Should().BeFalse();
+    }
+
+    #endregion
+
+    #region Organization Privacy Tests
+
+    [Fact]
+    public async Task SubscribeAsync_OnPrivateOrg_CreatesPendingRequestAndNoSubscription()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var joiner = await CreateTestUser("joiner@example.com");
+        var org = await CreateTestOrganization(creator.Id, isPrivate: true);
+
+        // Act
+        var result = await _sut.SubscribeAsync(org.Id, joiner.Id);
+
+        // Assert
+        result.Should().Be(SubscribeOutcome.JoinRequestCreated);
+
+        var subscribed = await _context.OrganizationSubscriptions
+            .AnyAsync(s => s.OrganizationId == org.Id && s.UserId == joiner.Id);
+        subscribed.Should().BeFalse();
+
+        var request = await _context.OrganizationJoinRequests
+            .SingleAsync(r => r.OrganizationId == org.Id && r.UserId == joiner.Id);
+        request.Status.Should().Be(OrganizationJoinRequestStatus.Pending);
+        request.DecidedAt.Should().BeNull();
+        request.DecidedByUserId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SubscribeAsync_OnPrivateOrgTwice_KeepsOneRequestAndReportsPending()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var joiner = await CreateTestUser("joiner@example.com");
+        var org = await CreateTestOrganization(creator.Id, isPrivate: true);
+        await _sut.SubscribeAsync(org.Id, joiner.Id);
+
+        // Act
+        var result = await _sut.SubscribeAsync(org.Id, joiner.Id);
+
+        // Assert
+        result.Should().Be(SubscribeOutcome.JoinRequestAlreadyPending);
+        var count = await _context.OrganizationJoinRequests
+            .CountAsync(r => r.OrganizationId == org.Id && r.UserId == joiner.Id);
+        count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SubscribeAsync_OnPublicOrg_CreatesNoJoinRequest()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var joiner = await CreateTestUser("joiner@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+
+        // Act
+        var result = await _sut.SubscribeAsync(org.Id, joiner.Id);
+
+        // Assert - unchanged public behavior
+        result.Should().Be(SubscribeOutcome.Subscribed);
+        var requests = await _context.OrganizationJoinRequests.CountAsync(r => r.OrganizationId == org.Id);
+        requests.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SwitchingPublicToPrivate_GrandfathersExistingMembers()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+
+        // Act
+        var updated = await _sut.UpdateAsync(
+            org.Id,
+            new UpdateOrganizationRequest(null, null, null, null, null, null, null, null, null, null, null, IsPrivate: true),
+            creator.Id);
+
+        // Assert
+        updated!.IsPrivate.Should().BeTrue();
+        var stillSubscribed = await _context.OrganizationSubscriptions
+            .AnyAsync(s => s.OrganizationId == org.Id && s.UserId == member.Id);
+        stillSubscribed.Should().BeTrue();
+        var requests = await _context.OrganizationJoinRequests.CountAsync(r => r.OrganizationId == org.Id);
+        requests.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithIsPrivate_PersistsThePrivacyFlag()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+
+        // Act
+        var dto = await _sut.CreateAsync(
+            new CreateOrganizationRequest("Private Club", null, null, null, null, null, null, null, null, null, null, IsPrivate: true),
+            creator.Id);
+
+        // Assert
+        dto.IsPrivate.Should().BeTrue();
+        (await _context.Organizations.SingleAsync(o => o.Id == dto.Id)).IsPrivate.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithoutIsPrivate_DefaultsToPublic()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+
+        // Act
+        var dto = await _sut.CreateAsync(
+            new CreateOrganizationRequest("Open Club", null, null, null, null, null, null, null, null, null, null),
+            creator.Id);
+
+        // Assert
+        dto.IsPrivate.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UnsubscribeAsync_FromPrivateOrg_ClearsApprovedRequest()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var joiner = await CreateTestUser("joiner@example.com");
+        var org = await CreateTestOrganization(creator.Id, isPrivate: true);
+        await _sut.SubscribeAsync(org.Id, joiner.Id);
+        await _joinRequestService.ApproveAsync(org.Id, joiner.Id, creator.Id);
+
+        // Act
+        await _sut.UnsubscribeAsync(org.Id, joiner.Id);
+
+        // Assert - leaving is not a denial, so the user can request again
+        var remaining = await _context.OrganizationJoinRequests
+            .CountAsync(r => r.OrganizationId == org.Id && r.UserId == joiner.Id);
+        remaining.Should().Be(0);
+
+        var second = await _sut.SubscribeAsync(org.Id, joiner.Id);
+        second.Should().Be(SubscribeOutcome.JoinRequestCreated);
+    }
+
+    [Fact]
+    public async Task LeaveAsync_FromPrivateOrg_ClearsApprovedRequest()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var joiner = await CreateTestUser("joiner@example.com");
+        var org = await CreateTestOrganization(creator.Id, isPrivate: true);
+        await _sut.SubscribeAsync(org.Id, joiner.Id);
+        await _joinRequestService.ApproveAsync(org.Id, joiner.Id, creator.Id);
+
+        // Act
+        await _sut.LeaveAsync(org.Id, joiner.Id);
+
+        // Assert
+        var remaining = await _context.OrganizationJoinRequests
+            .CountAsync(r => r.OrganizationId == org.Id && r.UserId == joiner.Id);
+        remaining.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task LeaveAsync_AfterDenial_KeepsTheDeniedRequest()
+    {
+        // Arrange - a denied user is still blocked after using the leave path
+        var creator = await CreateTestUser();
+        var joiner = await CreateTestUser("joiner@example.com");
+        var org = await CreateTestOrganization(creator.Id, isPrivate: true);
+        await _sut.SubscribeAsync(org.Id, joiner.Id);
+        await _joinRequestService.DenyAsync(org.Id, joiner.Id, creator.Id);
+
+        // Act
+        await _sut.LeaveAsync(org.Id, joiner.Id);
+
+        // Assert
+        var request = await _context.OrganizationJoinRequests
+            .SingleAsync(r => r.OrganizationId == org.Id && r.UserId == joiner.Id);
+        request.Status.Should().Be(OrganizationJoinRequestStatus.Denied);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ReportsMyJoinRequestStatusForTheCurrentUser()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var joiner = await CreateTestUser("joiner@example.com");
+        var other = await CreateTestUser("other@example.com");
+        var org = await CreateTestOrganization(creator.Id, isPrivate: true);
+        await _sut.SubscribeAsync(org.Id, joiner.Id);
+
+        // Act
+        var forJoiner = await _sut.GetByIdAsync(org.Id, joiner.Id);
+        var forOther = await _sut.GetByIdAsync(org.Id, other.Id);
+
+        // Assert
+        forJoiner!.MyJoinRequestStatus.Should().Be(OrganizationJoinRequestStatus.Pending);
+        forOther!.MyJoinRequestStatus.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_PendingJoinRequestCountIsAdminOnly()
+    {
+        // Arrange
+        var creator = await CreateTestUser();
+        var joiner = await CreateTestUser("joiner@example.com");
+        var subscriber = await CreateTestUser("sub@example.com");
+        var org = await CreateTestOrganization(creator.Id, isPrivate: true);
+        await CreateSubscription(org.Id, subscriber.Id);
+        await _sut.SubscribeAsync(org.Id, joiner.Id);
+
+        // Act
+        var asAdmin = await _sut.GetByIdAsync(org.Id, creator.Id);
+        var asSubscriber = await _sut.GetByIdAsync(org.Id, subscriber.Id);
+        var anonymous = await _sut.GetByIdAsync(org.Id, null);
+
+        // Assert - a non-admin must never learn how many people are waiting
+        asAdmin!.PendingJoinRequestCount.Should().Be(1);
+        asSubscriber!.PendingJoinRequestCount.Should().BeNull();
+        anonymous!.PendingJoinRequestCount.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_StillListsPrivateOrganizations()
+    {
+        // Arrange - private orgs stay visible when browsing
+        var creator = await CreateTestUser();
+        var outsider = await CreateTestUser("outsider@example.com");
+        var privateOrg = await CreateTestOrganization(creator.Id, name: "Private Org", isPrivate: true);
+
+        // Act
+        var orgs = await _sut.GetAllAsync(outsider.Id);
+
+        // Assert
+        orgs.Should().Contain(o => o.Id == privateOrg.Id && o.IsPrivate);
     }
 
     #endregion

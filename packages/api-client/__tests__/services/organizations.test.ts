@@ -209,4 +209,75 @@ describe('organizationService waivers', () => {
       expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/leave');
     });
   });
+
+  describe('subscribe', () => {
+    it('returns the Subscribed outcome for a public org', async () => {
+      mockPost.mockResolvedValueOnce({ data: { status: 'Subscribed', message: 'Successfully subscribed' } });
+
+      const result = await organizationService.subscribe('org-1');
+
+      expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/subscribe');
+      expect(result.status).toBe('Subscribed');
+    });
+
+    it('returns the JoinRequestPending outcome for a private org', async () => {
+      mockPost.mockResolvedValueOnce({
+        data: { status: 'JoinRequestPending', message: 'Your request to join was sent to the organizers.' },
+      });
+
+      const result = await organizationService.subscribe('org-1');
+
+      expect(result.status).toBe('JoinRequestPending');
+    });
+  });
+
+  describe('join requests', () => {
+    const mockRequest = {
+      id: 'req-1',
+      organizationId: 'org-1',
+      userId: 'user-9',
+      firstName: 'Jane',
+      lastName: 'Doe',
+      status: 'Pending',
+      requestedAt: '2026-08-01T00:00:00Z',
+      decidedAt: null,
+    };
+
+    it('fetches pending requests by default', async () => {
+      mockGet.mockResolvedValueOnce({ data: [mockRequest] });
+
+      const result = await organizationService.getJoinRequests('org-1');
+
+      expect(mockGet).toHaveBeenCalledWith('/organizations/org-1/join-requests', {
+        params: { status: 'Pending' },
+      });
+      expect(result).toEqual([mockRequest]);
+    });
+
+    it('passes an explicit status filter through', async () => {
+      mockGet.mockResolvedValueOnce({ data: [] });
+
+      await organizationService.getJoinRequests('org-1', 'Denied');
+
+      expect(mockGet).toHaveBeenCalledWith('/organizations/org-1/join-requests', {
+        params: { status: 'Denied' },
+      });
+    });
+
+    it('posts to the approve endpoint', async () => {
+      mockPost.mockResolvedValueOnce({});
+
+      await organizationService.approveJoinRequest('org-1', 'user-9');
+
+      expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/join-requests/user-9/approve');
+    });
+
+    it('posts to the deny endpoint', async () => {
+      mockPost.mockResolvedValueOnce({});
+
+      await organizationService.denyJoinRequest('org-1', 'user-9');
+
+      expect(mockPost).toHaveBeenCalledWith('/organizations/org-1/join-requests/user-9/deny');
+    });
+  });
 });
