@@ -123,8 +123,10 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
     const target = organizations.find(org => org.id === organizationId);
 
     // Joining a private org yields a join request, not a membership - so only
-    // the public path gets the optimistic "you're in" update
-    const joinsInstantly = !target?.isPrivate;
+    // the public path gets the optimistic "you're in" update. When the org
+    // isn't in the loaded list we can't tell, so skip the optimism rather than
+    // flash "Joined" at someone who is really only requesting.
+    const joinsInstantly = target ? !target.isPrivate : false;
 
     if (joinsInstantly) {
       set({

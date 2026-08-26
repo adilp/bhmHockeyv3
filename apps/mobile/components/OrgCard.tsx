@@ -19,7 +19,11 @@ export function OrgCard({
   onJoinPress,
   showJoinButton = false,
 }: OrgCardProps) {
-  const { name, description, skillLevels, subscriberCount, isSubscribed } = organization;
+  const { name, description, skillLevels, subscriberCount, isSubscribed, isPrivate, myJoinRequestStatus } = organization;
+
+  // A private org grants membership only after an admin approves
+  const isPending = myJoinRequestStatus === 'Pending';
+  const joinLabel = isSubscribed ? 'Joined' : isPending ? 'Pending' : isPrivate ? 'Request' : 'Join';
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
@@ -54,14 +58,14 @@ export function OrgCard({
 
           {showJoinButton && onJoinPress && (
             <TouchableOpacity
-              style={[styles.joinButton, isSubscribed && styles.joinedButton]}
+              style={[styles.joinButton, (isSubscribed || isPending) && styles.joinedButton]}
               onPress={(e) => {
                 e.stopPropagation();
                 onJoinPress();
               }}
             >
-              <Text style={[styles.joinButtonText, isSubscribed && styles.joinedButtonText]}>
-                {isSubscribed ? 'Joined' : 'Join'}
+              <Text style={[styles.joinButtonText, (isSubscribed || isPending) && styles.joinedButtonText]}>
+                {joinLabel}
               </Text>
             </TouchableOpacity>
           )}
