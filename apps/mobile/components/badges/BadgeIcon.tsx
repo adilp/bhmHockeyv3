@@ -15,6 +15,11 @@ const iconMap: Record<string, ReturnType<typeof require>> = {
   trophy_gold: require('../../assets/badges/trophy_gold_24.png'),
   star_teal: require('../../assets/badges/star_teal_24.png'),
   amp: require('../../assets/badges/amp.png'),
+  fights_cancer: require('../../assets/badges/fights_cancer.png'),
+  first_blood: require('../../assets/badges/first_blood.png'),
+  goalie: require('../../assets/badges/goalie.png'),
+  ironman: require('../../assets/badges/ironman.png'),
+  shutout: require('../../assets/badges/shutout.png'),
 };
 
 /**
