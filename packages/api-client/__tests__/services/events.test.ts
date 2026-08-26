@@ -54,6 +54,20 @@ describe('eventService waitlist visibility & payment', () => {
 
       expect(mockPost).toHaveBeenCalledWith('/events', request);
     });
+
+    it('passes startAsDraft through to the create endpoint', async () => {
+      const request = {
+        eventDate: '2026-08-01T00:00:00Z',
+        maxPlayers: 12,
+        cost: 0,
+        startAsDraft: false,
+      };
+      mockPost.mockResolvedValueOnce({ data: { id: 'event-1', status: 'Published' } });
+
+      await eventService.create(request);
+
+      expect(mockPost).toHaveBeenCalledWith('/events', request);
+    });
   });
 
   describe('update', () => {
@@ -82,6 +96,35 @@ describe('eventService waitlist visibility & payment', () => {
       mockPost.mockRejectedValueOnce(apiError);
 
       await expect(eventService.markPayment('event-1')).rejects.toEqual(apiError);
+    });
+  });
+
+  describe('publishEvent', () => {
+    it('posts to the event publish endpoint', async () => {
+      const result = { success: true, message: 'Event published successfully', notificationsSent: 4 };
+      mockPost.mockResolvedValueOnce({ data: result });
+
+      const response = await eventService.publishEvent('event-1');
+
+      expect(mockPost).toHaveBeenCalledWith('/events/event-1/publish');
+      expect(response).toEqual(result);
+    });
+
+    it('surfaces server rejection (already published)', async () => {
+      const apiError = { message: 'Event is already published' };
+      mockPost.mockRejectedValueOnce(apiError);
+
+      await expect(eventService.publishEvent('event-1')).rejects.toEqual(apiError);
+    });
+  });
+
+  describe('publishRoster', () => {
+    it('posts to the separate publish-roster endpoint', async () => {
+      mockPost.mockResolvedValueOnce({ data: { success: true, message: 'ok', notificationsSent: 2 } });
+
+      await eventService.publishRoster('event-1');
+
+      expect(mockPost).toHaveBeenCalledWith('/events/event-1/publish-roster');
     });
   });
 

@@ -13,6 +13,11 @@ interface RegistrationFooterProps {
   isFull: boolean;
   isProcessing: boolean;
   onRegister: () => void;
+  // Draft events are only visible to their managers, and signups are closed
+  // server-side until they publish
+  isDraft?: boolean;
+  canManage?: boolean;
+  onPublishEvent?: () => void;
 }
 
 export function RegistrationFooter({
@@ -22,8 +27,28 @@ export function RegistrationFooter({
   isFull,
   isProcessing,
   onRegister,
+  isDraft = false,
+  canManage = false,
+  onPublishEvent,
 }: RegistrationFooterProps) {
   const insets = useSafeAreaInsets();
+
+  // Draft - the only action is publishing it (managers are the only viewers)
+  if (isDraft) {
+    if (!canManage || !onPublishEvent) return null;
+    return (
+      <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <TouchableOpacity
+          style={styles.registerButton}
+          onPress={onPublishEvent}
+          disabled={isProcessing}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.registerButtonText} allowFontScaling={false}>Publish Event</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // Not authenticated - show login prompt
   if (!isAuthenticated) {

@@ -20,6 +20,7 @@ public record OrganizationDto(
     string? DefaultVisibility,
     string? GroupMeLink = null,  // Org-wide GroupMe chat link (events fall back to this)
     bool? DefaultShowWaitlistBeforePublish = null,  // Pre-fills ShowWaitlistBeforePublish on new events
+    bool? DefaultStartAsDraft = null,  // Pre-fills StartAsDraft on new events (null = global default: start as draft)
     bool IsPrivate = false,  // Private orgs require admin approval to join
     string? MyJoinRequestStatus = null,  // Current user's join request: null | "Pending" | "Approved" | "Denied"
     int? PendingJoinRequestCount = null  // ADMIN-ONLY - null for everyone else
@@ -54,6 +55,7 @@ public record CreateOrganizationRequest(
     string? DefaultVisibility,
     string? GroupMeLink = null,  // Org-wide GroupMe chat link
     bool? DefaultShowWaitlistBeforePublish = null,
+    bool? DefaultStartAsDraft = null,
     bool? IsPrivate = null  // null defaults to public
 );
 
@@ -71,6 +73,7 @@ public record UpdateOrganizationRequest(
     string? DefaultVisibility,
     string? GroupMeLink = null,  // Empty/whitespace clears the link; null leaves it unchanged
     bool? DefaultShowWaitlistBeforePublish = null,  // null leaves unchanged
+    bool? DefaultStartAsDraft = null,  // null leaves unchanged
     bool? IsPrivate = null  // null leaves unchanged
 );
 

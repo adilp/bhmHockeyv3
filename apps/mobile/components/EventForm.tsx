@@ -46,6 +46,7 @@ export interface EventFormData {
   applyAutoRoster?: boolean;
   groupMeLink?: string;  // '' clears the event's own link (inherits org's); trimmed value sets it
   showWaitlistBeforePublish: boolean;
+  startAsDraft: boolean;  // Create mode only - drafts stay hidden until the organizer publishes
 }
 
 interface EventFormProps {
@@ -81,6 +82,8 @@ export function EventForm({
   const [applyAutoRoster, setApplyAutoRoster] = useState(true);
   const [groupMeLink, setGroupMeLink] = useState('');
   const [showWaitlistBeforePublish, setShowWaitlistBeforePublish] = useState(false);
+  // New events start as drafts unless the org (or the organizer) says otherwise
+  const [startAsDraft, setStartAsDraft] = useState(true);
 
   // Auto-roster of the selected org (create mode only, admin-only endpoint)
   const autoRoster = useOrganizationStore((state) => state.autoRoster);
@@ -145,6 +148,7 @@ export function EventForm({
       org.defaultVenue,
       org.defaultVisibility,
       org.defaultShowWaitlistBeforePublish,
+      org.defaultStartAsDraft,
     ];
     const hasDefaults = defaultFields.some(field => field != null);
     if (!hasDefaults) return;
@@ -206,6 +210,9 @@ export function EventForm({
     }
     if (org.defaultShowWaitlistBeforePublish != null) {
       setShowWaitlistBeforePublish(org.defaultShowWaitlistBeforePublish);
+    }
+    if (org.defaultStartAsDraft != null) {
+      setStartAsDraft(org.defaultStartAsDraft);
     }
 
     // Mark defaults as applied and show notification
@@ -356,6 +363,7 @@ export function EventForm({
       applyAutoRoster: selectedOrgId ? applyAutoRoster : undefined,
       groupMeLink: groupMeLink.trim(),
       showWaitlistBeforePublish,
+      startAsDraft,
     };
 
     await onSubmit(formData);
@@ -594,6 +602,28 @@ export function EventForm({
             </View>
             <Text style={styles.skillNote}>
               Your organization's regulars will be placed on the roster automatically
+            </Text>
+          </View>
+        )}
+
+        {/* Start as Draft Toggle (create mode only - publishing is a per-event action afterwards) */}
+        {mode === 'create' && (
+          <View style={styles.field}>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel} allowFontScaling={false}>
+                Start as draft
+              </Text>
+              <Switch
+                value={startAsDraft}
+                onValueChange={setStartAsDraft}
+                trackColor={{ false: colors.bg.hover, true: colors.primary.teal }}
+                thumbColor={startAsDraft ? colors.text.primary : colors.text.muted}
+              />
+            </View>
+            <Text style={styles.skillNote}>
+              {startAsDraft
+                ? 'Only you will see this game until you publish it. Add players first, then publish to notify members and open signups.'
+                : 'This game goes live immediately - members are notified and signups open right away.'}
             </Text>
           </View>
         )}

@@ -1066,6 +1066,116 @@ public class OrganizationServiceTests : IDisposable
 
     #endregion
 
+    #region DefaultStartAsDraft Tests
+
+    private static UpdateOrganizationRequest StartAsDraftUpdateRequest(bool? defaultStartAsDraft)
+    {
+        return new UpdateOrganizationRequest(
+            Name: null,
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            DefaultShowWaitlistBeforePublish: null,
+            DefaultStartAsDraft: defaultStartAsDraft
+        );
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithDefaultStartAsDraft_StoresAndReturnsIt()
+    {
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest(
+            Name: "Draft Default Org",
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            DefaultShowWaitlistBeforePublish: null,
+            DefaultStartAsDraft: false);
+
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        result.DefaultStartAsDraft.Should().BeFalse();
+        var org = await _context.Organizations.FindAsync(result.Id);
+        org!.DefaultStartAsDraft.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithoutDefaultStartAsDraft_LeavesItNull()
+    {
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest(
+            Name: "No Draft Preference Org",
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null);
+
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        result.DefaultStartAsDraft.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SetsDefaultStartAsDraft_ReturnsItInDto()
+    {
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+
+        var result = await _sut.UpdateAsync(org.Id, StartAsDraftUpdateRequest(false), creator.Id);
+
+        result!.DefaultStartAsDraft.Should().BeFalse();
+        var updated = await _context.Organizations.FindAsync(org.Id);
+        updated!.DefaultStartAsDraft.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NullDefaultStartAsDraft_LeavesUnchanged()
+    {
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultStartAsDraft = false;
+        await _context.SaveChangesAsync();
+
+        var result = await _sut.UpdateAsync(org.Id, StartAsDraftUpdateRequest(null), creator.Id);
+
+        result!.DefaultStartAsDraft.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ReturnsDefaultStartAsDraft()
+    {
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultStartAsDraft = false;
+        await _context.SaveChangesAsync();
+
+        var result = await _sut.GetByIdAsync(org.Id, creator.Id);
+
+        result!.DefaultStartAsDraft.Should().BeFalse();
+    }
+
+    #endregion
+
     #region Leave Organization Tests
 
     private async Task<Event> CreateOrgEvent(Guid creatorId, Guid orgId, DateTime? eventDate = null, string status = "Published")

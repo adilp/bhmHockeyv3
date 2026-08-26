@@ -17,6 +17,7 @@ const mockGetMyRegistrations = jest.fn();
 const mockReorderWaitlist = jest.fn();
 const mockMarkPayment = jest.fn();
 const mockUpdateGhostPlayer = jest.fn();
+const mockPublishEvent = jest.fn();
 
 // Mock the api-client module
 jest.mock('@bhmhockey/api-client', () => ({
@@ -30,6 +31,7 @@ jest.mock('@bhmhockey/api-client', () => ({
     reorderWaitlist: mockReorderWaitlist,
     markPayment: mockMarkPayment,
     updateGhostPlayer: mockUpdateGhostPlayer,
+    publishEvent: mockPublishEvent,
   },
 }));
 
@@ -617,6 +619,35 @@ describe('eventStore', () => {
       expect(result).toBe(false);
       expect(useEventStore.getState().error).toBe(serverMessage);
       // No refresh on failure
+      expect(mockGetById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('publishEvent', () => {
+    it('publishes, then refreshes the detail view and the events list', async () => {
+      const published = { success: true, message: 'Event published successfully', notificationsSent: 3 };
+      mockPublishEvent.mockResolvedValue(published);
+      mockGetById.mockResolvedValue(createMockEvent({ id: 'event-1', status: 'Published' }));
+      mockGetAll.mockResolvedValue([createMockEvent({ id: 'event-1', status: 'Published' })]);
+
+      const result = await useEventStore.getState().publishEvent('event-1');
+
+      expect(result).toEqual(published);
+      expect(mockPublishEvent).toHaveBeenCalledWith('event-1');
+      // Both the detail screen and the lists that hid the draft must be refreshed
+      expect(mockGetById).toHaveBeenCalledWith('event-1');
+      expect(mockGetAll).toHaveBeenCalled();
+      expect(useEventStore.getState().selectedEvent?.status).toBe('Published');
+    });
+
+    it('returns null and surfaces the server message on failure', async () => {
+      // The axios interceptor rejects with a plain ApiError object (not an Error instance)
+      mockPublishEvent.mockRejectedValue({ message: 'Event is already published' });
+
+      const result = await useEventStore.getState().publishEvent('event-1');
+
+      expect(result).toBeNull();
+      expect(useEventStore.getState().error).toBe('Event is already published');
       expect(mockGetById).not.toHaveBeenCalled();
     });
   });

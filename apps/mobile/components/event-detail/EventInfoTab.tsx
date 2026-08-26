@@ -61,6 +61,8 @@ export function EventInfoTab({
   };
 
   const paymentBadge = getPaymentBadgeInfo(event.myPaymentStatus);
+  // Drafts are only ever returned to their managers, but gate on canManage anyway
+  const isDraft = event.status === 'Draft';
 
   return (
     <ScrollView
@@ -77,6 +79,20 @@ export function EventInfoTab({
         ) : undefined
       }
     >
+      {/* ═══════════════════════════════════════════════════════════════════
+          DRAFT BANNER (managers only - nobody else can see a draft)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {isDraft && canManage && (
+        <View style={styles.draftBanner}>
+          <Text style={styles.draftBannerTitle} allowFontScaling={false}>
+            Draft - not visible to members
+          </Text>
+          <Text style={styles.draftBannerText} allowFontScaling={false}>
+            Add players now if you want. Publishing notifies members and opens signups.
+          </Text>
+        </View>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════════
           TICKET CARD
           ═══════════════════════════════════════════════════════════════════ */}
@@ -122,6 +138,7 @@ export function EventInfoTab({
         {(canManage || event.isRegistered || event.amIWaitlisted ||
           event.visibility === 'InviteOnly') && (
           <View style={styles.statusBadgeRow}>
+            {isDraft && <Badge variant="warning">Draft</Badge>}
             {canManage && <Badge variant="purple">Organizer</Badge>}
             {event.isRegistered && <Badge variant="green">Registered</Badge>}
             {event.amIWaitlisted && (
@@ -398,6 +415,24 @@ const styles = StyleSheet.create({
   // ═══════════════════════════════════════════════════════════════════
   // TICKET CARD
   // ═══════════════════════════════════════════════════════════════════
+  draftBanner: {
+    backgroundColor: colors.bg.dark,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.status.warning,
+  },
+  draftBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.status.warning,
+  },
+  draftBannerText: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
   ticketCard: {
     backgroundColor: colors.bg.dark,
     borderRadius: radius.lg,

@@ -67,6 +67,7 @@ export interface Organization {
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
   defaultShowWaitlistBeforePublish?: boolean | null;  // Pre-fills showWaitlistBeforePublish on new events
+  defaultStartAsDraft?: boolean | null;  // Pre-fills startAsDraft on new events (null = global default: start as draft)
   groupMeLink?: string | null;  // Org-wide GroupMe chat link (events fall back to this)
   // Privacy - private orgs stay visible when browsing but joining needs admin approval
   isPrivate: boolean;
@@ -231,6 +232,7 @@ export interface CreateOrganizationRequest {
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
   defaultShowWaitlistBeforePublish?: boolean | null;
+  defaultStartAsDraft?: boolean | null;
   groupMeLink?: string | null;  // Org-wide GroupMe chat link
   isPrivate?: boolean | null;  // null/undefined defaults to public
 }
@@ -249,6 +251,7 @@ export interface UpdateOrganizationRequest {
   defaultVenue?: string | null;
   defaultVisibility?: EventVisibility | null;
   defaultShowWaitlistBeforePublish?: boolean | null;  // null/undefined leaves it unchanged
+  defaultStartAsDraft?: boolean | null;  // null/undefined leaves it unchanged
   groupMeLink?: string | null;  // Empty/whitespace clears the link; null/undefined leaves it unchanged
   isPrivate?: boolean | null;  // null/undefined leaves it unchanged
 }
@@ -399,6 +402,7 @@ export interface CreateEventRequest {
   applyAutoRoster?: boolean;     // Auto-add the org's auto-roster members (default true; ignored for standalone events)
   groupMeLink?: string;          // Optional game-specific GroupMe link (blank inherits org's link)
   showWaitlistBeforePublish?: boolean;  // Optional - defaults to false (form pre-fills from org default)
+  startAsDraft?: boolean;        // Optional - resolves to the org's defaultStartAsDraft, else the global default (true)
 }
 
 export interface UpdateEventRequest {

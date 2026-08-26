@@ -224,6 +224,8 @@ function RegisteredBadges({ event }: { event: EventDto }) {
 function OrganizingBadges({ event }: { event: EventDto }) {
   return (
     <View style={styles.organizerStats}>
+      {/* Drafts only ever reach the managers who can publish them */}
+      {event.status === 'Draft' && <Badge variant="warning">Draft</Badge>}
       <Badge variant="purple">{event.registeredCount}/{event.maxPlayers}</Badge>
       {/* Organized games no longer appear under My Upcoming Games, so flag the ones the organizer also plays in */}
       {(event.isRegistered || event.amIWaitlisted) && (

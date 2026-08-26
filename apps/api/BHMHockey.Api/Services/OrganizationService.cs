@@ -121,6 +121,7 @@ public class OrganizationService : IOrganizationService
             DefaultVenue = request.DefaultVenue,
             DefaultVisibility = request.DefaultVisibility,
             DefaultShowWaitlistBeforePublish = request.DefaultShowWaitlistBeforePublish,
+            DefaultStartAsDraft = request.DefaultStartAsDraft,
             GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink),
             IsPrivate = request.IsPrivate ?? false
         };
@@ -219,6 +220,7 @@ public class OrganizationService : IOrganizationService
         if (request.DefaultVenue != null) organization.DefaultVenue = request.DefaultVenue;
         if (request.DefaultVisibility != null) organization.DefaultVisibility = request.DefaultVisibility;
         if (request.DefaultShowWaitlistBeforePublish != null) organization.DefaultShowWaitlistBeforePublish = request.DefaultShowWaitlistBeforePublish;
+        if (request.DefaultStartAsDraft != null) organization.DefaultStartAsDraft = request.DefaultStartAsDraft;
         // Flipping privacy never touches existing memberships - members are grandfathered in
         if (request.IsPrivate != null) organization.IsPrivate = request.IsPrivate.Value;
         // Empty/whitespace clears the link (Normalize returns null); null leaves it unchanged
@@ -539,6 +541,7 @@ public class OrganizationService : IOrganizationService
             org.DefaultVisibility,
             org.GroupMeLink,
             org.DefaultShowWaitlistBeforePublish,
+            org.DefaultStartAsDraft,
             org.IsPrivate,
             myJoinRequestStatus,
             pendingJoinRequestCount
