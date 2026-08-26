@@ -62,7 +62,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="discover"
+        name="orgs"
         options={{
           tabBarLabel: 'Orgs',
           tabBarIcon: ({ color, size }) => (
