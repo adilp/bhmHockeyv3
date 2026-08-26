@@ -27,6 +27,9 @@ interface DraggableWaitlistProps {
   onItemPress: (registration: EventRegistrationDto) => void;
   /** Callback when waitlist order changes */
   onReorder: (items: WaitlistOrderItem[]) => Promise<void>;
+  /** Reports drag start/end so the parent can stop its ScrollView competing
+   *  for the same vertical pan */
+  onDragStateChange?: (isDragging: boolean) => void;
 }
 
 interface DragInfo {
@@ -163,12 +166,32 @@ export function DraggableWaitlist({
   canManage,
   onItemPress,
   onReorder,
+  onDragStateChange,
 }: DraggableWaitlistProps) {
   const [orderedWaitlist, setOrderedWaitlist] = useState<EventRegistrationDto[]>(waitlist);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [hoverIndex, setHoverIndex] = useState(-1);
   const containerRef = useRef<View>(null);
   const [containerTop, setContainerTop] = useState(0);
+
+  // The gesture callbacks read these refs instead of state. Reading state
+  // would put fast-changing values (hoverIndex) in their dependency arrays,
+  // which rebuilds the Gesture object mid-drag and drops the drag.
+  const dragInfoRef = useRef<DragInfo | null>(null);
+  const hoverIndexRef = useRef(-1);
+  const containerTopRef = useRef(0);
+  const orderedRef = useRef<EventRegistrationDto[]>(waitlist);
+  const waitlistRef = useRef(waitlist);
+  const onReorderRef = useRef(onReorder);
+  const canManageRef = useRef(canManage);
+  const onDragStateChangeRef = useRef(onDragStateChange);
+
+  orderedRef.current = orderedWaitlist;
+  waitlistRef.current = waitlist;
+  onReorderRef.current = onReorder;
+  canManageRef.current = canManage;
+  onDragStateChangeRef.current = onDragStateChange;
+  containerTopRef.current = containerTop;
 
   // Sync orderedWaitlist when waitlist prop changes
   React.useEffect(() => {
@@ -186,37 +209,44 @@ export function DraggableWaitlist({
 
   const startDrag = useCallback((registration: EventRegistrationDto, index: number) => {
     const startY = index * ROW_HEIGHT;
-    setDragInfo({ registration, index, startY });
+    const info = { registration, index, startY };
+    dragInfoRef.current = info;
+    setDragInfo(info);
+    // Tell the parent to stop scrolling while this drag runs
+    onDragStateChangeRef.current?.(true);
   }, []);
 
   // Determine which row is being touched based on Y position
   const getRowIndexFromY = useCallback((absoluteY: number) => {
-    const relativeY = absoluteY - containerTop;
+    const relativeY = absoluteY - containerTopRef.current;
     const index = Math.floor(relativeY / ROW_HEIGHT);
-    return Math.max(0, Math.min(index, orderedWaitlist.length - 1));
-  }, [containerTop, orderedWaitlist.length]);
+    return Math.max(0, Math.min(index, orderedRef.current.length - 1));
+  }, []);
 
   const handleDragMove = useCallback((absoluteY: number) => {
-    const relativeY = absoluteY - containerTop;
-    const targetIndex = Math.floor(relativeY / ROW_HEIGHT);
-    const clampedIndex = Math.max(0, Math.min(targetIndex, orderedWaitlist.length - 1));
+    const clampedIndex = getRowIndexFromY(absoluteY);
+    hoverIndexRef.current = clampedIndex;
     setHoverIndex(clampedIndex);
-  }, [containerTop, orderedWaitlist.length]);
+  }, [getRowIndexFromY]);
 
   const handleDragEnd = useCallback(async () => {
-    if (!dragInfo || hoverIndex < 0) {
+    // Captured up front: onFinalize clears these right after this runs
+    const info = dragInfoRef.current;
+    const targetIndex = hoverIndexRef.current;
+    const currentOrder = orderedRef.current;
+
+    if (!info || targetIndex < 0) {
       setDragInfo(null);
       setHoverIndex(-1);
       translateY.value = 0;
       return;
     }
 
-    const sourceIndex = dragInfo.index;
-    const targetIndex = hoverIndex;
+    const sourceIndex = info.index;
 
     if (sourceIndex !== targetIndex) {
       // Reorder the waitlist optimistically
-      const newOrder = [...orderedWaitlist];
+      const newOrder = [...currentOrder];
       const [removed] = newOrder.splice(sourceIndex, 1);
       newOrder.splice(targetIndex, 0, removed);
       setOrderedWaitlist(newOrder);
@@ -229,19 +259,22 @@ export function DraggableWaitlist({
 
       // Persist to backend
       try {
-        await onReorder(items);
+        await onReorderRef.current(items);
       } catch (error) {
         // Revert on failure - parent will show error
-        setOrderedWaitlist(waitlist);
+        setOrderedWaitlist(waitlistRef.current);
       }
     }
 
     setDragInfo(null);
     setHoverIndex(-1);
     translateY.value = 0;
-  }, [dragInfo, hoverIndex, orderedWaitlist, onReorder, translateY, waitlist]);
+  }, [translateY]);
 
   const handleDragCancel = useCallback(() => {
+    dragInfoRef.current = null;
+    hoverIndexRef.current = -1;
+    onDragStateChangeRef.current?.(false);
     setDragInfo(null);
     setHoverIndex(-1);
     translateY.value = 0;
@@ -249,13 +282,13 @@ export function DraggableWaitlist({
 
   // Start drag from gesture position
   const handleDragStart = useCallback((absoluteY: number) => {
-    if (!canManage) return;
+    if (!canManageRef.current) return;
     const index = getRowIndexFromY(absoluteY);
-    const registration = orderedWaitlist[index];
+    const registration = orderedRef.current[index];
     if (registration) {
       startDrag(registration, index);
     }
-  }, [canManage, getRowIndexFromY, orderedWaitlist, startDrag]);
+  }, [getRowIndexFromY, startDrag]);
 
   // Track if drag was started (shared value for worklet access)
   const isDragging = useSharedValue(false);

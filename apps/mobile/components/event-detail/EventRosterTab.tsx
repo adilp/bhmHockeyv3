@@ -638,6 +638,7 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
                 canManage={canManage}
                 onItemPress={handleWaitlistItemPress}
                 onReorder={handleWaitlistReorder}
+                onDragStateChange={setIsDragActive}
               />
             </View>
           </View>

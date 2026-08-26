@@ -295,10 +295,13 @@ public class EventsController : ControllerBase
     {
         var userId = GetCurrentUserId();
 
-        // Check if event exists
-        var eventDto = await _eventService.GetByIdAsync(eventId);
+        // Pass the caller: GetByIdAsync applies visibility rules, and without a
+        // user it treats the request as anonymous - which hides every
+        // OrganizationMembers/InviteOnly event from its own organizer
+        var eventDto = await _eventService.GetByIdAsync(eventId, userId);
         if (eventDto == null)
         {
+            _logger.LogWarning("Waitlist reorder requested for event {EventId} not visible to user {UserId}", eventId, userId);
             return NotFound();
         }
 
