@@ -10,6 +10,8 @@ public class Organization
     public string? Location { get; set; }
     public List<string>? SkillLevels { get; set; } // Gold, Silver, Bronze, D-League (multiple allowed)
     public bool IsActive { get; set; } = true;
+    // Private orgs stay visible when browsing, but joining requires admin approval
+    public bool IsPrivate { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -22,6 +24,8 @@ public class Organization
     public string? DefaultVenue { get; set; }
     public string? DefaultVisibility { get; set; }  // "Public", "OrganizationMembers", "InviteOnly"
     public bool? DefaultShowWaitlistBeforePublish { get; set; }  // Pre-fills ShowWaitlistBeforePublish on new events
+    // Overrides the global "new events start as drafts" default; null falls back to that global default
+    public bool? DefaultStartAsDraft { get; set; }
 
     // Org-wide GroupMe chat link - events fall back to this unless they set their own
     public string? GroupMeLink { get; set; }

@@ -42,6 +42,7 @@ export default function EditOrganizationScreen() {
         name: data.name,
         description: data.description,
         skillLevels: data.skillLevels,
+        isPrivate: data.isPrivate,
       });
 
       Alert.alert('Success', 'Organization updated successfully!', [

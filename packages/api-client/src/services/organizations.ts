@@ -13,7 +13,10 @@ import type {
   SetOrganizationWaiverResponse,
   AcceptWaiverRequest,
   WaiverSignatureDetails,
-  PendingWaiver
+  PendingWaiver,
+  SubscribeResult,
+  OrganizationJoinRequest,
+  JoinRequestStatus
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 
@@ -61,10 +64,14 @@ export const organizationService = {
   },
 
   /**
-   * Subscribe to organization
+   * Join an organization. Public orgs subscribe instantly; private orgs create a
+   * join request an admin must approve (status: "JoinRequestPending").
    */
-  async subscribe(organizationId: string): Promise<void> {
-    await apiClient.instance.post(`/organizations/${organizationId}/subscribe`);
+  async subscribe(organizationId: string): Promise<SubscribeResult> {
+    const response = await apiClient.instance.post<SubscribeResult>(
+      `/organizations/${organizationId}/subscribe`
+    );
+    return response.data;
   },
 
   /**
@@ -164,6 +171,38 @@ export const organizationService = {
       { orderedUserIds }
     );
     return response.data;
+  },
+
+  // Join request methods (admin only) - private orgs require approval to join
+
+  /**
+   * List an organization's join requests (admin only). Defaults to Pending;
+   * pass 'All' to include past decisions.
+   */
+  async getJoinRequests(
+    organizationId: string,
+    status: JoinRequestStatus | 'All' = 'Pending'
+  ): Promise<OrganizationJoinRequest[]> {
+    const response = await apiClient.instance.get<OrganizationJoinRequest[]>(
+      `/organizations/${organizationId}/join-requests`,
+      { params: { status } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Approve a join request (admin only) - subscribes the user. Works on a
+   * previously denied request too.
+   */
+  async approveJoinRequest(organizationId: string, userId: string): Promise<void> {
+    await apiClient.instance.post(`/organizations/${organizationId}/join-requests/${userId}/approve`);
+  },
+
+  /**
+   * Deny a join request (admin only) - the user cannot request again
+   */
+  async denyJoinRequest(organizationId: string, userId: string): Promise<void> {
+    await apiClient.instance.post(`/organizations/${organizationId}/join-requests/${userId}/deny`);
   },
 
   // Waiver methods

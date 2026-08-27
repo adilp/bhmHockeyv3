@@ -949,4 +949,104 @@ public class EventsControllerTests
     }
 
     #endregion
+
+    #region ReorderWaitlist
+
+    [Fact]
+    public async Task ReorderWaitlist_LooksUpTheEventAsTheCaller_NotAnonymously()
+    {
+        SetupAuthenticatedUser();
+
+        // Regression: the lookup used to omit the user, so GetByIdAsync applied
+        // visibility rules anonymously and hid OrganizationMembers/InviteOnly
+        // events from their own organizer - reordering 404'd.
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, null))
+            .ReturnsAsync((EventDto?)null);
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, _testUserId))
+            .ReturnsAsync(CreateEventDto());
+        _mockEventService.Setup(s => s.CanUserManageEventAsync(_testEventId, _testUserId))
+            .ReturnsAsync(true);
+
+        var request = new ReorderWaitlistRequest
+        {
+            Items = new List<WaitlistOrderItem>
+            {
+                new() { RegistrationId = Guid.NewGuid(), Position = 1 },
+            },
+        };
+
+        var result = await _controller.ReorderWaitlist(_testEventId, request);
+
+        result.Should().BeOfType<OkObjectResult>();
+        _mockWaitlistService.Verify(
+            w => w.ReorderWaitlistAsync(_testEventId, It.IsAny<List<WaitlistReorderItem>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ReorderWaitlist_EventNotVisibleToCaller_ReturnsNotFound()
+    {
+        SetupAuthenticatedUser();
+        _mockEventService.Setup(s => s.GetByIdAsync(_testEventId, _testUserId))
+            .ReturnsAsync((EventDto?)null);
+
+        var request = new ReorderWaitlistRequest
+        {
+            Items = new List<WaitlistOrderItem>
+            {
+                new() { RegistrationId = Guid.NewGuid(), Position = 1 },
+            },
+        };
+
+        var result = await _controller.ReorderWaitlist(_testEventId, request);
+
+        result.Should().BeOfType<NotFoundResult>();
+    }
+
+    #endregion
+
+    #region PublishEvent Tests
+
+    [Fact]
+    public async Task PublishEvent_AsManager_ReturnsOkWithResult()
+    {
+        SetupAuthenticatedUser();
+        var expected = new PublishResultDto(true, "Event published successfully", 3);
+        _mockEventService
+            .Setup(s => s.PublishEventAsync(_testEventId, _testUserId))
+            .ReturnsAsync(expected);
+
+        var result = await _controller.PublishEvent(_testEventId);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task PublishEvent_WhenServiceReportsFailure_ReturnsBadRequest()
+    {
+        SetupAuthenticatedUser();
+        _mockEventService
+            .Setup(s => s.PublishEventAsync(_testEventId, _testUserId))
+            .ReturnsAsync(new PublishResultDto(false, "Event is already published", 0));
+
+        var result = await _controller.PublishEvent(_testEventId);
+
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task PublishEvent_AsNonManager_ReturnsForbid()
+    {
+        SetupAuthenticatedUser();
+        _mockEventService
+            .Setup(s => s.PublishEventAsync(_testEventId, _testUserId))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var result = await _controller.PublishEvent(_testEventId);
+
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    #endregion
 }

@@ -295,10 +295,13 @@ public class EventsController : ControllerBase
     {
         var userId = GetCurrentUserId();
 
-        // Check if event exists
-        var eventDto = await _eventService.GetByIdAsync(eventId);
+        // Pass the caller: GetByIdAsync applies visibility rules, and without a
+        // user it treats the request as anonymous - which hides every
+        // OrganizationMembers/InviteOnly event from its own organizer
+        var eventDto = await _eventService.GetByIdAsync(eventId, userId);
         if (eventDto == null)
         {
+            _logger.LogWarning("Waitlist reorder requested for event {EventId} not visible to user {UserId}", eventId, userId);
             return NotFound();
         }
 
@@ -486,6 +489,36 @@ public class EventsController : ControllerBase
     }
 
     /// <summary>
+    /// Publish a draft event (organizer only).
+    /// Makes the event visible to members, opens signups, and notifies org subscribers.
+    /// Separate from publish-roster, which reveals team/waitlist placements later.
+    /// </summary>
+    [Authorize]
+    [HttpPost("{eventId:guid}/publish")]
+    public async Task<ActionResult<PublishResultDto>> PublishEvent(Guid eventId)
+    {
+        var userId = GetCurrentUserId();
+
+        try
+        {
+            var result = await _eventService.PublishEventAsync(eventId, userId);
+
+            if (!result.Success)
+            {
+                _logger.LogWarning("Publish event failed for event {EventId}: {Message}", eventId, result.Message);
+                return BadRequest(new { message = result.Message });
+            }
+
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Publish event denied for event {EventId}, user {UserId}", eventId, userId);
+            return Forbid();
+        }
+    }
+
+    /// <summary>
     /// Publish the roster for an event (organizer only).
     /// Sets IsRosterPublished=true and sends notifications to all players.
     /// </summary>
@@ -501,6 +534,7 @@ public class EventsController : ControllerBase
 
             if (!result.Success)
             {
+                _logger.LogWarning("Publish roster failed for event {EventId}: {Message}", eventId, result.Message);
                 return BadRequest(new { message = result.Message });
             }
 

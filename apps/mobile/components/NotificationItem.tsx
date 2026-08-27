@@ -18,6 +18,9 @@ const typeConfig: Record<NotificationType, { icon: string; color: string }> = {
   game_reminder: { icon: '🏒', color: colors.primary.teal },
   organizer_payment_reminder: { icon: '💰', color: colors.status.error },
   not_full_reminder: { icon: '🏒', color: colors.primary.green },
+  join_request: { icon: '🙋', color: colors.primary.purple },
+  join_request_approved: { icon: '✅', color: colors.primary.green },
+  join_request_denied: { icon: '🚫', color: colors.status.error },
 };
 
 function formatTimeAgo(dateString: string): string {

@@ -306,6 +306,9 @@ namespace BHMHockey.Api.Migrations
                     b.Property<bool?>("DefaultShowWaitlistBeforePublish")
                         .HasColumnType("boolean");
 
+                    b.Property<bool?>("DefaultStartAsDraft")
+                        .HasColumnType("boolean");
+
                     b.Property<TimeSpan?>("DefaultStartTime")
                         .HasColumnType("interval");
 
@@ -322,6 +325,9 @@ namespace BHMHockey.Api.Migrations
                         .HasColumnType("text");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPrivate")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Location")
@@ -414,6 +420,44 @@ namespace BHMHockey.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("OrganizationAutoRosterMembers");
+                });
+
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.OrganizationJoinRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedByUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrganizationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationJoinRequests");
                 });
 
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.OrganizationSubscription", b =>
@@ -1310,6 +1354,32 @@ namespace BHMHockey.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("AddedByUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.OrganizationJoinRequest", b =>
+                {
+                    b.HasOne("BHMHockey.Api.Models.Entities.User", "DecidedByUser")
+                        .WithMany()
+                        .HasForeignKey("DecidedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DecidedByUser");
 
                     b.Navigation("Organization");
 

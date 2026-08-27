@@ -14,6 +14,7 @@ export default function CreateOrganizationScreen() {
         name: data.name,
         description: data.description,
         skillLevels: data.skillLevels,
+        isPrivate: data.isPrivate,
       });
 
       Alert.alert('Success', 'Organization created successfully!', [

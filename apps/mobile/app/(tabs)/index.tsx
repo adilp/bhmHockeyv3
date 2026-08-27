@@ -76,7 +76,8 @@ export default function HomeScreen() {
   );
 
   const myOrganizedGames = useMemo(() =>
-    events.filter(e => e.canManage && e.status === 'Published').sort(sortByDate),
+    // Drafts belong here too - this is where the organizer goes to publish them
+    events.filter(e => e.canManage && (e.status === 'Published' || e.status === 'Draft')).sort(sortByDate),
     [events]
   );
 

@@ -16,6 +16,10 @@ public class EventService : IEventService
     private readonly ILogger<EventService> _logger;
     private static readonly HashSet<string> ValidSkillLevels = new() { "Gold", "Silver", "Bronze", "D-League" };
 
+    // Global fallback for "new events start as drafts", used when neither the request
+    // nor the organization expresses a preference.
+    public const bool DefaultStartAsDraft = true;
+
     // Central Time Zone for displaying times to users (local community app)
     private static readonly TimeZoneInfo CentralTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
 
@@ -102,8 +106,16 @@ public class EventService : IEventService
         // Default duration to 60 minutes if not provided
         var duration = request.Duration ?? 60;
 
+        // Three-tier resolution for "start as draft": per-event request wins, then the
+        // organization's default, then the global default.
+        Organization? organization = request.OrganizationId.HasValue
+            ? await _context.Organizations.FindAsync(request.OrganizationId.Value)
+            : null;
+        var startAsDraft = request.StartAsDraft ?? organization?.DefaultStartAsDraft ?? DefaultStartAsDraft;
+
         var evt = new Event
         {
+            Status = startAsDraft ? "Draft" : "Published",
             OrganizationId = request.OrganizationId,
             CreatorId = creatorId,
             Name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name,
@@ -134,7 +146,7 @@ public class EventService : IEventService
                 await _context.SaveChangesAsync();
 
                 // Load organization for MapToDto and auto-roster placement
-                evt.Organization = await _context.Organizations.FindAsync(evt.OrganizationId.Value);
+                evt.Organization = organization;
 
                 // Auto-add the org's regulars before subscribers are notified,
                 // so they're placed before anyone else can register
@@ -152,19 +164,12 @@ public class EventService : IEventService
             }
 
             // Notify organization subscribers AFTER commit so a rollback can't send a
-            // "New Game" blast for an event that was never persisted
-            var orgName = evt.Organization?.Name ?? "An organization";
-            var venueText = !string.IsNullOrWhiteSpace(evt.Venue) ? $" - {evt.Venue}" : "";
-            // Convert UTC to Central Time for display
-            var localEventDate = TimeZoneInfo.ConvertTimeFromUtc(evt.EventDate, CentralTimeZone);
-            await _notificationService.NotifyOrganizationSubscribersAsync(
-                evt.OrganizationId.Value,
-                $"New Game: {evt.Name}",
-                $"{orgName} posted a new game on {localEventDate:MMM d} at {localEventDate:h:mm tt}{venueText}",
-                new { eventId = evt.Id.ToString(), type = "new_event" },
-                type: "new_event",
-                eventId: evt.Id
-            );
+            // "New Game" blast for an event that was never persisted. Drafts are invisible
+            // to members, so the blast waits until the organizer publishes.
+            if (!startAsDraft)
+            {
+                await NotifyOrganizationSubscribersOfNewEventAsync(evt);
+            }
         }
         else
         {
@@ -172,6 +177,69 @@ public class EventService : IEventService
         }
 
         return await MapToDto(evt, creatorId);
+    }
+
+    /// <summary>
+    /// Sends the "New Game" blast to the organization's subscribers. Fired when an event
+    /// first becomes visible to members - at creation for non-drafts, at publish for drafts.
+    /// Returns the number of subscribers notified (push and/or notification center).
+    /// </summary>
+    private async Task<int> NotifyOrganizationSubscribersOfNewEventAsync(Event evt)
+    {
+        var orgName = evt.Organization?.Name ?? "An organization";
+        var venueText = !string.IsNullOrWhiteSpace(evt.Venue) ? $" - {evt.Venue}" : "";
+        // Convert UTC to Central Time for display
+        var localEventDate = TimeZoneInfo.ConvertTimeFromUtc(evt.EventDate, CentralTimeZone);
+
+        var recipientCount = await _context.OrganizationSubscriptions
+            .CountAsync(s => s.OrganizationId == evt.OrganizationId!.Value && s.NotificationEnabled);
+
+        await _notificationService.NotifyOrganizationSubscribersAsync(
+            evt.OrganizationId!.Value,
+            $"New Game: {evt.Name}",
+            $"{orgName} posted a new game on {localEventDate:MMM d} at {localEventDate:h:mm tt}{venueText}",
+            new { eventId = evt.Id.ToString(), type = "new_event" },
+            type: "new_event",
+            eventId: evt.Id
+        );
+
+        return recipientCount;
+    }
+
+    /// <summary>
+    /// Publish a draft event (manager only): makes it visible to members, opens
+    /// self-registration, and sends the "New Game" blast to org subscribers.
+    /// Separate from PublishRosterAsync, which reveals teams and waitlist positions later.
+    /// </summary>
+    public async Task<PublishResultDto> PublishEventAsync(Guid eventId, Guid organizerId)
+    {
+        var evt = await _context.Events
+            .Include(e => e.Organization)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (evt == null)
+            return new PublishResultDto(false, "Event not found", 0);
+
+        if (!await CanUserManageEventAsync(evt, organizerId))
+            throw new UnauthorizedAccessException("You don't have permission to manage this event");
+
+        if (evt.Status == "Cancelled")
+            return new PublishResultDto(false, "This event has been cancelled", 0);
+
+        // Guards the notification against firing twice - only a Draft can be published
+        if (evt.Status != "Draft")
+            return new PublishResultDto(false, "Event is already published", 0);
+
+        evt.Status = "Published";
+        evt.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        // Standalone events have no subscriber audience - same as creating one live
+        var notifiedCount = evt.OrganizationId.HasValue
+            ? await NotifyOrganizationSubscribersOfNewEventAsync(evt)
+            : 0;
+
+        return new PublishResultDto(true, "Event published successfully", notifiedCount);
     }
 
     /// <summary>
@@ -306,6 +374,14 @@ public class EventService : IEventService
     /// </summary>
     private async Task<bool> CanUserSeeEventAsync(Event evt, Guid? currentUserId, List<Guid> userSubscribedOrgIds)
     {
+        // Drafts exist only for the people who can publish them - checked before the
+        // creator/visibility rules below, which would otherwise let a non-admin creator
+        // of an org event see a draft they cannot manage
+        if (evt.Status == "Draft")
+        {
+            return currentUserId.HasValue && await CanUserManageEventAsync(evt, currentUserId.Value);
+        }
+
         // Creator can always see their own events
         if (currentUserId.HasValue && evt.CreatorId == currentUserId.Value)
         {
@@ -352,13 +428,14 @@ public class EventService : IEventService
             .ToListAsync();
 
         // Mirrors CanUserManageEventAsync (org admin for org events, creator for
-        // standalone) but as one query instead of a permission check per event
+        // standalone) but as one query instead of a permission check per event.
+        // Drafts are managers-only, so a played draft never surfaces for the player.
         var events = await _context.Events
             .Include(e => e.Organization)
             .Include(e => e.Registrations)
             .Where(e => e.Status != "Cancelled"
                 && e.EventDate < now
-                && (playedIds.Contains(e.Id)
+                && ((e.Status != "Draft" && playedIds.Contains(e.Id))
                     || (e.OrganizationId == null && e.CreatorId == currentUserId)
                     || (e.OrganizationId != null && adminOrgIds.Contains(e.OrganizationId.Value))))
             .OrderByDescending(e => e.EventDate)
@@ -460,7 +537,16 @@ public class EventService : IEventService
         if (request.MaxPlayers.HasValue) evt.MaxPlayers = request.MaxPlayers.Value;
         if (request.Cost.HasValue) evt.Cost = request.Cost.Value;
         if (request.RegistrationDeadline.HasValue) evt.RegistrationDeadline = request.RegistrationDeadline;
-        if (request.Status != null) evt.Status = request.Status;
+        if (request.Status != null)
+        {
+            // Publishing a draft has to go through PublishEventAsync, which is what
+            // sends the "New Game" blast - a plain status edit would skip it
+            if (evt.Status == "Draft" && request.Status != "Draft" && request.Status != "Cancelled")
+            {
+                throw new InvalidOperationException("Use the publish endpoint to publish a draft event");
+            }
+            evt.Status = request.Status;
+        }
 
         // Handle visibility changes
         if (request.Visibility != null)
@@ -530,6 +616,14 @@ public class EventService : IEventService
         if (evt == null)
         {
             throw new InvalidOperationException("Event not found");
+        }
+
+        // Drafts are not open for signups yet. Organizers place players directly
+        // (add-player / auto-roster / guests), which bypasses this path.
+        if (evt.Status == "Draft")
+        {
+            _logger.LogWarning("Registration blocked for event {EventId}: event is still a draft", eventId);
+            throw new InvalidOperationException("This game hasn't been published yet. Signups open once the organizer publishes it.");
         }
 
         // Check registration deadline
@@ -1038,12 +1132,22 @@ public class EventService : IEventService
 
     public async Task<List<EventDto>> GetUserRegistrationsAsync(Guid userId)
     {
+        var adminOrgIds = await _context.OrganizationAdmins
+            .Where(a => a.UserId == userId)
+            .Select(a => a.OrganizationId)
+            .ToListAsync();
+
         var registrations = await _context.EventRegistrations
             .Include(r => r.Event)
             .ThenInclude(e => e.Organization)
             .Include(r => r.Event.Registrations)
             .Where(r => r.UserId == userId && r.Status == "Registered")
             .Where(r => r.Event.EventDate >= DateTime.UtcNow)
+            // An organizer can place someone on a draft; that placement stays hidden
+            // until publish for everyone but the event's managers
+            .Where(r => r.Event.Status != "Draft"
+                || (r.Event.OrganizationId == null && r.Event.CreatorId == userId)
+                || (r.Event.OrganizationId != null && adminOrgIds.Contains(r.Event.OrganizationId.Value)))
             .OrderBy(r => r.Event.EventDate)
             .ToListAsync();
 
@@ -2034,6 +2138,20 @@ public class EventService : IEventService
             .Where(ub => userIdList.Contains(ub.UserId))
             .ToListAsync();
 
+        // How many players hold each of these badges, globally. The roster only
+        // has room for three, so it shows a player's rarest - an unusual badge
+        // is what makes someone stand out, and it stops every row repeating the
+        // same common one. (The trophy case still honours the player's own
+        // ordering; this ranking is for the compact roster row.)
+        var badgeTypeIds = allBadges.Select(ub => ub.BadgeTypeId).Distinct().ToList();
+        var awardCounts = badgeTypeIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await _context.UserBadges
+                .Where(ub => badgeTypeIds.Contains(ub.BadgeTypeId))
+                .GroupBy(ub => ub.BadgeTypeId)
+                .Select(g => new { BadgeTypeId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.BadgeTypeId, x => x.Count);
+
         // Group by user and compute top 3 + total count
         var result = new Dictionary<Guid, (List<UserBadgeDto> TopBadges, int TotalCount)>();
 
@@ -2041,8 +2159,10 @@ public class EventService : IEventService
         {
             var userBadges = allBadges
                 .Where(ub => ub.UserId == userId)
-                .OrderBy(ub => ub.DisplayOrder ?? int.MaxValue)
+                // Rarest first; SortPriority then earned-date keep it deterministic
+                .OrderBy(ub => awardCounts.GetValueOrDefault(ub.BadgeTypeId, int.MaxValue))
                 .ThenBy(ub => ub.BadgeType.SortPriority)
+                .ThenByDescending(ub => ub.EarnedAt)
                 .ToList();
 
             var topBadges = userBadges

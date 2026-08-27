@@ -65,7 +65,8 @@ public record CreateEventRequest(
     List<string>? SkillLevels = null,    // Optional - overrides org's skill levels if set
     bool ApplyAutoRoster = true,         // Auto-add the org's auto-roster members (ignored for standalone events)
     string? GroupMeLink = null,          // Optional game-specific GroupMe link (blank inherits org's link)
-    bool? ShowWaitlistBeforePublish = null  // Optional - defaults to false (client pre-fills from org default)
+    bool? ShowWaitlistBeforePublish = null,  // Optional - defaults to false (client pre-fills from org default)
+    bool? StartAsDraft = null            // Optional - resolves to org's DefaultStartAsDraft, else the global default (true)
 );
 
 public record UpdateEventRequest(

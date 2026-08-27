@@ -45,7 +45,7 @@ export { PlayerDetailModal } from './PlayerDetailModal';
 export { MemberDetailModal } from './MemberDetailModal';
 
 // Badge components
-export { BadgeIcon, BadgeIconsRow, TrophyCase, Confetti, BadgeCelebrationModal } from './badges';
+export { BadgeIcon, BadgeIconsRow, TrophyCase, Confetti, BadgeCelebrationModal, BadgeDetailModal } from './badges';
 
 // Event detail components
 export {

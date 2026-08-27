@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { organizationService } from '@bhmhockey/api-client';
-import type { Organization, OrganizationSubscription, CreateOrganizationRequest, OrganizationMember, AutoRosterMember, Position, OrganizationWaiver } from '@bhmhockey/shared';
+import type { Organization, OrganizationSubscription, CreateOrganizationRequest, OrganizationMember, AutoRosterMember, Position, OrganizationWaiver, OrganizationJoinRequest, JoinRequestStatus, SubscribeResult } from '@bhmhockey/shared';
 import { useEventStore, getErrorMessage } from './eventStore';
 
 interface OrganizationState {
@@ -12,6 +12,9 @@ interface OrganizationState {
   autoRosterOrgId: string | null; // Which org the loaded autoRoster belongs to
   waiver: OrganizationWaiver | null; // Active waiver of the org being viewed (null = none)
   waiverOrgId: string | null; // Which org the loaded waiver belongs to
+  joinRequests: OrganizationJoinRequest[]; // Join requests of the org being viewed (admin only)
+  joinRequestsOrgId: string | null; // Which org the loaded joinRequests belong to
+  joinRequestsStatus: JoinRequestStatus | 'All'; // Filter the loaded joinRequests were fetched with
   isLoading: boolean;
   error: string | null;
 
@@ -20,7 +23,7 @@ interface OrganizationState {
   fetchMySubscriptions: () => Promise<void>;
   fetchMyOrganizations: () => Promise<void>;
   createOrganization: (data: CreateOrganizationRequest) => Promise<Organization>;
-  subscribe: (organizationId: string) => Promise<void>;
+  subscribe: (organizationId: string) => Promise<SubscribeResult | null>;
   unsubscribe: (organizationId: string) => Promise<void>;
   deleteOrganization: (organizationId: string) => Promise<boolean>;
   clearError: () => void;
@@ -37,6 +40,11 @@ interface OrganizationState {
   // Waiver actions (fetch for anyone; save is admin only)
   fetchWaiver: (organizationId: string) => Promise<OrganizationWaiver | null>;
   saveWaiver: (organizationId: string, text: string) => Promise<boolean>;
+
+  // Join request actions (admin only) - private orgs require approval to join
+  fetchJoinRequests: (organizationId: string, status?: JoinRequestStatus | 'All') => Promise<void>;
+  approveJoinRequest: (organizationId: string, userId: string) => Promise<boolean>;
+  denyJoinRequest: (organizationId: string, userId: string) => Promise<boolean>;
 }
 
 export const useOrganizationStore = create<OrganizationState>((set, get) => ({
@@ -48,6 +56,9 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   autoRosterOrgId: null,
   waiver: null,
   waiverOrgId: null,
+  joinRequests: [],
+  joinRequestsOrgId: null,
+  joinRequestsStatus: 'Pending',
   isLoading: false,
   error: null,
 
@@ -109,29 +120,49 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
 
   subscribe: async (organizationId: string) => {
     const { organizations } = get();
+    const target = organizations.find(org => org.id === organizationId);
 
-    // Optimistic update
-    set({
-      organizations: organizations.map(org =>
-        org.id === organizationId
-          ? { ...org, isSubscribed: true, subscriberCount: org.subscriberCount + 1 }
-          : org
-      )
-    });
+    // Joining a private org yields a join request, not a membership - so only
+    // the public path gets the optimistic "you're in" update. When the org
+    // isn't in the loaded list we can't tell, so skip the optimism rather than
+    // flash "Joined" at someone who is really only requesting.
+    const joinsInstantly = target ? !target.isPrivate : false;
+
+    if (joinsInstantly) {
+      set({
+        organizations: organizations.map(org =>
+          org.id === organizationId
+            ? { ...org, isSubscribed: true, subscriberCount: org.subscriberCount + 1 }
+            : org
+        )
+      });
+    }
 
     try {
-      await organizationService.subscribe(organizationId);
+      const result = await organizationService.subscribe(organizationId);
+
+      if (result?.status === 'JoinRequestPending') {
+        set({
+          organizations: organizations.map(org =>
+            org.id === organizationId ? { ...org, myJoinRequestStatus: 'Pending' } : org
+          )
+        });
+        return result;
+      }
+
       // Refresh subscriptions to get full data
       await get().fetchMySubscriptions();
       // Membership changes event visibility - refresh so the org's events
       // appear without a manual pull-to-refresh (failure is non-fatal)
       await useEventStore.getState().fetchEvents().catch(() => {});
+      return result ?? null;
     } catch (error) {
       // Rollback optimistic update - restore original state
       set({
         organizations,
-        error: error instanceof Error ? error.message : 'Failed to subscribe'
+        error: getErrorMessage(error, 'Failed to join organization')
       });
+      return null;
     }
   },
 
@@ -256,6 +287,42 @@ export const useOrganizationStore = create<OrganizationState>((set, get) => ({
       return true;
     } catch (error) {
       set({ error: getErrorMessage(error, 'Failed to save waiver') });
+      return false;
+    }
+  },
+
+  fetchJoinRequests: async (organizationId: string, status: JoinRequestStatus | 'All' = 'Pending') => {
+    try {
+      const joinRequests = await organizationService.getJoinRequests(organizationId, status);
+      set({ joinRequests, joinRequestsOrgId: organizationId, joinRequestsStatus: status });
+    } catch (error) {
+      set({ error: getErrorMessage(error, 'Failed to load join requests') });
+    }
+  },
+
+  approveJoinRequest: async (organizationId: string, userId: string) => {
+    try {
+      await organizationService.approveJoinRequest(organizationId, userId);
+      // The approval changes membership and the pending count, so refresh
+      // everything a screen could be showing (failures here are non-fatal)
+      await get().fetchJoinRequests(organizationId, get().joinRequestsStatus);
+      await get().fetchOrganizations().catch(() => {});
+      await useEventStore.getState().fetchEvents().catch(() => {});
+      return true;
+    } catch (error) {
+      set({ error: getErrorMessage(error, 'Failed to approve join request') });
+      return false;
+    }
+  },
+
+  denyJoinRequest: async (organizationId: string, userId: string) => {
+    try {
+      await organizationService.denyJoinRequest(organizationId, userId);
+      await get().fetchJoinRequests(organizationId, get().joinRequestsStatus);
+      await get().fetchOrganizations().catch(() => {});
+      return true;
+    } catch (error) {
+      set({ error: getErrorMessage(error, 'Failed to deny join request') });
       return false;
     }
   },

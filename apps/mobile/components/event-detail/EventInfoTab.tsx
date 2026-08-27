@@ -5,6 +5,7 @@ import { Badge } from '../Badge';
 import { colors, spacing, radius } from '../../theme';
 import { getPaymentBadgeInfo } from '../../utils/payment';
 import { promptAddToCalendar } from '../../utils/calendar';
+import { DraftBanner } from './DraftBanner';
 
 interface EventInfoTabProps {
   event: EventDto;
@@ -61,6 +62,8 @@ export function EventInfoTab({
   };
 
   const paymentBadge = getPaymentBadgeInfo(event.myPaymentStatus);
+  // Drafts are only ever returned to their managers, but gate on canManage anyway
+  const isDraft = event.status === 'Draft';
 
   return (
     <ScrollView
@@ -77,6 +80,13 @@ export function EventInfoTab({
         ) : undefined
       }
     >
+      {/* ═══════════════════════════════════════════════════════════════════
+          DRAFT BANNER (managers only - nobody else can see a draft)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {isDraft && canManage && (
+        <DraftBanner />
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════════
           TICKET CARD
           ═══════════════════════════════════════════════════════════════════ */}
@@ -122,6 +132,7 @@ export function EventInfoTab({
         {(canManage || event.isRegistered || event.amIWaitlisted ||
           event.visibility === 'InviteOnly') && (
           <View style={styles.statusBadgeRow}>
+            {isDraft && <Badge variant="warning">Draft</Badge>}
             {canManage && <Badge variant="purple">Organizer</Badge>}
             {event.isRegistered && <Badge variant="green">Registered</Badge>}
             {event.amIWaitlisted && (

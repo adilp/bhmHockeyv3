@@ -51,6 +51,7 @@ export default function EventDetailScreen() {
     clearError,
     markPayment,
     cancelEvent,
+    publishEvent,
   } = useEventStore();
 
   useFocusEffect(
@@ -332,6 +333,40 @@ export default function EventDetailScreen() {
     );
   };
 
+  const handlePublishEvent = () => {
+    if (!id) return;
+
+    Alert.alert(
+      'Publish Event',
+      'This makes the game visible to members, opens signups, and sends them a "New Game" notification. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Publish',
+          onPress: async () => {
+            setIsProcessing(true);
+            try {
+              const result = await publishEvent(id);
+              if (result?.success) {
+                Alert.alert(
+                  'Event Published',
+                  `The game is live. ${result.notificationsSent} member${result.notificationsSent === 1 ? '' : 's'} notified.`
+                );
+              } else {
+                Alert.alert(
+                  'Error',
+                  result?.message || useEventStore.getState().error || 'Failed to publish event'
+                );
+              }
+            } finally {
+              setIsProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleDeleteEvent = () => {
     if (!id) return;
 
@@ -390,7 +425,14 @@ export default function EventDetailScreen() {
           />
         );
       case 'roster':
-        return <EventRosterTab eventId={id} event={selectedEvent} canManage={canManage} />;
+        return (
+          <EventRosterTab
+            eventId={id}
+            event={selectedEvent}
+            canManage={canManage}
+            onPublishEvent={handlePublishEvent}
+          />
+        );
       case 'chat':
         return <EventChatTab event={selectedEvent} />;
       default:
@@ -448,6 +490,7 @@ export default function EventDetailScreen() {
             isFull={isFull}
             isProcessing={isProcessing}
             onRegister={handleRegister}
+            isDraft={selectedEvent.status === 'Draft'}
           />
 
           {/* Waiver acceptance modal (registration flow) - decline returns to the event */}

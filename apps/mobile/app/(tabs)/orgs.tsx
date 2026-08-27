@@ -63,8 +63,34 @@ export default function OrganizationsScreen() {
 
     if (org.isSubscribed) {
       await unsubscribe(org.id);
-    } else {
-      await subscribe(org.id);
+      return;
+    }
+
+    // Denied users can never ask again - the server rejects a repeat request
+    if (org.myJoinRequestStatus === 'Denied') {
+      Alert.alert(
+        'Request Declined',
+        `Your request to join ${org.name} was declined. Contact an organizer if you think this is a mistake.`
+      );
+      return;
+    }
+
+    if (org.myJoinRequestStatus === 'Pending') {
+      Alert.alert('Request Pending', `Your request to join ${org.name} is waiting for an organizer to approve it.`);
+      return;
+    }
+
+    const result = await subscribe(org.id);
+
+    if (!result) {
+      Alert.alert('Error', useOrganizationStore.getState().error || 'Failed to join organization');
+      return;
+    }
+
+    // Joining a private org sends a request instead - say so, or the tap looks
+    // like it did nothing
+    if (result.status === 'JoinRequestPending') {
+      Alert.alert('Request Sent', result.message);
     }
   };
 

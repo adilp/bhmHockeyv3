@@ -54,6 +54,14 @@ public interface IEventService
     Task<List<EventRegistrationDto>> GetPrePublishWaitlistAsync(Guid eventId);
 
     /// <summary>
+    /// Publish a draft event (organizer only): makes it visible to members, opens
+    /// self-registration, and notifies org subscribers of the new game.
+    /// Returns failure if the event is not a draft, so the blast fires exactly once.
+    /// This is a separate, earlier step than PublishRosterAsync.
+    /// </summary>
+    Task<PublishResultDto> PublishEventAsync(Guid eventId, Guid organizerId);
+
+    /// <summary>
     /// Publish the roster for an event (organizer only).
     /// Sets IsRosterPublished=true, records PublishedAt timestamp, and sends notifications to all players.
     /// Returns failure if roster is already published.

@@ -1,8 +1,8 @@
-import { View, Text, Switch, StyleSheet, Platform } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import { View, Text, Switch, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { SKILL_LEVELS } from '@bhmhockey/shared';
 import type { SkillLevel, UserPositions } from '@bhmhockey/shared';
 import { colors, spacing, radius } from '../theme';
+import { skillLevelColors } from './SkillLevelBadges';
 
 export interface PositionState {
   isGoalie: boolean;
@@ -21,6 +21,49 @@ interface PositionSelectorProps {
   onSkaterChange: (value: boolean) => void;
   onSkaterSkillChange: (value: SkillLevel) => void;
   disabled?: boolean;
+}
+
+/**
+ * Single-select skill pills. Replaces a native wheel Picker, which clipped
+ * its top option at the height it was given and sat oddly indented - four
+ * options fit on one row and match the rest of the app's controls.
+ */
+function SkillPills({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: SkillLevel;
+  onChange: (level: SkillLevel) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={styles.skillPills}>
+      {SKILL_LEVELS.map((level) => {
+        const isSelected = value === level;
+        return (
+          <TouchableOpacity
+            key={level}
+            style={[
+              styles.skillPill,
+              isSelected && { backgroundColor: skillLevelColors[level], borderColor: skillLevelColors[level] },
+              disabled && styles.skillPillDisabled,
+            ]}
+            onPress={() => onChange(level)}
+            disabled={disabled}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[styles.skillPillText, isSelected && styles.skillPillTextSelected]}
+              allowFontScaling={false}
+            >
+              {level}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
 }
 
 export function PositionSelector({
@@ -54,25 +97,11 @@ export function PositionSelector({
           </Text>
         </View>
         {isGoalie && (
-          <View style={styles.skillPickerContainer}>
-            <Picker
-              selectedValue={goalieSkill}
-              onValueChange={(value) => onGoalieSkillChange(value as SkillLevel)}
-              style={styles.skillPicker}
-              itemStyle={styles.pickerItem}
-              dropdownIconColor={colors.text.primary}
-              enabled={!disabled}
-            >
-              {SKILL_LEVELS.map((level) => (
-                <Picker.Item
-                  key={level}
-                  label={level}
-                  value={level}
-                  color={Platform.OS === 'ios' ? colors.text.primary : undefined}
-                />
-              ))}
-            </Picker>
-          </View>
+          <SkillPills
+            value={goalieSkill}
+            onChange={onGoalieSkillChange}
+            disabled={disabled}
+          />
         )}
       </View>
 
@@ -94,25 +123,11 @@ export function PositionSelector({
           </Text>
         </View>
         {isSkater && (
-          <View style={styles.skillPickerContainer}>
-            <Picker
-              selectedValue={skaterSkill}
-              onValueChange={(value) => onSkaterSkillChange(value as SkillLevel)}
-              style={styles.skillPicker}
-              itemStyle={styles.pickerItem}
-              dropdownIconColor={colors.text.primary}
-              enabled={!disabled}
-            >
-              {SKILL_LEVELS.map((level) => (
-                <Picker.Item
-                  key={level}
-                  label={level}
-                  value={level}
-                  color={Platform.OS === 'ios' ? colors.text.primary : undefined}
-                />
-              ))}
-            </Picker>
-          </View>
+          <SkillPills
+            value={skaterSkill}
+            onChange={onSkaterSkillChange}
+            disabled={disabled}
+          />
         )}
       </View>
     </View>
@@ -142,6 +157,32 @@ export function createStateFromPositions(positions?: UserPositions): Partial<Pos
 }
 
 const styles = StyleSheet.create({
+  skillPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginLeft: Platform.OS === 'ios' ? 52 : 56,
+    marginTop: spacing.xs,
+  },
+  skillPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.bg.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.muted,
+  },
+  skillPillDisabled: {
+    opacity: 0.5,
+  },
+  skillPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  skillPillTextSelected: {
+    color: colors.bg.darkest,
+  },
   positionRow: {
     marginBottom: spacing.md,
     borderBottomWidth: 1,
@@ -167,23 +208,5 @@ const styles = StyleSheet.create({
   positionLabelActive: {
     color: colors.primary.teal,
     fontWeight: '600',
-  },
-  skillPickerContainer: {
-    backgroundColor: colors.bg.elevated,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    marginLeft: Platform.OS === 'ios' ? 52 : 56,
-    marginRight: spacing.xs,
-  },
-  skillPicker: {
-    height: Platform.OS === 'ios' ? 120 : 56,
-    width: '100%',
-    color: colors.text.primary,
-  },
-  pickerItem: {
-    fontSize: 16,
-    color: colors.text.primary,
   },
 });

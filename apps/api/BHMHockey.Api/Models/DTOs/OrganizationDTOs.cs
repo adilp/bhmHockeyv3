@@ -19,7 +19,11 @@ public record OrganizationDto(
     string? DefaultVenue,
     string? DefaultVisibility,
     string? GroupMeLink = null,  // Org-wide GroupMe chat link (events fall back to this)
-    bool? DefaultShowWaitlistBeforePublish = null  // Pre-fills ShowWaitlistBeforePublish on new events
+    bool? DefaultShowWaitlistBeforePublish = null,  // Pre-fills ShowWaitlistBeforePublish on new events
+    bool? DefaultStartAsDraft = null,  // Pre-fills StartAsDraft on new events (null = global default: start as draft)
+    bool IsPrivate = false,  // Private orgs require admin approval to join
+    string? MyJoinRequestStatus = null,  // Current user's join request: null | "Pending" | "Approved" | "Denied"
+    int? PendingJoinRequestCount = null  // ADMIN-ONLY - null for everyone else
 );
 
 // Member/subscriber info - visible to all subscribers
@@ -32,7 +36,7 @@ public record OrganizationMemberDto(
     Dictionary<string, string>? Positions,  // {"goalie": "Gold", "skater": "Silver"}
     DateTime SubscribedAt,
     bool IsAdmin,  // True if this member is an admin of the organization
-    List<UserBadgeDto>? Badges = null,  // Top 3 badges by displayOrder
+    List<UserBadgeDto>? Badges = null,  // Top 3 badges, rarest first
     int TotalBadgeCount = 0,  // Total badges user has earned
     bool? HasAcceptedCurrentWaiver = null  // null when the org has no active waiver
 );
@@ -50,7 +54,9 @@ public record CreateOrganizationRequest(
     string? DefaultVenue,
     string? DefaultVisibility,
     string? GroupMeLink = null,  // Org-wide GroupMe chat link
-    bool? DefaultShowWaitlistBeforePublish = null
+    bool? DefaultShowWaitlistBeforePublish = null,
+    bool? DefaultStartAsDraft = null,
+    bool? IsPrivate = null  // null defaults to public
 );
 
 public record UpdateOrganizationRequest(
@@ -66,7 +72,9 @@ public record UpdateOrganizationRequest(
     string? DefaultVenue,
     string? DefaultVisibility,
     string? GroupMeLink = null,  // Empty/whitespace clears the link; null leaves it unchanged
-    bool? DefaultShowWaitlistBeforePublish = null  // null leaves unchanged
+    bool? DefaultShowWaitlistBeforePublish = null,  // null leaves unchanged
+    bool? DefaultStartAsDraft = null,  // null leaves unchanged
+    bool? IsPrivate = null  // null leaves unchanged
 );
 
 public record OrganizationSubscriptionDto(
@@ -111,4 +119,35 @@ public record AddAutoRosterMemberRequest(
 
 public record ReorderAutoRosterRequest(
     List<Guid> OrderedUserIds               // All auto-roster member user IDs in the new order
+);
+
+// Join request DTOs - private orgs require an admin to approve membership
+
+/// <summary>
+/// Outcome of a subscribe attempt. Public orgs subscribe instantly; private orgs
+/// produce a join request an admin must approve.
+/// </summary>
+public enum SubscribeOutcome
+{
+    Subscribed,
+    AlreadySubscribed,
+    JoinRequestCreated,
+    JoinRequestAlreadyPending
+}
+
+// Body of POST /organizations/{id}/subscribe. Status is "Subscribed" or "JoinRequestPending".
+public record SubscribeResponse(
+    string Status,
+    string Message
+);
+
+public record OrganizationJoinRequestDto(
+    Guid Id,
+    Guid OrganizationId,
+    Guid UserId,
+    string FirstName,
+    string LastName,
+    string Status,  // "Pending" | "Approved" | "Denied"
+    DateTime RequestedAt,
+    DateTime? DecidedAt
 );

@@ -21,6 +21,7 @@ public class OrganizationsControllerTests
     private readonly Mock<IOrganizationAdminService> _mockAdminService;
     private readonly Mock<IOrganizationAutoRosterService> _mockAutoRosterService;
     private readonly Mock<IOrganizationWaiverService> _mockWaiverService;
+    private readonly Mock<IOrganizationJoinRequestService> _mockJoinRequestService;
     private readonly OrganizationsController _controller;
     private readonly Guid _testUserId = Guid.NewGuid();
 
@@ -30,11 +31,13 @@ public class OrganizationsControllerTests
         _mockAdminService = new Mock<IOrganizationAdminService>();
         _mockAutoRosterService = new Mock<IOrganizationAutoRosterService>();
         _mockWaiverService = new Mock<IOrganizationWaiverService>();
+        _mockJoinRequestService = new Mock<IOrganizationJoinRequestService>();
         _controller = new OrganizationsController(
             _mockOrgService.Object,
             _mockAdminService.Object,
             _mockAutoRosterService.Object,
             _mockWaiverService.Object,
+            _mockJoinRequestService.Object,
             Mock.Of<ILogger<OrganizationsController>>());
     }
 
@@ -252,7 +255,7 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        _mockOrgService.Setup(s => s.SubscribeAsync(orgId, _testUserId)).ReturnsAsync(true);
+        _mockOrgService.Setup(s => s.SubscribeAsync(orgId, _testUserId)).ReturnsAsync(SubscribeOutcome.Subscribed);
 
         // Act
         var result = await _controller.Subscribe(orgId);
@@ -267,13 +270,218 @@ public class OrganizationsControllerTests
         // Arrange
         SetupAuthenticatedUser(_testUserId);
         var orgId = Guid.NewGuid();
-        _mockOrgService.Setup(s => s.SubscribeAsync(orgId, _testUserId)).ReturnsAsync(false);
+        _mockOrgService.Setup(s => s.SubscribeAsync(orgId, _testUserId)).ReturnsAsync(SubscribeOutcome.AlreadySubscribed);
 
         // Act
         var result = await _controller.Subscribe(orgId);
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task Subscribe_ToPrivateOrg_ReturnsJoinRequestPending()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockOrgService.Setup(s => s.SubscribeAsync(orgId, _testUserId)).ReturnsAsync(SubscribeOutcome.JoinRequestCreated);
+
+        // Act
+        var result = await _controller.Subscribe(orgId);
+
+        // Assert
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<SubscribeResponse>()
+            .Which.Status.Should().Be("JoinRequestPending");
+    }
+
+    [Fact]
+    public async Task Subscribe_WithPendingRequest_ReturnsJoinRequestPending()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockOrgService.Setup(s => s.SubscribeAsync(orgId, _testUserId)).ReturnsAsync(SubscribeOutcome.JoinRequestAlreadyPending);
+
+        // Act
+        var result = await _controller.Subscribe(orgId);
+
+        // Assert
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<SubscribeResponse>()
+            .Which.Status.Should().Be("JoinRequestPending");
+    }
+
+    [Fact]
+    public async Task Subscribe_AfterDenial_Returns400WithMessage()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockOrgService.Setup(s => s.SubscribeAsync(orgId, _testUserId))
+            .ThrowsAsync(new InvalidOperationException("Your request to join this organization was declined."));
+
+        // Act
+        var result = await _controller.Subscribe(orgId);
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    #endregion
+
+    #region Join Request Tests
+
+    [Fact]
+    public async Task GetJoinRequests_AsAdmin_ReturnsPendingByDefault()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var requests = new List<OrganizationJoinRequestDto>
+        {
+            new(Guid.NewGuid(), orgId, Guid.NewGuid(), "Jane", "Doe", "Pending", DateTime.UtcNow, null)
+        };
+        _mockJoinRequestService.Setup(s => s.GetRequestsAsync(orgId, _testUserId, "Pending")).ReturnsAsync(requests);
+
+        // Act
+        var result = await _controller.GetJoinRequests(orgId);
+
+        // Assert
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        (ok.Value as List<OrganizationJoinRequestDto>).Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetJoinRequests_WithAllStatus_PassesNullFilter()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockJoinRequestService.Setup(s => s.GetRequestsAsync(orgId, _testUserId, null))
+            .ReturnsAsync(new List<OrganizationJoinRequestDto>());
+
+        // Act
+        var result = await _controller.GetJoinRequests(orgId, "All");
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _mockJoinRequestService.Verify(s => s.GetRequestsAsync(orgId, _testUserId, null), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetJoinRequests_AsNonAdmin_Returns403()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        _mockJoinRequestService.Setup(s => s.GetRequestsAsync(orgId, _testUserId, It.IsAny<string?>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        // Act
+        var result = await _controller.GetJoinRequests(orgId);
+
+        // Assert
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    [Fact]
+    public async Task ApproveJoinRequest_WhenApproved_ReturnsOk()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var requestUserId = Guid.NewGuid();
+        _mockJoinRequestService.Setup(s => s.ApproveAsync(orgId, requestUserId, _testUserId)).ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.ApproveJoinRequest(orgId, requestUserId);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task ApproveJoinRequest_WithNoRequest_Returns404()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var requestUserId = Guid.NewGuid();
+        _mockJoinRequestService.Setup(s => s.ApproveAsync(orgId, requestUserId, _testUserId)).ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.ApproveJoinRequest(orgId, requestUserId);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task ApproveJoinRequest_AsNonAdmin_Returns403()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var requestUserId = Guid.NewGuid();
+        _mockJoinRequestService.Setup(s => s.ApproveAsync(orgId, requestUserId, _testUserId))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        // Act
+        var result = await _controller.ApproveJoinRequest(orgId, requestUserId);
+
+        // Assert
+        result.Should().BeOfType<ForbidResult>();
+    }
+
+    [Fact]
+    public async Task DenyJoinRequest_WhenDenied_ReturnsOk()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var requestUserId = Guid.NewGuid();
+        _mockJoinRequestService.Setup(s => s.DenyAsync(orgId, requestUserId, _testUserId)).ReturnsAsync(true);
+
+        // Act
+        var result = await _controller.DenyJoinRequest(orgId, requestUserId);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task DenyJoinRequest_WithNoRequest_Returns404()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var requestUserId = Guid.NewGuid();
+        _mockJoinRequestService.Setup(s => s.DenyAsync(orgId, requestUserId, _testUserId)).ReturnsAsync(false);
+
+        // Act
+        var result = await _controller.DenyJoinRequest(orgId, requestUserId);
+
+        // Assert
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
+    public async Task DenyJoinRequest_AsNonAdmin_Returns403()
+    {
+        // Arrange
+        SetupAuthenticatedUser(_testUserId);
+        var orgId = Guid.NewGuid();
+        var requestUserId = Guid.NewGuid();
+        _mockJoinRequestService.Setup(s => s.DenyAsync(orgId, requestUserId, _testUserId))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        // Act
+        var result = await _controller.DenyJoinRequest(orgId, requestUserId);
+
+        // Assert
+        result.Should().BeOfType<ForbidResult>();
     }
 
     #endregion

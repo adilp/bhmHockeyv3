@@ -31,10 +31,14 @@ export default function CreateEventScreen() {
       applyAutoRoster: data.applyAutoRoster,
       groupMeLink: data.groupMeLink || undefined,
       showWaitlistBeforePublish: data.showWaitlistBeforePublish,
+      startAsDraft: data.startAsDraft,
     });
 
     if (result) {
-      Alert.alert('Success', 'Event created successfully!', [
+      const message = result.status === 'Draft'
+        ? 'Saved as a draft. Add players, then publish it to notify members and open signups.'
+        : 'Event created successfully!';
+      Alert.alert('Success', message, [
         { text: 'OK', onPress: () => router.back() }
       ]);
       return true;

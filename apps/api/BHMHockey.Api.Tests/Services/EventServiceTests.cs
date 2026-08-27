@@ -1580,7 +1580,8 @@ public class EventServiceTests : IDisposable
             MaxPlayers: 20,
             Cost: 15,
             RegistrationDeadline: null,
-            Visibility: "Public"
+            Visibility: "Public",
+            StartAsDraft: false  // Published immediately - drafts notify at publish time instead
         );
 
         // Act
@@ -1658,7 +1659,8 @@ public class EventServiceTests : IDisposable
             MaxPlayers: 20,
             Cost: 15,
             RegistrationDeadline: null,
-            Visibility: "Public"
+            Visibility: "Public",
+            StartAsDraft: false  // Only the immediate-publish path notifies at creation
         );
 
         // Act & Assert - Should throw because notification failure propagates
@@ -2544,6 +2546,136 @@ public class EventServiceTests : IDisposable
         result.Registration!.TeamAssignment.Should().NotBeNull();
         result.Registration.TeamAssignment.Should().BeOneOf("Black", "White");
     }
+
+    #region Roster badge rarity
+
+    private async Task<BadgeType> CreateBadgeType(string code, int sortPriority = 0)
+    {
+        var badgeType = new BadgeType
+        {
+            Id = Guid.NewGuid(),
+            Code = code,
+            Name = code,
+            Description = code,
+            IconName = code.ToLowerInvariant(),
+            Category = "achievement",
+            SortPriority = sortPriority
+        };
+        _context.BadgeTypes.Add(badgeType);
+        await _context.SaveChangesAsync();
+        return badgeType;
+    }
+
+    private async Task AwardBadge(Guid userId, Guid badgeTypeId, int? displayOrder = null)
+    {
+        _context.UserBadges.Add(new UserBadge
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            BadgeTypeId = badgeTypeId,
+            EarnedAt = DateTime.UtcNow,
+            DisplayOrder = displayOrder
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_ShowsThePlayersRarestBadgesFirst()
+    {
+        // Arrange - three badge types with very different global counts
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+        await CreateRegistration(evt.Id, player.Id);
+
+        var common = await CreateBadgeType("COMMON");
+        var uncommon = await CreateBadgeType("UNCOMMON");
+        var rare = await CreateBadgeType("RARE");
+
+        // The player holds all three
+        await AwardBadge(player.Id, common.Id);
+        await AwardBadge(player.Id, uncommon.Id);
+        await AwardBadge(player.Id, rare.Id);
+
+        // Other players make COMMON common and UNCOMMON middling; RARE stays unique
+        for (var i = 0; i < 5; i++)
+        {
+            var other = await CreateTestUser($"other{i}@example.com");
+            await AwardBadge(other.Id, common.Id);
+            if (i < 2) await AwardBadge(other.Id, uncommon.Id);
+        }
+
+        // Act
+        var registrations = await _sut.GetRegistrationsAsync(evt.Id);
+
+        // Assert - rarest first, regardless of when they were earned
+        var badges = registrations.Single().User.Badges!;
+        badges.Select(b => b.BadgeType.Code).Should().Equal("RARE", "UNCOMMON", "COMMON");
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_MoreThanThreeBadges_KeepsTheThreeRarest()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+        await CreateRegistration(evt.Id, player.Id);
+
+        var types = new List<BadgeType>();
+        for (var i = 0; i < 5; i++)
+        {
+            types.Add(await CreateBadgeType($"BADGE{i}"));
+            await AwardBadge(player.Id, types[i].Id);
+        }
+
+        // BADGE0 is held by many, BADGE4 by only this player
+        for (var i = 0; i < 4; i++)
+        {
+            var other = await CreateTestUser($"other{i}@example.com");
+            for (var t = 0; t <= i; t++)
+            {
+                await AwardBadge(other.Id, types[t].Id);
+            }
+        }
+
+        // Act
+        var registrations = await _sut.GetRegistrationsAsync(evt.Id);
+
+        // Assert - the three least-held survive the cut, total still reports all five
+        var user = registrations.Single().User;
+        user.Badges!.Select(b => b.BadgeType.Code).Should().Equal("BADGE4", "BADGE3", "BADGE2");
+        user.TotalBadgeCount.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_RarityWins_EvenWhenThePlayerOrderedTheirCase()
+    {
+        // Arrange - the player pinned a common badge to the front of their case
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+        await CreateRegistration(evt.Id, player.Id);
+
+        var common = await CreateBadgeType("COMMON");
+        var rare = await CreateBadgeType("RARE");
+        await AwardBadge(player.Id, common.Id, displayOrder: 0);
+        await AwardBadge(player.Id, rare.Id, displayOrder: 1);
+
+        for (var i = 0; i < 3; i++)
+        {
+            var other = await CreateTestUser($"other{i}@example.com");
+            await AwardBadge(other.Id, common.Id);
+        }
+
+        // Act
+        var registrations = await _sut.GetRegistrationsAsync(evt.Id);
+
+        // Assert - the compact roster row leads with the rare one
+        registrations.Single().User.Badges![0].BadgeType.Code.Should().Be("RARE");
+    }
+
+    #endregion
 
     [Fact]
     public async Task GetPastForUserAsync_ReturnsGamesPlayedAndOrganized_NewestFirst()
@@ -5247,6 +5379,553 @@ public class EventServiceTests : IDisposable
 
         // Act / Assert
         (await _sut.GetRegistrationsAsync(evt.Id)).Should().OnlyContain(r => !r.HasNotAcceptedWaiver);
+    }
+
+    #endregion
+    #region Draft Event Tests
+
+    private CreateEventRequest DraftCreateRequest(
+        Guid? orgId,
+        bool? startAsDraft = null,
+        string name = "Draft Test Event",
+        decimal cost = 0,
+        bool applyAutoRoster = false)
+    {
+        return new CreateEventRequest(
+            EventDate: DateTime.UtcNow.AddDays(7),
+            MaxPlayers: 10,
+            Cost: cost,
+            OrganizationId: orgId,
+            Name: name,
+            ApplyAutoRoster: applyAutoRoster,
+            StartAsDraft: startAsDraft);
+    }
+
+    private void VerifyNewEventNotification(Times times)
+    {
+        _mockNotificationService.Verify(
+            n => n.NotifyOrganizationSubscribersAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<object>(),
+                "new_event",
+                It.IsAny<Guid?>()),
+            times);
+    }
+
+    // --- Three-tier default resolution ---
+
+    [Fact]
+    public async Task CreateAsync_NoPreferenceAnywhere_StartsAsDraftAndDoesNotNotify()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+
+        var result = await _sut.CreateAsync(DraftCreateRequest(org.Id), creator.Id);
+
+        result.Status.Should().Be("Draft");
+        VerifyNewEventNotification(Times.Never());
+    }
+
+    [Fact]
+    public async Task CreateAsync_OrgDefaultFalse_StartsPublishedAndNotifies()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultStartAsDraft = false;
+        await _context.SaveChangesAsync();
+
+        var result = await _sut.CreateAsync(DraftCreateRequest(org.Id), creator.Id);
+
+        result.Status.Should().Be("Published");
+        VerifyNewEventNotification(Times.Once());
+    }
+
+    [Fact]
+    public async Task CreateAsync_RequestTrue_OverridesOrgDefaultFalse()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultStartAsDraft = false;
+        await _context.SaveChangesAsync();
+
+        var result = await _sut.CreateAsync(DraftCreateRequest(org.Id, startAsDraft: true), creator.Id);
+
+        result.Status.Should().Be("Draft");
+        VerifyNewEventNotification(Times.Never());
+    }
+
+    [Fact]
+    public async Task CreateAsync_RequestFalse_OverridesOrgDefaultTrue()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultStartAsDraft = true;
+        await _context.SaveChangesAsync();
+
+        var result = await _sut.CreateAsync(DraftCreateRequest(org.Id, startAsDraft: false), creator.Id);
+
+        result.Status.Should().Be("Published");
+        VerifyNewEventNotification(Times.Once());
+    }
+
+    [Fact]
+    public async Task CreateAsync_StandaloneEvent_UsesGlobalDraftDefault()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+
+        var result = await _sut.CreateAsync(DraftCreateRequest(null), creator.Id);
+
+        result.Status.Should().Be("Draft");
+        VerifyNewEventNotification(Times.Never());
+    }
+
+    [Fact]
+    public async Task CreateAsync_StandaloneEvent_StartAsDraftFalse_PublishesWithoutNotifying()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+
+        var result = await _sut.CreateAsync(DraftCreateRequest(null, startAsDraft: false), creator.Id);
+
+        result.Status.Should().Be("Published");
+        VerifyNewEventNotification(Times.Never());
+    }
+
+    [Fact]
+    public async Task CreateAsync_Draft_StillAppliesAutoRoster()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var regular = await CreateTestUser("regular@example.com");
+        await CreateSubscription(org.Id, regular.Id);
+        await AddAutoRosterMember(org.Id, regular.Id, "Skater", 0);
+
+        var result = await _sut.CreateAsync(
+            DraftCreateRequest(org.Id, applyAutoRoster: true), creator.Id);
+
+        result.Status.Should().Be("Draft");
+        var registrations = await _context.EventRegistrations
+            .Where(r => r.EventId == result.Id)
+            .ToListAsync();
+        registrations.Should().ContainSingle(r => r.UserId == regular.Id && r.Status == "Registered");
+        VerifyNewEventNotification(Times.Never());
+    }
+
+    // --- Visibility: drafts hidden from non-managers, visible to managers ---
+
+    [Fact]
+    public async Task GetAllAsync_Draft_HiddenFromSubscriber()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        await CreateTestEvent(creator.Id, org.Id, name: "Hidden Draft", status: "Draft");
+
+        var events = await _sut.GetAllAsync(member.Id);
+
+        events.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_Draft_HiddenFromAnonymous()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        var events = await _sut.GetAllAsync(null);
+
+        events.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_Draft_VisibleToOrgAdmin()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateTestEvent(creator.Id, org.Id, name: "My Draft", status: "Draft");
+
+        var events = await _sut.GetAllAsync(creator.Id);
+
+        events.Should().ContainSingle(e => e.Name == "My Draft" && e.Status == "Draft");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_Draft_ReturnsNullForNonManager()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        var result = await _sut.GetByIdAsync(evt.Id, member.Id);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_Draft_ReturnsEventForManager()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        var result = await _sut.GetByIdAsync(evt.Id, creator.Id);
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be("Draft");
+        result.CanManage.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_DraftOrgEvent_HiddenFromCreatorWhoIsNotAnOrgAdmin()
+    {
+        // An org event's manager is the org's admins, not whoever's row created it -
+        // a demoted creator must not keep seeing the draft
+        var owner = await CreateTestUser("owner@example.com");
+        var org = await CreateTestOrganization(owner.Id);
+        var formerAdmin = await CreateTestUser("former@example.com");
+        var evt = await CreateTestEvent(formerAdmin.Id, org.Id, status: "Draft");
+
+        var result = await _sut.GetByIdAsync(evt.Id, formerAdmin.Id);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_StandaloneDraft_VisibleToCreatorOnly()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var other = await CreateTestUser("other@example.com");
+        var evt = await CreateTestEvent(creator.Id, null, status: "Draft");
+
+        (await _sut.GetByIdAsync(evt.Id, creator.Id)).Should().NotBeNull();
+        (await _sut.GetByIdAsync(evt.Id, other.Id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByOrganizationAsync_Draft_HiddenFromSubscriberVisibleToAdmin()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        await CreateTestEvent(creator.Id, org.Id, name: "Org Draft", status: "Draft");
+        await CreateTestEvent(creator.Id, org.Id, name: "Org Live", status: "Published");
+
+        var memberView = await _sut.GetByOrganizationAsync(org.Id, member.Id);
+        var adminView = await _sut.GetByOrganizationAsync(org.Id, creator.Id);
+
+        memberView.Should().ContainSingle(e => e.Name == "Org Live");
+        adminView.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetPastForUserAsync_PastDraft_HiddenFromRosteredPlayer()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, name: "Past Draft", status: "Draft",
+            eventDate: DateTime.UtcNow.AddDays(-2));
+        await CreateRegistration(evt.Id, player.Id);
+
+        var past = await _sut.GetPastForUserAsync(player.Id);
+
+        past.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPastForUserAsync_PastDraft_VisibleToOrgAdmin()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateTestEvent(creator.Id, org.Id, name: "Past Draft", status: "Draft",
+            eventDate: DateTime.UtcNow.AddDays(-2));
+
+        var past = await _sut.GetPastForUserAsync(creator.Id);
+
+        past.Should().ContainSingle(e => e.Name == "Past Draft");
+    }
+
+    [Fact]
+    public async Task GetUserRegistrationsAsync_Draft_ExcludedForPlayer()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var draft = await CreateTestEvent(creator.Id, org.Id, name: "Draft Game", status: "Draft");
+        var live = await CreateTestEvent(creator.Id, org.Id, name: "Live Game", status: "Published");
+        await CreateRegistration(draft.Id, player.Id);
+        await CreateRegistration(live.Id, player.Id);
+
+        var mine = await _sut.GetUserRegistrationsAsync(player.Id);
+
+        mine.Should().ContainSingle(e => e.Name == "Live Game");
+    }
+
+    [Fact]
+    public async Task GetUserRegistrationsAsync_Draft_IncludedForManager()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var draft = await CreateTestEvent(creator.Id, org.Id, name: "Draft Game", status: "Draft");
+        await CreateRegistration(draft.Id, creator.Id);
+
+        var mine = await _sut.GetUserRegistrationsAsync(creator.Id);
+
+        mine.Should().ContainSingle(e => e.Name == "Draft Game");
+    }
+
+    [Fact]
+    public async Task GetUserRegistrationsAsync_StandaloneDraft_IncludedForCreator()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var draft = await CreateTestEvent(creator.Id, null, name: "Solo Draft", status: "Draft");
+        await CreateRegistration(draft.Id, creator.Id);
+
+        var mine = await _sut.GetUserRegistrationsAsync(creator.Id);
+
+        mine.Should().ContainSingle(e => e.Name == "Solo Draft");
+    }
+
+    // --- Self-registration is closed on drafts ---
+
+    [Fact]
+    public async Task RegisterAsync_OnDraft_Throws()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft", cost: 0);
+
+        var act = async () => await _sut.RegisterAsync(evt.Id, player.Id);
+
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .WithMessage("*hasn't been published*");
+    }
+
+    [Fact]
+    public async Task RegisterAsync_OnDraft_ThrowsForManagerToo()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft", cost: 0);
+
+        var act = async () => await _sut.RegisterAsync(evt.Id, creator.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    // --- Organizer-driven placement still works on a draft ---
+
+    [Fact]
+    public async Task AddUserToWaitlistAsync_OnDraft_PlacesPlayerSilently()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft", cost: 0);
+
+        var registration = await _sut.AddUserToWaitlistAsync(evt.Id, player.Id, creator.Id, "Skater");
+
+        registration.Status.Should().Be("Registered");
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateGhostPlayerAsync_OnDraft_PlacesGuest()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft", cost: 0);
+
+        var registration = await _sut.CreateGhostPlayerAsync(
+            evt.Id, creator.Id, "Guest", "Player", "Skater", "Bronze");
+
+        registration.Status.Should().Be("Registered");
+        registration.User.IsGhostPlayer.Should().BeTrue();
+    }
+
+    // --- Publishing ---
+
+    [Fact]
+    public async Task PublishEventAsync_AsNonManager_Throws()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var outsider = await CreateTestUser("outsider@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        var act = async () => await _sut.PublishEventAsync(evt.Id, outsider.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await _context.Events.FindAsync(evt.Id))!.Status.Should().Be("Draft");
+    }
+
+    [Fact]
+    public async Task PublishEventAsync_AsManager_PublishesAndNotifiesOnce()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        var result = await _sut.PublishEventAsync(evt.Id, creator.Id);
+
+        result.Success.Should().BeTrue();
+        result.NotificationsSent.Should().Be(1);
+        (await _context.Events.FindAsync(evt.Id))!.Status.Should().Be("Published");
+        VerifyNewEventNotification(Times.Once());
+    }
+
+    [Fact]
+    public async Task PublishEventAsync_CalledTwice_DoesNotNotifyAgain()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        await _sut.PublishEventAsync(evt.Id, creator.Id);
+        var second = await _sut.PublishEventAsync(evt.Id, creator.Id);
+
+        second.Success.Should().BeFalse();
+        second.Message.Should().Contain("already published");
+        VerifyNewEventNotification(Times.Once());
+    }
+
+    [Fact]
+    public async Task PublishEventAsync_EventNotFound_ReturnsFailure()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+
+        var result = await _sut.PublishEventAsync(Guid.NewGuid(), creator.Id);
+
+        result.Success.Should().BeFalse();
+        result.Message.Should().Contain("not found");
+    }
+
+    [Fact]
+    public async Task PublishEventAsync_CancelledEvent_ReturnsFailure()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Cancelled");
+
+        var result = await _sut.PublishEventAsync(evt.Id, creator.Id);
+
+        result.Success.Should().BeFalse();
+        VerifyNewEventNotification(Times.Never());
+    }
+
+    [Fact]
+    public async Task PublishEventAsync_StandaloneEvent_PublishesWithoutNotifying()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var evt = await CreateTestEvent(creator.Id, null, status: "Draft");
+
+        var result = await _sut.PublishEventAsync(evt.Id, creator.Id);
+
+        result.Success.Should().BeTrue();
+        result.NotificationsSent.Should().Be(0);
+        (await _context.Events.FindAsync(evt.Id))!.Status.Should().Be("Published");
+        VerifyNewEventNotification(Times.Never());
+    }
+
+    [Fact]
+    public async Task PublishEventAsync_LeavesRosterUnpublished()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft", isRosterPublished: false);
+
+        await _sut.PublishEventAsync(evt.Id, creator.Id);
+
+        (await _context.Events.FindAsync(evt.Id))!.IsRosterPublished.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task PublishEventAsync_ThenSubscriberCanSeeAndRegister()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        await CreateSubscription(org.Id, member.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft", cost: 0);
+
+        await _sut.PublishEventAsync(evt.Id, creator.Id);
+
+        (await _sut.GetByIdAsync(evt.Id, member.Id)).Should().NotBeNull();
+        var registration = await _sut.RegisterAsync(evt.Id, member.Id);
+        registration.Status.Should().Be("Registered");
+    }
+
+    [Fact]
+    public async Task PublishEventAsync_OnAlreadyPublishedEvent_ReturnsFailure()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Published");
+
+        var result = await _sut.PublishEventAsync(evt.Id, creator.Id);
+
+        result.Success.Should().BeFalse();
+        VerifyNewEventNotification(Times.Never());
+    }
+
+    // --- The plain update path can't sneak a draft past the notification ---
+
+    [Fact]
+    public async Task UpdateAsync_DraftToPublished_IsRejected()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        var act = async () => await _sut.UpdateAsync(evt.Id, new UpdateEventRequest(
+            Name: null, Description: null, EventDate: null, Duration: null, Venue: null,
+            MaxPlayers: null, Cost: null, RegistrationDeadline: null, Status: "Published",
+            Visibility: null, SkillLevels: null, SlotPositionLabels: null), creator.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        (await _context.Events.FindAsync(evt.Id))!.Status.Should().Be("Draft");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_DraftToCancelled_IsAllowed()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        await _sut.UpdateAsync(evt.Id, new UpdateEventRequest(
+            Name: null, Description: null, EventDate: null, Duration: null, Venue: null,
+            MaxPlayers: null, Cost: null, RegistrationDeadline: null, Status: "Cancelled",
+            Visibility: null, SkillLevels: null, SlotPositionLabels: null), creator.Id);
+
+        (await _context.Events.FindAsync(evt.Id))!.Status.Should().Be("Cancelled");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_Draft_CancelsIt()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var org = await CreateTestOrganization(creator.Id);
+        var evt = await CreateTestEvent(creator.Id, org.Id, status: "Draft");
+
+        (await _sut.DeleteAsync(evt.Id, creator.Id)).Should().BeTrue();
+
+        (await _context.Events.FindAsync(evt.Id))!.Status.Should().Be("Cancelled");
     }
 
     #endregion

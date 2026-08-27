@@ -123,9 +123,30 @@ export default function OrganizationDetailScreen() {
       return;
     }
 
+    // A denied user can never ask again - the server rejects a repeat request
+    if (organization.myJoinRequestStatus === 'Denied') {
+      Alert.alert(
+        'Request Declined',
+        `Your request to join ${organization.name} was declined. Contact an organizer if you think this is a mistake.`
+      );
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      await subscribe(organization.id);
+      const result = await subscribe(organization.id);
+
+      if (!result) {
+        Alert.alert('Error', useOrganizationStore.getState().error || 'Failed to join organization');
+        return;
+      }
+
+      if (result.status === 'JoinRequestPending') {
+        setOrganization({ ...organization, myJoinRequestStatus: 'Pending' });
+        Alert.alert('Request Sent', result.message);
+        return;
+      }
+
       setOrganization({
         ...organization,
         isSubscribed: true,
@@ -248,6 +269,29 @@ export default function OrganizationDetailScreen() {
   };
 
   const isAdmin = organization?.isAdmin;
+  const isPrivate = !!organization?.isPrivate;
+  const joinRequestStatus = organization?.myJoinRequestStatus ?? null;
+  const joinRequestPending = !organization?.isSubscribed && joinRequestStatus === 'Pending';
+  const joinRequestDenied = !organization?.isSubscribed && joinRequestStatus === 'Denied';
+  const pendingJoinRequestCount = organization?.pendingJoinRequestCount ?? 0;
+
+  const joinLabel = organization?.isSubscribed
+    ? 'Leave Organization'
+    : joinRequestPending
+      ? 'Request Pending'
+      : isPrivate
+        ? 'Request to Join'
+        : 'Join Organization';
+
+  const joinHint = organization?.isSubscribed
+    ? "You'll be notified when new events are posted"
+    : joinRequestPending
+      ? 'An organizer will review your request. You\'ll be notified either way.'
+      : joinRequestDenied
+        ? "Your request was declined, so you can't ask again. Contact an organizer if that's a mistake."
+        : isPrivate
+          ? 'This organization is private - an admin approves each request'
+          : 'Join to get notified about new events';
 
   // Waiver status - ADMIN-ONLY visibility (the server also nulls the flags
   // for non-admin requesters); flags are only non-null when an active waiver exists
@@ -374,7 +418,12 @@ export default function OrganizationDetailScreen() {
                             <Text style={styles.memberEmail}>{member.email}</Text>
                           ) : (
                             member.badges && member.badges.length > 0 && (
-                              <BadgeIconsRow badges={member.badges} size={20} maxDisplay={3} />
+                              <BadgeIconsRow
+                                badges={member.badges}
+                                size={20}
+                                maxDisplay={3}
+                                ownerName={`${member.firstName} ${member.lastName}`.trim()}
+                              />
                             )
                           )}
                         </View>
@@ -393,10 +442,10 @@ export default function OrganizationDetailScreen() {
             style={[
               styles.subscribeButton,
               organization.isSubscribed && styles.subscribedButton,
-              isProcessing && styles.disabledButton,
+              (isProcessing || joinRequestPending) && styles.disabledButton,
             ]}
             onPress={handleSubscriptionToggle}
-            disabled={isProcessing}
+            disabled={isProcessing || joinRequestPending}
           >
             {isProcessing ? (
               <ActivityIndicator color={organization.isSubscribed ? colors.primary.teal : colors.bg.darkest} />
@@ -404,18 +453,16 @@ export default function OrganizationDetailScreen() {
               <Text style={[
                 styles.subscribeButtonText,
                 organization.isSubscribed && styles.leaveButtonText,
-              ]}>
-                {organization.isSubscribed ? 'Leave Organization' : 'Join Organization'}
+              ]} allowFontScaling={false}>
+                {joinLabel}
               </Text>
             )}
           </TouchableOpacity>
         )}
 
         {!isAdmin && (
-          <Text style={styles.hint}>
-            {organization.isSubscribed
-              ? "You'll be notified when new events are posted"
-              : 'Join to get notified about new events'}
+          <Text style={styles.hint} allowFontScaling={false}>
+            {joinHint}
           </Text>
         )}
 
@@ -438,6 +485,19 @@ export default function OrganizationDetailScreen() {
           >
             <Ionicons name="document-text-outline" size={20} color={colors.text.secondary} />
             <Text style={styles.settingsButtonText}>Legal Waiver</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Join Requests Button - admins of private orgs only */}
+        {isAdmin && isPrivate && (
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => router.push(`/organizations/${id}/join-requests`)}
+          >
+            <Ionicons name="person-add-outline" size={20} color={colors.text.secondary} />
+            <Text style={styles.settingsButtonText} allowFontScaling={false}>
+              Join Requests{pendingJoinRequestCount > 0 ? ` (${pendingJoinRequestCount})` : ''}
+            </Text>
           </TouchableOpacity>
         )}
 
