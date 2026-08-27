@@ -267,9 +267,13 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange, own
     translateY.value = 0;
   }, [translateY]);
 
-  // Pan gesture for drag-and-drop
+  // Pan gesture for drag-and-drop. Only armed in edit mode: otherwise it
+  // swallows every drag over the list and the surrounding page can't scroll.
+  // isEditMode only flips from the Edit button, never mid-gesture, so
+  // rebuilding the gesture here can't drop a drag in progress.
   const panGesture = useMemo(() =>
     Gesture.Pan()
+      .enabled(isEditMode)
       .onUpdate((event) => {
         'worklet';
         if (dragInfo) {
@@ -287,7 +291,7 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange, own
         'worklet';
         runOnJS(handleDragCancel)();
       }),
-    [dragInfo, handleDragMove, handleDragEnd, handleDragCancel, translateY]
+    [isEditMode, dragInfo, handleDragMove, handleDragEnd, handleDragCancel, translateY]
   );
 
   // Empty state
