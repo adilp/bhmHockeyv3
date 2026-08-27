@@ -1664,4 +1664,76 @@ public class OrganizationServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Member badge rarity
+
+    private async Task<BadgeType> CreateBadgeType(string code, int sortPriority = 0)
+    {
+        var badgeType = new BadgeType
+        {
+            Id = Guid.NewGuid(),
+            Code = code,
+            Name = code,
+            Description = code,
+            IconName = code.ToLowerInvariant(),
+            Category = "achievement",
+            SortPriority = sortPriority
+        };
+        _context.BadgeTypes.Add(badgeType);
+        await _context.SaveChangesAsync();
+        return badgeType;
+    }
+
+    private async Task AwardBadge(Guid userId, Guid badgeTypeId, int? displayOrder = null)
+    {
+        _context.UserBadges.Add(new UserBadge
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            BadgeTypeId = badgeTypeId,
+            EarnedAt = DateTime.UtcNow,
+            DisplayOrder = displayOrder
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task GetMembersAsync_ShowsTheMembersRarestBadgesFirst()
+    {
+        // Arrange - a member holding four badges of very different global counts.
+        // Only three fit on the row, so the common one has to lose.
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        var member = await CreateTestUser("member@example.com");
+        await CreateSubscription(org.Id, member.Id);
+
+        var common = await CreateBadgeType("COMMON");
+        var uncommon = await CreateBadgeType("UNCOMMON");
+        var rare = await CreateBadgeType("RARE");
+        var unique = await CreateBadgeType("UNIQUE");
+
+        // The member's own ordering puts the common badge first - rarity still wins
+        await AwardBadge(member.Id, common.Id, displayOrder: 0);
+        await AwardBadge(member.Id, uncommon.Id, displayOrder: 1);
+        await AwardBadge(member.Id, rare.Id, displayOrder: 2);
+        await AwardBadge(member.Id, unique.Id, displayOrder: 3);
+
+        for (var i = 0; i < 6; i++)
+        {
+            var other = await CreateTestUser($"other{i}@example.com");
+            await AwardBadge(other.Id, common.Id);
+            if (i < 3) await AwardBadge(other.Id, uncommon.Id);
+            if (i < 1) await AwardBadge(other.Id, rare.Id);
+        }
+
+        // Act
+        var members = await _sut.GetMembersAsync(org.Id, creator.Id);
+
+        // Assert - three rarest, rarest first; the total still counts them all
+        var row = members.Single(m => m.Id == member.Id);
+        row.Badges!.Select(b => b.BadgeType.Code).Should().Equal("UNIQUE", "RARE", "UNCOMMON");
+        row.TotalBadgeCount.Should().Be(4);
+    }
+
+    #endregion
 }
