@@ -3237,6 +3237,133 @@ public class EventServiceTests : IDisposable
     #region Move Operations (Phase 3)
 
     [Fact]
+    public async Task MoveToRosterAsync_PaidEvent_TellsPlayerToSendPayment()
+    {
+        // Arrange - organizer promotes the top waitlisted player on a paid event
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        player.PushToken = "ExponentPushToken[test]";
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 19m);
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        registration.PaymentStatus = "Pending";
+        await _context.SaveChangesAsync();
+
+        // Act
+        await _sut.MoveToRosterAsync(evt.Id, registration.Id, creator.Id);
+
+        // Assert - names their old place and asks for payment, without promising
+        // an automatic cutoff (deadlines are organizer-managed)
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                player.PushToken,
+                "A Spot Opened - Send Payment",
+                It.Is<string>(b =>
+                    b.Contains("#1 on the waitlist")
+                    && b.Contains("$19.00")
+                    && b.Contains("may go to the next player")),
+                It.IsAny<object>(),
+                player.Id,
+                "moved_to_roster",
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_AlreadyVerified_DoesNotAskForPaymentAgain()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        player.PushToken = "ExponentPushToken[test]";
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 19m);
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        registration.PaymentStatus = "Verified";
+        await _context.SaveChangesAsync();
+
+        await _sut.MoveToRosterAsync(evt.Id, registration.Id, creator.Id);
+
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(),
+                "You're On the Roster",
+                It.Is<string>(b => !b.Contains("payment")),
+                It.IsAny<object>(),
+                player.Id,
+                "moved_to_roster",
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_FreeEvent_SaysTheyAreOnTheRoster()
+    {
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 0m);
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 2;
+        await _context.SaveChangesAsync();
+
+        await _sut.MoveToRosterAsync(evt.Id, registration.Id, creator.Id);
+
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(),
+                "You're On the Roster",
+                It.Is<string>(b => b.Contains("#2 on the waitlist")),
+                It.IsAny<object>(),
+                player.Id,
+                "moved_to_roster",
+                It.IsAny<Guid?>(),
+                It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_WithoutPushToken_StillRecordsNotification()
+    {
+        // No push token must not mean no in-app notification
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 19m);
+        var registration = await CreateRegistration(evt.Id, player.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        await _sut.MoveToRosterAsync(evt.Id, registration.Id, creator.Id);
+
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object>(),
+                player.Id, "moved_to_roster", It.IsAny<Guid?>(), It.IsAny<Guid?>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task MoveToRosterAsync_GhostPlayer_SendsNothing()
+    {
+        // Guests have no account to notify
+        var creator = await CreateTestUser("creator@example.com");
+        var ghost = await CreateTestUser("ghost@placeholder.bhmhockey");
+        ghost.IsGhostPlayer = true;
+        var evt = await CreateTestEvent(creator.Id, maxPlayers: 10, cost: 19m);
+        var registration = await CreateRegistration(evt.Id, ghost.Id, "Waitlisted");
+        registration.WaitlistPosition = 1;
+        await _context.SaveChangesAsync();
+
+        await _sut.MoveToRosterAsync(evt.Id, registration.Id, creator.Id);
+
+        _mockNotificationService.Verify(
+            n => n.SendPushNotificationAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object>(),
+                It.IsAny<Guid?>(), "moved_to_roster", It.IsAny<Guid?>(), It.IsAny<Guid?>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task MoveToRosterAsync_WaitlistedPlayer_MovesToRoster()
     {
         // Arrange
