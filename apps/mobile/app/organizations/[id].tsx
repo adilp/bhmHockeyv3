@@ -418,7 +418,12 @@ export default function OrganizationDetailScreen() {
                             <Text style={styles.memberEmail}>{member.email}</Text>
                           ) : (
                             member.badges && member.badges.length > 0 && (
-                              <BadgeIconsRow badges={member.badges} size={20} maxDisplay={3} />
+                              <BadgeIconsRow
+                                badges={member.badges}
+                                size={20}
+                                maxDisplay={3}
+                                ownerName={`${member.firstName} ${member.lastName}`.trim()}
+                              />
                             )
                           )}
                         </View>

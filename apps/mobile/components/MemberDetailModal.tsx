@@ -152,7 +152,10 @@ export function MemberDetailModal({
                       <ActivityIndicator size="small" color={colors.primary.teal} />
                     </View>
                   ) : (
-                    <TrophyCase badges={badges} />
+                    <TrophyCase
+                      badges={badges}
+                      ownerName={`${member.firstName} ${member.lastName}`.trim()}
+                    />
                   )}
                 </View>
 

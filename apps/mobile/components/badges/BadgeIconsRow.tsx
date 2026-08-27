@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ViewStyle, StyleProp, Pressable } from 'react-native';
 import type { UserBadgeDto } from '@bhmhockey/shared';
 import { BadgeIcon } from './BadgeIcon';
+import { BadgeDetailModal } from './BadgeDetailModal';
 import { colors, spacing } from '../../theme';
 
 interface BadgeIconsRowProps {
@@ -15,6 +16,8 @@ interface BadgeIconsRowProps {
   totalCount?: number;
   /** Optional style for the container */
   style?: StyleProp<ViewStyle>;
+  /** Whose badges these are, when they are not the viewer's own */
+  ownerName?: string;
 }
 
 /**
@@ -25,7 +28,8 @@ interface BadgeIconsRowProps {
  *
  * Layout: [icon] [icon] [icon] +N
  */
-export function BadgeIconsRow({ badges, size = 24, maxDisplay = 3, totalCount, style }: BadgeIconsRowProps) {
+export function BadgeIconsRow({ badges, size = 24, maxDisplay = 3, totalCount, style, ownerName }: BadgeIconsRowProps) {
+  const [selected, setSelected] = useState<UserBadgeDto | null>(null);
   // If no badges, render empty view to maintain height consistency
   if (!badges || badges.length === 0) {
     return <View style={[styles.container, style]} />;
@@ -40,15 +44,27 @@ export function BadgeIconsRow({ badges, size = 24, maxDisplay = 3, totalCount, s
   return (
     <View style={[styles.container, style]}>
       {displayedBadges.map((badge) => (
-        <BadgeIcon
+        // Tappable so anyone can read what a badge was awarded for. hitSlop
+        // keeps the small roster icons reachable without enlarging the row.
+        <Pressable
           key={badge.id}
-          iconName={badge.badgeType.iconName}
-          size={size}
-        />
+          onPress={() => setSelected(badge)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={badge.badgeType.name}
+        >
+          <BadgeIcon iconName={badge.badgeType.iconName} size={size} />
+        </Pressable>
       ))}
       {overflow > 0 && (
         <Text style={styles.overflow} allowFontScaling={false}>+{overflow}</Text>
       )}
+
+      <BadgeDetailModal
+        badge={selected}
+        ownerName={ownerName}
+        onClose={() => setSelected(null)}
+      />
     </View>
   );
 }
