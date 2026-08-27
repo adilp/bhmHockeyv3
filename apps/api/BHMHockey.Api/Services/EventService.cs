@@ -2085,6 +2085,20 @@ public class EventService : IEventService
             .Where(ub => userIdList.Contains(ub.UserId))
             .ToListAsync();
 
+        // How many players hold each of these badges, globally. The roster only
+        // has room for three, so it shows a player's rarest - an unusual badge
+        // is what makes someone stand out, and it stops every row repeating the
+        // same common one. (The trophy case still honours the player's own
+        // ordering; this ranking is for the compact roster row.)
+        var badgeTypeIds = allBadges.Select(ub => ub.BadgeTypeId).Distinct().ToList();
+        var awardCounts = badgeTypeIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await _context.UserBadges
+                .Where(ub => badgeTypeIds.Contains(ub.BadgeTypeId))
+                .GroupBy(ub => ub.BadgeTypeId)
+                .Select(g => new { BadgeTypeId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.BadgeTypeId, x => x.Count);
+
         // Group by user and compute top 3 + total count
         var result = new Dictionary<Guid, (List<UserBadgeDto> TopBadges, int TotalCount)>();
 
@@ -2092,8 +2106,10 @@ public class EventService : IEventService
         {
             var userBadges = allBadges
                 .Where(ub => ub.UserId == userId)
-                .OrderBy(ub => ub.DisplayOrder ?? int.MaxValue)
+                // Rarest first; SortPriority then earned-date keep it deterministic
+                .OrderBy(ub => awardCounts.GetValueOrDefault(ub.BadgeTypeId, int.MaxValue))
                 .ThenBy(ub => ub.BadgeType.SortPriority)
+                .ThenByDescending(ub => ub.EarnedAt)
                 .ToList();
 
             var topBadges = userBadges

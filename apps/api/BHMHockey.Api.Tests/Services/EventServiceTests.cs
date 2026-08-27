@@ -2547,6 +2547,136 @@ public class EventServiceTests : IDisposable
         result.Registration.TeamAssignment.Should().BeOneOf("Black", "White");
     }
 
+    #region Roster badge rarity
+
+    private async Task<BadgeType> CreateBadgeType(string code, int sortPriority = 0)
+    {
+        var badgeType = new BadgeType
+        {
+            Id = Guid.NewGuid(),
+            Code = code,
+            Name = code,
+            Description = code,
+            IconName = code.ToLowerInvariant(),
+            Category = "achievement",
+            SortPriority = sortPriority
+        };
+        _context.BadgeTypes.Add(badgeType);
+        await _context.SaveChangesAsync();
+        return badgeType;
+    }
+
+    private async Task AwardBadge(Guid userId, Guid badgeTypeId, int? displayOrder = null)
+    {
+        _context.UserBadges.Add(new UserBadge
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            BadgeTypeId = badgeTypeId,
+            EarnedAt = DateTime.UtcNow,
+            DisplayOrder = displayOrder
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_ShowsThePlayersRarestBadgesFirst()
+    {
+        // Arrange - three badge types with very different global counts
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+        await CreateRegistration(evt.Id, player.Id);
+
+        var common = await CreateBadgeType("COMMON");
+        var uncommon = await CreateBadgeType("UNCOMMON");
+        var rare = await CreateBadgeType("RARE");
+
+        // The player holds all three
+        await AwardBadge(player.Id, common.Id);
+        await AwardBadge(player.Id, uncommon.Id);
+        await AwardBadge(player.Id, rare.Id);
+
+        // Other players make COMMON common and UNCOMMON middling; RARE stays unique
+        for (var i = 0; i < 5; i++)
+        {
+            var other = await CreateTestUser($"other{i}@example.com");
+            await AwardBadge(other.Id, common.Id);
+            if (i < 2) await AwardBadge(other.Id, uncommon.Id);
+        }
+
+        // Act
+        var registrations = await _sut.GetRegistrationsAsync(evt.Id);
+
+        // Assert - rarest first, regardless of when they were earned
+        var badges = registrations.Single().User.Badges!;
+        badges.Select(b => b.BadgeType.Code).Should().Equal("RARE", "UNCOMMON", "COMMON");
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_MoreThanThreeBadges_KeepsTheThreeRarest()
+    {
+        // Arrange
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+        await CreateRegistration(evt.Id, player.Id);
+
+        var types = new List<BadgeType>();
+        for (var i = 0; i < 5; i++)
+        {
+            types.Add(await CreateBadgeType($"BADGE{i}"));
+            await AwardBadge(player.Id, types[i].Id);
+        }
+
+        // BADGE0 is held by many, BADGE4 by only this player
+        for (var i = 0; i < 4; i++)
+        {
+            var other = await CreateTestUser($"other{i}@example.com");
+            for (var t = 0; t <= i; t++)
+            {
+                await AwardBadge(other.Id, types[t].Id);
+            }
+        }
+
+        // Act
+        var registrations = await _sut.GetRegistrationsAsync(evt.Id);
+
+        // Assert - the three least-held survive the cut, total still reports all five
+        var user = registrations.Single().User;
+        user.Badges!.Select(b => b.BadgeType.Code).Should().Equal("BADGE4", "BADGE3", "BADGE2");
+        user.TotalBadgeCount.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task GetRegistrationsAsync_RarityWins_EvenWhenThePlayerOrderedTheirCase()
+    {
+        // Arrange - the player pinned a common badge to the front of their case
+        var creator = await CreateTestUser("creator@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var evt = await CreateTestEvent(creator.Id);
+        await CreateRegistration(evt.Id, player.Id);
+
+        var common = await CreateBadgeType("COMMON");
+        var rare = await CreateBadgeType("RARE");
+        await AwardBadge(player.Id, common.Id, displayOrder: 0);
+        await AwardBadge(player.Id, rare.Id, displayOrder: 1);
+
+        for (var i = 0; i < 3; i++)
+        {
+            var other = await CreateTestUser($"other{i}@example.com");
+            await AwardBadge(other.Id, common.Id);
+        }
+
+        // Act
+        var registrations = await _sut.GetRegistrationsAsync(evt.Id);
+
+        // Assert - the compact roster row leads with the rare one
+        registrations.Single().User.Badges![0].BadgeType.Code.Should().Be("RARE");
+    }
+
+    #endregion
+
     [Fact]
     public async Task GetPastForUserAsync_ReturnsGamesPlayedAndOrganized_NewestFirst()
     {
