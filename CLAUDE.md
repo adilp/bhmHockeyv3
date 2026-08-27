@@ -105,6 +105,7 @@ Only manually bump `version` (e.g., `1.0.4` → `1.0.5`) in TWO places when the 
 > this applies to everyone. Publish an `eas update` only after a build
 > carrying `expo-calendar` has shipped and users are on it.
 > Remove this note once that build is live.
+> Full steps: `docs/RELEASE_CHECKLIST.md`.
 
 ```bash
 cd apps/mobile

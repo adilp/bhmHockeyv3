@@ -275,6 +275,7 @@ Mock `@bhmhockey/api-client` before importing stores in tests.
 > this applies to everyone. Publish an `eas update` only after a build
 > carrying `expo-calendar` has shipped and users are on it.
 > Remove this note once that build is live.
+> Full steps: `docs/RELEASE_CHECKLIST.md`.
 
 ```bash
 cd apps/mobile
