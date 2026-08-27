@@ -20,6 +20,8 @@ const iconMap: Record<string, ReturnType<typeof require>> = {
   goalie: require('../../assets/badges/goalie.png'),
   ironman: require('../../assets/badges/ironman.png'),
   shutout: require('../../assets/badges/shutout.png'),
+  christmas: require('../../assets/badges/christmas.png'),
+  halloween: require('../../assets/badges/halloween.png'),
 };
 
 /**

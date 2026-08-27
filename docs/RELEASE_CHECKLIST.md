@@ -31,7 +31,7 @@ since 2026-02-26):
 - Calendar integration (the native module above), D-League team affiliation
 - Waitlist drag-reorder fix, org privacy with join approval
 - Draft events, dark-mode date pickers
-- Trophies: five new types, rarity-ranked rows, tap-for-detail
+- Trophies: seven new types, rarity-ranked rows, tap-for-detail
 - Waitlist promotion notification
 - `js <update id>` on the profile screen (see Verifying below)
 
@@ -74,10 +74,11 @@ npx eas-cli submit --platform ios
 
 ## After users are on the new build
 
-- [ ] Run `docs/sql/add_badge_types_2026_08.sql` against production. It
-      creates the five new badge types. Running it earlier would award
-      badges whose icons aren't in the shipped bundle, so holders would see
-      a blank space.
+- [ ] Run both badge scripts against production:
+      `docs/sql/add_badge_types_2026_08.sql` (five types) and
+      `docs/sql/add_badge_types_holiday_games.sql` (Christmas, Halloween).
+      Running them earlier would award badges whose icons aren't in the
+      shipped bundle, so holders would see a blank space.
 - [ ] Remove the "next release must be a store binary" note from `CLAUDE.md`
       and `apps/mobile/CLAUDE.md` - OTAs are safe again once the calendar
       build is out.
