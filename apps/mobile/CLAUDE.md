@@ -265,6 +265,18 @@ Mock `@bhmhockey/api-client` before importing stores in tests.
 
 ## OTA Updates
 
+> **The next production release MUST be a store binary, not an OTA.**
+> `expo-calendar` was added on 2026-08-21 (native module) and is imported at
+> the top of `apps/mobile/utils/calendar.ts`, which the event detail screen
+> and info tab import directly. `runtimeVersion` is pinned to the fixed
+> string `"1.0.0"`, so an OTA reaches every build back to December -
+> including every build that predates that native module. Those devices
+> would crash on opening any event. The last store build predates it, so
+> this applies to everyone. Publish an `eas update` only after a build
+> carrying `expo-calendar` has shipped and users are on it.
+> Remove this note once that build is live.
+> Full steps: `docs/RELEASE_CHECKLIST.md`.
+
 ```bash
 cd apps/mobile
 npx eas-cli update --branch production --message "Description"

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { userService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
 import type { User, SkillLevel, UserBadgeDto, DLeagueTeam } from '@bhmhockey/shared';
@@ -27,6 +28,30 @@ import {
 import { colors, spacing, radius } from '../../theme';
 
 const BADGE_SAVE_DEBOUNCE_MS = 500;
+
+/**
+ * Which JS bundle is actually running: a short over-the-air update id, or
+ * "embedded" when the app is still on the bundle baked into the store build.
+ *
+ * Version and build number above come from the manifest and read the same
+ * whether or not an update landed, so they can't answer "did this device get
+ * the update?" - this can. Ask a user for this line when a shipped feature
+ * appears to be missing on their phone.
+ */
+function describeJsBundle(): string {
+  try {
+    // Disabled in Expo Go and in dev, where the bundle comes from Metro
+    if (!Updates.isEnabled) {
+      return 'dev';
+    }
+    if (Updates.isEmbeddedLaunch || !Updates.updateId) {
+      return 'embedded';
+    }
+    return Updates.updateId.slice(0, 8);
+  } catch {
+    return '?';
+  }
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -406,7 +431,7 @@ export default function ProfileScreen() {
           <Text style={styles.versionText}>
             runtime {typeof Constants.expoConfig?.runtimeVersion === 'string'
               ? Constants.expoConfig.runtimeVersion
-              : '?'}
+              : '?'} · js {describeJsBundle()}
           </Text>
         </View>
       </View>
