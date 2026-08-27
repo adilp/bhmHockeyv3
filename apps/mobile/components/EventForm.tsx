@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { datePickerProps } from '../utils/pickerTheme';
 import type { EventVisibility, SkillLevel, EventDto, Organization } from '@bhmhockey/shared';
 import { SkillLevelSelector } from './SkillLevelSelector';
 import { useOrganizationStore } from '../stores/organizationStore';
@@ -481,6 +482,7 @@ export function EventForm({
 
         {showDatePicker && (
           <DateTimePicker
+            {...datePickerProps}
             value={eventDate}
             mode="date"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -491,6 +493,7 @@ export function EventForm({
 
         {showTimePicker && (
           <DateTimePicker
+            {...datePickerProps}
             value={eventDate}
             mode="time"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}

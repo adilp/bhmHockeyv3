@@ -18,6 +18,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { datePickerProps } from '../../../utils/pickerTheme';
 import { organizationService } from '@bhmhockey/api-client';
 import type { Organization, EventVisibility } from '@bhmhockey/shared';
 import { isValidGroupMeLink, GROUPME_LINK_ERROR } from '../../../utils/groupme';
@@ -318,6 +319,7 @@ export default function OrganizationSettingsScreen() {
 
           {showTimePicker && (
             <DateTimePicker
+            {...datePickerProps}
               value={defaultStartTime || new Date()}
               mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
