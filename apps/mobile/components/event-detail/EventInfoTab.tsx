@@ -5,6 +5,7 @@ import { Badge } from '../Badge';
 import { colors, spacing, radius } from '../../theme';
 import { getPaymentBadgeInfo } from '../../utils/payment';
 import { promptAddToCalendar } from '../../utils/calendar';
+import { DraftBanner } from './DraftBanner';
 
 interface EventInfoTabProps {
   event: EventDto;
@@ -83,14 +84,7 @@ export function EventInfoTab({
           DRAFT BANNER (managers only - nobody else can see a draft)
           ═══════════════════════════════════════════════════════════════════ */}
       {isDraft && canManage && (
-        <View style={styles.draftBanner}>
-          <Text style={styles.draftBannerTitle} allowFontScaling={false}>
-            Draft - not visible to members
-          </Text>
-          <Text style={styles.draftBannerText} allowFontScaling={false}>
-            Add players now if you want. Publishing notifies members and opens signups.
-          </Text>
-        </View>
+        <DraftBanner />
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════
@@ -415,24 +409,6 @@ const styles = StyleSheet.create({
   // ═══════════════════════════════════════════════════════════════════
   // TICKET CARD
   // ═══════════════════════════════════════════════════════════════════
-  draftBanner: {
-    backgroundColor: colors.bg.dark,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.status.warning,
-  },
-  draftBannerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.status.warning,
-  },
-  draftBannerText: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
   ticketCard: {
     backgroundColor: colors.bg.dark,
     borderRadius: radius.lg,

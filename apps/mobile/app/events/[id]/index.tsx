@@ -425,7 +425,14 @@ export default function EventDetailScreen() {
           />
         );
       case 'roster':
-        return <EventRosterTab eventId={id} event={selectedEvent} canManage={canManage} />;
+        return (
+          <EventRosterTab
+            eventId={id}
+            event={selectedEvent}
+            canManage={canManage}
+            onPublishEvent={handlePublishEvent}
+          />
+        );
       case 'chat':
         return <EventChatTab event={selectedEvent} />;
       default:
@@ -484,8 +491,6 @@ export default function EventDetailScreen() {
             isProcessing={isProcessing}
             onRegister={handleRegister}
             isDraft={selectedEvent.status === 'Draft'}
-            canManage={canManage}
-            onPublishEvent={handlePublishEvent}
           />
 
           {/* Waiver acceptance modal (registration flow) - decline returns to the event */}
