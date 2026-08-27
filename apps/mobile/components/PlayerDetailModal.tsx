@@ -204,7 +204,10 @@ export function PlayerDetailModal({
                     </View>
                   ) : (
                     <>
-                      <TrophyCase badges={showAllBadges ? badges : badges.slice(0, 2)} />
+                      <TrophyCase
+                        badges={showAllBadges ? badges : badges.slice(0, 2)}
+                        ownerName={`${user.firstName} ${user.lastName}`.trim()}
+                      />
                       {badges.length > 2 && (
                         <TouchableOpacity
                           style={styles.expandButton}

@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { UserBadgeDto } from '@bhmhockey/shared';
 import { BadgeIcon } from './BadgeIcon';
+import { BadgeDetailModal } from './BadgeDetailModal';
 import { colors, spacing, radius } from '../../theme';
 
 const ROW_HEIGHT = 88; // Height of each badge row for drag calculations (increased for 48px icons)
@@ -28,6 +29,8 @@ interface TrophyCaseProps {
   style?: StyleProp<ViewStyle>;
   /** Enable edit mode with drag-to-reorder */
   editable?: boolean;
+  /** Whose trophies these are, when they are not the viewer's own */
+  ownerName?: string;
   /** Callback when badge order changes (receives ordered badge IDs) */
   onOrderChange?: (badgeIds: string[]) => void;
 }
@@ -77,11 +80,13 @@ function BadgeRow({
   isEditMode,
   onLongPress,
   isDragging,
+  onPress,
 }: {
   badge: UserBadgeDto;
   isEditMode: boolean;
   onLongPress: () => void;
   isDragging: boolean;
+  onPress?: () => void;
 }) {
   const contextText = getContextText(badge.context);
   const earnedText = formatEarnedDate(badge.earnedAt);
@@ -89,10 +94,11 @@ function BadgeRow({
   return (
     <TouchableOpacity
       style={[styles.badgeRow, isDragging && styles.badgeRowDragging]}
+      onPress={isEditMode ? undefined : onPress}
       onLongPress={isEditMode ? onLongPress : undefined}
       delayLongPress={150}
-      activeOpacity={isEditMode ? 0.7 : 1}
-      disabled={!isEditMode}
+      activeOpacity={0.7}
+      disabled={!isEditMode && !onPress}
     >
       {/* Drag handle - only visible in edit mode */}
       {isEditMode && (
@@ -182,8 +188,9 @@ function DragOverlay({
  * - Context text (14px muted) - tournament name or description
  * - Earned date (12px subtle)
  */
-export function TrophyCase({ badges, style, editable = false, onOrderChange }: TrophyCaseProps) {
+export function TrophyCase({ badges, style, editable = false, onOrderChange, ownerName }: TrophyCaseProps) {
   const [isEditMode, setIsEditMode] = useState(false);
+  const [selected, setSelected] = useState<UserBadgeDto | null>(null);
   const [orderedBadges, setOrderedBadges] = useState<UserBadgeDto[]>(badges);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [hoverIndex, setHoverIndex] = useState(-1);
@@ -260,9 +267,13 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange }: T
     translateY.value = 0;
   }, [translateY]);
 
-  // Pan gesture for drag-and-drop
+  // Pan gesture for drag-and-drop. Only armed in edit mode: otherwise it
+  // swallows every drag over the list and the surrounding page can't scroll.
+  // isEditMode only flips from the Edit button, never mid-gesture, so
+  // rebuilding the gesture here can't drop a drag in progress.
   const panGesture = useMemo(() =>
     Gesture.Pan()
+      .enabled(isEditMode)
       .onUpdate((event) => {
         'worklet';
         if (dragInfo) {
@@ -280,7 +291,7 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange }: T
         'worklet';
         runOnJS(handleDragCancel)();
       }),
-    [dragInfo, handleDragMove, handleDragEnd, handleDragCancel, translateY]
+    [isEditMode, dragInfo, handleDragMove, handleDragEnd, handleDragCancel, translateY]
   );
 
   // Empty state
@@ -303,8 +314,15 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange }: T
             isEditMode={false}
             onLongPress={() => {}}
             isDragging={false}
+            onPress={() => setSelected(badge)}
           />
         ))}
+
+        <BadgeDetailModal
+          badge={selected}
+          ownerName={ownerName}
+          onClose={() => setSelected(null)}
+        />
       </View>
     );
   }
@@ -346,6 +364,7 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange }: T
                       isEditMode={isEditMode}
                       onLongPress={() => startDrag(badge, index)}
                       isDragging={isDragging}
+                      onPress={() => setSelected(badge)}
                     />
                   </View>
                   {/* Drop indicator line below this row */}
@@ -368,6 +387,12 @@ export function TrophyCase({ badges, style, editable = false, onOrderChange }: T
       {isEditMode && (
         <Text style={styles.hint} allowFontScaling={false}>Hold and drag to reorder</Text>
       )}
+      <BadgeDetailModal
+        badge={selected}
+        ownerName={ownerName}
+        onClose={() => setSelected(null)}
+      />
+
     </View>
   );
 }

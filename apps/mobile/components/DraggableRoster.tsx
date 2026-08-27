@@ -166,6 +166,7 @@ function PlayerCell({
         <BadgeIconsRow
           badges={user.badges || []}
           totalCount={user.totalBadgeCount || 0}
+          ownerName={`${user.firstName} ${user.lastName}`.trim()}
         />
       )}
     </Pressable>
@@ -244,6 +245,7 @@ function DragOverlay({
           <BadgeIconsRow
             badges={user.badges || []}
             totalCount={user.totalBadgeCount || 0}
+            ownerName={`${user.firstName} ${user.lastName}`.trim()}
           />
         )}
       </View>

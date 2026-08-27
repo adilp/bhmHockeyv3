@@ -17,6 +17,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { datePickerProps } from '../../../../utils/pickerTheme';
 import { Picker } from '@react-native-picker/picker';
 import { useTournamentStore } from '../../../../stores/tournamentStore';
 import { tournamentService } from '@bhmhockey/api-client';
@@ -377,6 +378,7 @@ export default function TournamentSettingsScreen() {
 
             {showStartDatePicker && (
               <DateTimePicker
+            {...datePickerProps}
                 value={startDate}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -400,6 +402,7 @@ export default function TournamentSettingsScreen() {
 
             {showEndDatePicker && (
               <DateTimePicker
+            {...datePickerProps}
                 value={endDate}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -426,6 +429,7 @@ export default function TournamentSettingsScreen() {
 
             {showRegistrationDeadlinePicker && (
               <DateTimePicker
+            {...datePickerProps}
                 value={registrationDeadline}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}

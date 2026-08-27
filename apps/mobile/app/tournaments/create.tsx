@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { datePickerProps } from '../../utils/pickerTheme';
 import { useRouter, Stack } from 'expo-router';
 import { useTournamentStore } from '../../stores/tournamentStore';
 import { useOrganizationStore } from '../../stores/organizationStore';
@@ -392,6 +393,7 @@ export default function CreateTournamentScreen() {
 
           {showStartDatePicker && (
             <DateTimePicker
+            {...datePickerProps}
               value={startDate}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -413,6 +415,7 @@ export default function CreateTournamentScreen() {
 
           {showEndDatePicker && (
             <DateTimePicker
+            {...datePickerProps}
               value={endDate}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -437,6 +440,7 @@ export default function CreateTournamentScreen() {
 
           {showRegistrationDeadlinePicker && (
             <DateTimePicker
+            {...datePickerProps}
               value={registrationDeadline}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}

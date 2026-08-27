@@ -1066,6 +1066,116 @@ public class OrganizationServiceTests : IDisposable
 
     #endregion
 
+    #region DefaultStartAsDraft Tests
+
+    private static UpdateOrganizationRequest StartAsDraftUpdateRequest(bool? defaultStartAsDraft)
+    {
+        return new UpdateOrganizationRequest(
+            Name: null,
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            DefaultShowWaitlistBeforePublish: null,
+            DefaultStartAsDraft: defaultStartAsDraft
+        );
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithDefaultStartAsDraft_StoresAndReturnsIt()
+    {
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest(
+            Name: "Draft Default Org",
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null,
+            DefaultShowWaitlistBeforePublish: null,
+            DefaultStartAsDraft: false);
+
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        result.DefaultStartAsDraft.Should().BeFalse();
+        var org = await _context.Organizations.FindAsync(result.Id);
+        org!.DefaultStartAsDraft.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithoutDefaultStartAsDraft_LeavesItNull()
+    {
+        var creator = await CreateTestUser();
+        var request = new CreateOrganizationRequest(
+            Name: "No Draft Preference Org",
+            Description: null,
+            Location: null,
+            SkillLevels: null,
+            DefaultDayOfWeek: null,
+            DefaultStartTime: null,
+            DefaultDurationMinutes: null,
+            DefaultMaxPlayers: null,
+            DefaultCost: null,
+            DefaultVenue: null,
+            DefaultVisibility: null);
+
+        var result = await _sut.CreateAsync(request, creator.Id);
+
+        result.DefaultStartAsDraft.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SetsDefaultStartAsDraft_ReturnsItInDto()
+    {
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+
+        var result = await _sut.UpdateAsync(org.Id, StartAsDraftUpdateRequest(false), creator.Id);
+
+        result!.DefaultStartAsDraft.Should().BeFalse();
+        var updated = await _context.Organizations.FindAsync(org.Id);
+        updated!.DefaultStartAsDraft.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_NullDefaultStartAsDraft_LeavesUnchanged()
+    {
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultStartAsDraft = false;
+        await _context.SaveChangesAsync();
+
+        var result = await _sut.UpdateAsync(org.Id, StartAsDraftUpdateRequest(null), creator.Id);
+
+        result!.DefaultStartAsDraft.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ReturnsDefaultStartAsDraft()
+    {
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        org.DefaultStartAsDraft = false;
+        await _context.SaveChangesAsync();
+
+        var result = await _sut.GetByIdAsync(org.Id, creator.Id);
+
+        result!.DefaultStartAsDraft.Should().BeFalse();
+    }
+
+    #endregion
+
     #region Leave Organization Tests
 
     private async Task<Event> CreateOrgEvent(Guid creatorId, Guid orgId, DateTime? eventDate = null, string status = "Published")
@@ -1551,6 +1661,78 @@ public class OrganizationServiceTests : IDisposable
 
         // Assert
         orgs.Should().Contain(o => o.Id == privateOrg.Id && o.IsPrivate);
+    }
+
+    #endregion
+
+    #region Member badge rarity
+
+    private async Task<BadgeType> CreateBadgeType(string code, int sortPriority = 0)
+    {
+        var badgeType = new BadgeType
+        {
+            Id = Guid.NewGuid(),
+            Code = code,
+            Name = code,
+            Description = code,
+            IconName = code.ToLowerInvariant(),
+            Category = "achievement",
+            SortPriority = sortPriority
+        };
+        _context.BadgeTypes.Add(badgeType);
+        await _context.SaveChangesAsync();
+        return badgeType;
+    }
+
+    private async Task AwardBadge(Guid userId, Guid badgeTypeId, int? displayOrder = null)
+    {
+        _context.UserBadges.Add(new UserBadge
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            BadgeTypeId = badgeTypeId,
+            EarnedAt = DateTime.UtcNow,
+            DisplayOrder = displayOrder
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task GetMembersAsync_ShowsTheMembersRarestBadgesFirst()
+    {
+        // Arrange - a member holding four badges of very different global counts.
+        // Only three fit on the row, so the common one has to lose.
+        var creator = await CreateTestUser();
+        var org = await CreateTestOrganization(creator.Id);
+        var member = await CreateTestUser("member@example.com");
+        await CreateSubscription(org.Id, member.Id);
+
+        var common = await CreateBadgeType("COMMON");
+        var uncommon = await CreateBadgeType("UNCOMMON");
+        var rare = await CreateBadgeType("RARE");
+        var unique = await CreateBadgeType("UNIQUE");
+
+        // The member's own ordering puts the common badge first - rarity still wins
+        await AwardBadge(member.Id, common.Id, displayOrder: 0);
+        await AwardBadge(member.Id, uncommon.Id, displayOrder: 1);
+        await AwardBadge(member.Id, rare.Id, displayOrder: 2);
+        await AwardBadge(member.Id, unique.Id, displayOrder: 3);
+
+        for (var i = 0; i < 6; i++)
+        {
+            var other = await CreateTestUser($"other{i}@example.com");
+            await AwardBadge(other.Id, common.Id);
+            if (i < 3) await AwardBadge(other.Id, uncommon.Id);
+            if (i < 1) await AwardBadge(other.Id, rare.Id);
+        }
+
+        // Act
+        var members = await _sut.GetMembersAsync(org.Id, creator.Id);
+
+        // Assert - three rarest, rarest first; the total still counts them all
+        var row = members.Single(m => m.Id == member.Id);
+        row.Badges!.Select(b => b.BadgeType.Code).Should().Equal("UNIQUE", "RARE", "UNCOMMON");
+        row.TotalBadgeCount.Should().Be(4);
     }
 
     #endregion

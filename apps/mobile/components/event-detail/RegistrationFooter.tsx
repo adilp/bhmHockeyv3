@@ -13,6 +13,9 @@ interface RegistrationFooterProps {
   isFull: boolean;
   isProcessing: boolean;
   onRegister: () => void;
+  // Draft events are only visible to their managers, and signups are closed
+  // server-side until they publish
+  isDraft?: boolean;
 }
 
 export function RegistrationFooter({
@@ -22,8 +25,15 @@ export function RegistrationFooter({
   isFull,
   isProcessing,
   onRegister,
+  isDraft = false,
 }: RegistrationFooterProps) {
   const insets = useSafeAreaInsets();
+
+  // Draft - nobody can register yet, and publishing lives on the Roster tab
+  // where the organizer is already building the game
+  if (isDraft) {
+    return null;
+  }
 
   // Not authenticated - show login prompt
   if (!isAuthenticated) {

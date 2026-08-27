@@ -24,6 +24,8 @@ public class Organization
     public string? DefaultVenue { get; set; }
     public string? DefaultVisibility { get; set; }  // "Public", "OrganizationMembers", "InviteOnly"
     public bool? DefaultShowWaitlistBeforePublish { get; set; }  // Pre-fills ShowWaitlistBeforePublish on new events
+    // Overrides the global "new events start as drafts" default; null falls back to that global default
+    public bool? DefaultStartAsDraft { get; set; }
 
     // Org-wide GroupMe chat link - events fall back to this unless they set their own
     public string? GroupMeLink { get; set; }

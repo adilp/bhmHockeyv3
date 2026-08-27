@@ -23,6 +23,7 @@ import { EmptyState } from '../EmptyState';
 import { SectionHeader } from '../SectionHeader';
 import { DraggableRoster } from '../DraggableRoster';
 import { DraggableWaitlist } from '../DraggableWaitlist';
+import { DraftBanner } from './DraftBanner';
 import { PlayerDetailModal } from '../PlayerDetailModal';
 import { DraftModeRoster } from './DraftModeRoster';
 import { AddPlayerModal } from './AddPlayerModal';
@@ -42,9 +43,13 @@ interface EventRosterTabProps {
   eventId: string;
   event: EventDto;
   canManage: boolean;
+  /** Publishes a draft event. The roster's top button does this while the
+   *  event is a draft, since the roster cannot be published before the event. */
+  onPublishEvent?: () => void;
 }
 
-export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProps) {
+export function EventRosterTab({ eventId, event, canManage, onPublishEvent }: EventRosterTabProps) {
+  const isDraft = event.status === 'Draft';
   const [allRegistrations, setAllRegistrations] = useState<EventRegistrationDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<EventRegistrationDto | null>(null);
@@ -562,6 +567,9 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} scrollEnabled={!isDragActive}>
+        {/* Same reminder as the Info tab - this is where the roster gets built */}
+        {isDraft && canManage && <DraftBanner />}
+
         {/* Organizer action buttons */}
         {canManage && (
           <View style={styles.organizerActions}>
@@ -575,18 +583,19 @@ export function EventRosterTab({ eventId, event, canManage }: EventRosterTabProp
               </Text>
             </TouchableOpacity>
 
-            {/* Publish Roster button (only on unpublished events) */}
-            {!event.isRosterPublished && (
+            {/* One button, two stages: a draft must be published before its
+                roster can be, so the same slot does whichever comes next */}
+            {(isDraft || !event.isRosterPublished) && (
               <TouchableOpacity
                 style={[styles.publishButton, isPublishing && styles.publishButtonDisabled]}
-                onPress={handlePublishRoster}
-                disabled={isPublishing}
+                onPress={isDraft ? onPublishEvent : handlePublishRoster}
+                disabled={isPublishing || (isDraft && !onPublishEvent)}
               >
                 {isPublishing ? (
                   <ActivityIndicator size="small" color={colors.text.primary} />
                 ) : (
                   <Text style={styles.publishButtonText} allowFontScaling={false}>
-                    Publish Roster
+                    {isDraft ? 'Publish Event' : 'Publish Roster'}
                   </Text>
                 )}
               </TouchableOpacity>

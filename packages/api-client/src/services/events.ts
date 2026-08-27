@@ -186,6 +186,20 @@ export const eventService = {
     return response.data;
   },
 
+  // Event publishing (organizer)
+
+  /**
+   * Publish a draft event (organizer only).
+   * Makes it visible to members, opens signups, and notifies org subscribers.
+   * Separate from (and earlier than) publishRoster.
+   */
+  async publishEvent(eventId: string): Promise<PublishResultDto> {
+    const response = await apiClient.instance.post<PublishResultDto>(
+      `/events/${eventId}/publish`
+    );
+    return response.data;
+  },
+
   // Roster publishing (organizer)
 
   /**

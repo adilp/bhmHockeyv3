@@ -18,6 +18,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { datePickerProps } from '../../../utils/pickerTheme';
 import { organizationService } from '@bhmhockey/api-client';
 import type { Organization, EventVisibility } from '@bhmhockey/shared';
 import { isValidGroupMeLink, GROUPME_LINK_ERROR } from '../../../utils/groupme';
@@ -58,6 +59,8 @@ export default function OrganizationSettingsScreen() {
   const [defaultVenue, setDefaultVenue] = useState('');
   const [defaultVisibility, setDefaultVisibility] = useState<EventVisibility | null>(null);
   const [defaultShowWaitlistBeforePublish, setDefaultShowWaitlistBeforePublish] = useState(false);
+  // Matches the global default when the org has never expressed a preference
+  const [defaultStartAsDraft, setDefaultStartAsDraft] = useState(true);
   const [groupMeLink, setGroupMeLink] = useState('');
 
   // UI state
@@ -106,6 +109,7 @@ export default function OrganizationSettingsScreen() {
       setDefaultVenue(org.defaultVenue ?? '');
       setDefaultVisibility(org.defaultVisibility ?? null);
       setDefaultShowWaitlistBeforePublish(org.defaultShowWaitlistBeforePublish ?? false);
+      setDefaultStartAsDraft(org.defaultStartAsDraft ?? true);
       setGroupMeLink(org.groupMeLink ?? '');
     } catch (error) {
       Alert.alert('Error', 'Failed to load organization');
@@ -205,6 +209,7 @@ export default function OrganizationSettingsScreen() {
         defaultVenue: defaultVenue.trim() || null,
         defaultVisibility,
         defaultShowWaitlistBeforePublish,
+        defaultStartAsDraft,
         // '' clears the org's link (backend stores null); a value sets it
         groupMeLink: groupMeLink.trim(),
       });
@@ -314,6 +319,7 @@ export default function OrganizationSettingsScreen() {
 
           {showTimePicker && (
             <DateTimePicker
+            {...datePickerProps}
               value={defaultStartTime || new Date()}
               mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -431,6 +437,24 @@ export default function OrganizationSettingsScreen() {
             </View>
             <Text style={styles.fieldHint} allowFontScaling={false}>
               New events start with the waitlist visible to registered and waitlisted players before publish
+            </Text>
+          </View>
+
+          {/* Start New Events as Drafts */}
+          <View style={styles.field}>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel} allowFontScaling={false}>
+                Start new events as drafts
+              </Text>
+              <Switch
+                value={defaultStartAsDraft}
+                onValueChange={setDefaultStartAsDraft}
+                trackColor={{ false: colors.bg.hover, true: colors.primary.teal }}
+                thumbColor={defaultStartAsDraft ? colors.text.primary : colors.text.muted}
+              />
+            </View>
+            <Text style={styles.fieldHint} allowFontScaling={false}>
+              New events stay hidden from members until the organizer publishes them. Off means new events go live and notify members immediately.
             </Text>
           </View>
 

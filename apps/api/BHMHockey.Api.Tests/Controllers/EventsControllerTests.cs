@@ -1004,4 +1004,49 @@ public class EventsControllerTests
     }
 
     #endregion
+
+    #region PublishEvent Tests
+
+    [Fact]
+    public async Task PublishEvent_AsManager_ReturnsOkWithResult()
+    {
+        SetupAuthenticatedUser();
+        var expected = new PublishResultDto(true, "Event published successfully", 3);
+        _mockEventService
+            .Setup(s => s.PublishEventAsync(_testEventId, _testUserId))
+            .ReturnsAsync(expected);
+
+        var result = await _controller.PublishEvent(_testEventId);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task PublishEvent_WhenServiceReportsFailure_ReturnsBadRequest()
+    {
+        SetupAuthenticatedUser();
+        _mockEventService
+            .Setup(s => s.PublishEventAsync(_testEventId, _testUserId))
+            .ReturnsAsync(new PublishResultDto(false, "Event is already published", 0));
+
+        var result = await _controller.PublishEvent(_testEventId);
+
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task PublishEvent_AsNonManager_ReturnsForbid()
+    {
+        SetupAuthenticatedUser();
+        _mockEventService
+            .Setup(s => s.PublishEventAsync(_testEventId, _testUserId))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var result = await _controller.PublishEvent(_testEventId);
+
+        result.Result.Should().BeOfType<ForbidResult>();
+    }
+
+    #endregion
 }

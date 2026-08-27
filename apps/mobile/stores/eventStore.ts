@@ -49,6 +49,9 @@ interface EventState {
   // Event management (organizer)
   cancelEvent: (eventId: string) => Promise<boolean>;
 
+  // Event publishing (organizer) - makes a draft visible to members and notifies them
+  publishEvent: (eventId: string) => Promise<PublishResultDto | null>;
+
   // Roster publishing (organizer)
   publishRoster: (eventId: string) => Promise<PublishResultDto | null>;
 
@@ -429,6 +432,23 @@ export const useEventStore = create<EventState>((set, get) => ({
         error: getErrorMessage(error, 'Failed to cancel event'),
       });
       return false;
+    }
+  },
+
+  // Publish a draft event (organizer only) - opens signups and notifies subscribers
+  publishEvent: async (eventId: string) => {
+    try {
+      const result = await eventService.publishEvent(eventId);
+      // The event just became visible to members: refresh the detail view and the
+      // lists that filtered it out while it was a draft
+      await get().fetchEventById(eventId);
+      await get().fetchEvents();
+      return result;
+    } catch (error) {
+      set({
+        error: getErrorMessage(error, 'Failed to publish event'),
+      });
+      return null;
     }
   },
 

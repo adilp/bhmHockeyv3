@@ -121,6 +121,7 @@ public class OrganizationService : IOrganizationService
             DefaultVenue = request.DefaultVenue,
             DefaultVisibility = request.DefaultVisibility,
             DefaultShowWaitlistBeforePublish = request.DefaultShowWaitlistBeforePublish,
+            DefaultStartAsDraft = request.DefaultStartAsDraft,
             GroupMeLink = GroupMeLinkValidator.Normalize(request.GroupMeLink),
             IsPrivate = request.IsPrivate ?? false
         };
@@ -219,6 +220,7 @@ public class OrganizationService : IOrganizationService
         if (request.DefaultVenue != null) organization.DefaultVenue = request.DefaultVenue;
         if (request.DefaultVisibility != null) organization.DefaultVisibility = request.DefaultVisibility;
         if (request.DefaultShowWaitlistBeforePublish != null) organization.DefaultShowWaitlistBeforePublish = request.DefaultShowWaitlistBeforePublish;
+        if (request.DefaultStartAsDraft != null) organization.DefaultStartAsDraft = request.DefaultStartAsDraft;
         // Flipping privacy never touches existing memberships - members are grandfathered in
         if (request.IsPrivate != null) organization.IsPrivate = request.IsPrivate.Value;
         // Empty/whitespace clears the link (Normalize returns null); null leaves it unchanged
@@ -412,22 +414,41 @@ public class OrganizationService : IOrganizationService
         var allUserBadges = await _context.UserBadges
             .Include(ub => ub.BadgeType)
             .Where(ub => memberUserIds.Contains(ub.UserId))
-            .OrderBy(ub => ub.DisplayOrder ?? int.MaxValue)
-            .ThenBy(ub => ub.BadgeType.SortPriority)
             .ToListAsync();
 
-        // Group badges by user and take top 3
+        // How many people hold each of these badges, so the member row can lead
+        // with the rarest ones (same ranking the event roster uses)
+        var badgeTypeIds = allUserBadges.Select(ub => ub.BadgeTypeId).Distinct().ToList();
+        var awardCounts = badgeTypeIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await _context.UserBadges
+                .Where(ub => badgeTypeIds.Contains(ub.BadgeTypeId))
+                .GroupBy(ub => ub.BadgeTypeId)
+                .Select(g => new { BadgeTypeId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.BadgeTypeId, x => x.Count);
+
+        // Group badges by user and take the three rarest. Only three fit on a
+        // member row, so they should be the ones that make someone stand out
+        // rather than the common badge everyone has. (The trophy case still
+        // honours the member's own DisplayOrder ordering.)
         var badgesByUser = allUserBadges
             .GroupBy(ub => ub.UserId)
             .ToDictionary(
                 g => g.Key,
-                g => g.Take(3).Select(ub => new UserBadgeDto(
-                    ub.Id,
-                    new BadgeTypeDto(ub.BadgeType.Id, ub.BadgeType.Code, ub.BadgeType.Name, ub.BadgeType.Description, ub.BadgeType.IconName, ub.BadgeType.Category),
-                    ub.Context ?? new Dictionary<string, object>(),
-                    ub.EarnedAt,
-                    ub.DisplayOrder
-                )).ToList()
+                g => g
+                    // Rarest first; SortPriority then earned-date keep it deterministic
+                    .OrderBy(ub => awardCounts.GetValueOrDefault(ub.BadgeTypeId, int.MaxValue))
+                    .ThenBy(ub => ub.BadgeType.SortPriority)
+                    .ThenByDescending(ub => ub.EarnedAt)
+                    .Take(3)
+                    .Select(ub => new UserBadgeDto(
+                        ub.Id,
+                        new BadgeTypeDto(ub.BadgeType.Id, ub.BadgeType.Code, ub.BadgeType.Name, ub.BadgeType.Description, ub.BadgeType.IconName, ub.BadgeType.Category),
+                        ub.Context ?? new Dictionary<string, object>(),
+                        ub.EarnedAt,
+                        ub.DisplayOrder
+                    ))
+                    .ToList()
             );
 
         // Count badges per user
@@ -539,6 +560,7 @@ public class OrganizationService : IOrganizationService
             org.DefaultVisibility,
             org.GroupMeLink,
             org.DefaultShowWaitlistBeforePublish,
+            org.DefaultStartAsDraft,
             org.IsPrivate,
             myJoinRequestStatus,
             pendingJoinRequestCount
