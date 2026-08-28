@@ -2121,73 +2121,12 @@ public class EventService : IEventService
     }
 
     /// <summary>
-    /// Batch loads badges for a list of users to prevent N+1 queries.
-    /// Returns a dictionary mapping userId to (top 3 badges, total count).
+    /// Batch loads each user's rarest three badges + total count for the roster
+    /// rows, in two queries (no N+1). Shared with the org member list via
+    /// <see cref="BadgeRanking.TopRarestByUserAsync"/>.
     /// </summary>
-    private async Task<Dictionary<Guid, (List<UserBadgeDto> TopBadges, int TotalCount)>> GetBadgesForUsersAsync(IEnumerable<Guid> userIds)
-    {
-        var userIdList = userIds.ToList();
-        if (userIdList.Count == 0)
-        {
-            return new Dictionary<Guid, (List<UserBadgeDto>, int)>();
-        }
-
-        // Single query to get all badges for all users
-        var allBadges = await _context.UserBadges
-            .Include(ub => ub.BadgeType)
-            .Where(ub => userIdList.Contains(ub.UserId))
-            .ToListAsync();
-
-        // How many players hold each of these badges, globally. The roster only
-        // has room for three, so it shows a player's rarest - an unusual badge
-        // is what makes someone stand out, and it stops every row repeating the
-        // same common one. (The trophy case still honours the player's own
-        // ordering; this ranking is for the compact roster row.)
-        var badgeTypeIds = allBadges.Select(ub => ub.BadgeTypeId).Distinct().ToList();
-        var awardCounts = badgeTypeIds.Count == 0
-            ? new Dictionary<Guid, int>()
-            : await _context.UserBadges
-                .Where(ub => badgeTypeIds.Contains(ub.BadgeTypeId))
-                .GroupBy(ub => ub.BadgeTypeId)
-                .Select(g => new { BadgeTypeId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.BadgeTypeId, x => x.Count);
-
-        // Group by user and compute top 3 + total count
-        var result = new Dictionary<Guid, (List<UserBadgeDto> TopBadges, int TotalCount)>();
-
-        foreach (var userId in userIdList)
-        {
-            var userBadges = allBadges
-                .Where(ub => ub.UserId == userId)
-                // Rarest first; SortPriority then earned-date keep it deterministic
-                .OrderBy(ub => awardCounts.GetValueOrDefault(ub.BadgeTypeId, int.MaxValue))
-                .ThenBy(ub => ub.BadgeType.SortPriority)
-                .ThenByDescending(ub => ub.EarnedAt)
-                .ToList();
-
-            var topBadges = userBadges
-                .Take(3)
-                .Select(ub => new UserBadgeDto(
-                    ub.Id,
-                    new BadgeTypeDto(
-                        ub.BadgeType.Id,
-                        ub.BadgeType.Code,
-                        ub.BadgeType.Name,
-                        ub.BadgeType.Description,
-                        ub.BadgeType.IconName,
-                        ub.BadgeType.Category
-                    ),
-                    ub.Context,
-                    ub.EarnedAt,
-                    ub.DisplayOrder
-                ))
-                .ToList();
-
-            result[userId] = (topBadges, userBadges.Count);
-        }
-
-        return result;
-    }
+    private Task<Dictionary<Guid, (List<UserBadgeDto> TopBadges, int TotalCount)>> GetBadgesForUsersAsync(IEnumerable<Guid> userIds)
+        => BadgeRanking.TopRarestByUserAsync(_context, userIds);
 
     /// <summary>
     /// Search for users that can be added to an event's waitlist (organizer only).

@@ -410,51 +410,11 @@ public class OrganizationService : IOrganizationService
         // Get all member user IDs for batch queries
         var memberUserIds = subscriptions.Select(s => s.User.Id).ToList();
 
-        // Batch query: Get all badges for all members in one query
-        var allUserBadges = await _context.UserBadges
-            .Include(ub => ub.BadgeType)
-            .Where(ub => memberUserIds.Contains(ub.UserId))
-            .ToListAsync();
-
-        // How many people hold each of these badges, so the member row can lead
-        // with the rarest ones (same ranking the event roster uses)
-        var badgeTypeIds = allUserBadges.Select(ub => ub.BadgeTypeId).Distinct().ToList();
-        var awardCounts = badgeTypeIds.Count == 0
-            ? new Dictionary<Guid, int>()
-            : await _context.UserBadges
-                .Where(ub => badgeTypeIds.Contains(ub.BadgeTypeId))
-                .GroupBy(ub => ub.BadgeTypeId)
-                .Select(g => new { BadgeTypeId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.BadgeTypeId, x => x.Count);
-
-        // Group badges by user and take the three rarest. Only three fit on a
-        // member row, so they should be the ones that make someone stand out
-        // rather than the common badge everyone has. (The trophy case still
-        // honours the member's own DisplayOrder ordering.)
-        var badgesByUser = allUserBadges
-            .GroupBy(ub => ub.UserId)
-            .ToDictionary(
-                g => g.Key,
-                g => g
-                    // Rarest first; SortPriority then earned-date keep it deterministic
-                    .OrderBy(ub => awardCounts.GetValueOrDefault(ub.BadgeTypeId, int.MaxValue))
-                    .ThenBy(ub => ub.BadgeType.SortPriority)
-                    .ThenByDescending(ub => ub.EarnedAt)
-                    .Take(3)
-                    .Select(ub => new UserBadgeDto(
-                        ub.Id,
-                        new BadgeTypeDto(ub.BadgeType.Id, ub.BadgeType.Code, ub.BadgeType.Name, ub.BadgeType.Description, ub.BadgeType.IconName, ub.BadgeType.Category),
-                        ub.Context ?? new Dictionary<string, object>(),
-                        ub.EarnedAt,
-                        ub.DisplayOrder
-                    ))
-                    .ToList()
-            );
-
-        // Count badges per user
-        var badgeCountsByUser = allUserBadges
-            .GroupBy(ub => ub.UserId)
-            .ToDictionary(g => g.Key, g => g.Count());
+        // Rarest three badges + total per member for the compact member row -
+        // the same ranking the event roster uses (see BadgeRanking).
+        var badgeData = await BadgeRanking.TopRarestByUserAsync(_context, memberUserIds);
+        var badgesByUser = badgeData.ToDictionary(kv => kv.Key, kv => kv.Value.TopBadges);
+        var badgeCountsByUser = badgeData.ToDictionary(kv => kv.Key, kv => kv.Value.TotalCount);
 
         // Waiver status per member - ADMIN-ONLY (like member emails above), and
         // only meaningful when an active waiver exists. Null flags keep the
