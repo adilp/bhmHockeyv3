@@ -34,4 +34,11 @@ module.exports = {
   },
   NativeModules: {},
   useColorScheme: () => 'light',
+  Alert: {
+    alert: jest.fn(),
+  },
+  Linking: {
+    openURL: jest.fn(() => Promise.resolve()),
+    canOpenURL: jest.fn(() => Promise.resolve(true)),
+  },
 };

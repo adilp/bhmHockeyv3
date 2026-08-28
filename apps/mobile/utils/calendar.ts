@@ -1,14 +1,17 @@
-import { Alert } from 'react-native';
-import * as Calendar from 'expo-calendar';
+import { Alert, Linking } from 'react-native';
 import type { EventDto } from '@bhmhockey/shared';
 
 /**
- * Adds a game to the phone's calendar through the OS-provided event sheet.
+ * Adds a game to the player's calendar via a Google Calendar "event template"
+ * link, opened in the browser or the Google Calendar app.
  *
- * Deliberately uses createEventInCalendarAsync rather than createEventAsync:
- * the system UI does the writing after the user confirms, so the app never
- * needs calendar permission and never gains read access to anyone's events.
- * The user also picks which calendar (iCloud, Gmail, Outlook) in that sheet.
+ * This is deliberately a plain https link rather than a native integration:
+ * it needs no native module and no calendar permission, so the feature ships
+ * over-the-air. The trade-off is that it targets Google Calendar — a user on
+ * iCloud or Outlook is routed through Google's web UI to add the event.
+ *
+ * (An earlier version used expo-calendar's native new-event sheet; it was
+ * removed because the native module forced every release to be a store build.)
  */
 
 function eventWindow(event: EventDto): { start: Date; end: Date } {
@@ -31,20 +34,29 @@ export function calendarNotes(event: EventDto): string {
   return parts.join('\n');
 }
 
-/** Opens the system's new-event sheet pre-filled with the game */
-export async function promptAddToCalendar(event: EventDto): Promise<void> {
-  const { start, end } = eventWindow(event);
+/** Google Calendar expects start/end as compact UTC: YYYYMMDDTHHMMSSZ. */
+function toGoogleUtc(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
 
+/** Builds a Google Calendar "add event" template URL pre-filled with the game. */
+export function googleCalendarUrl(event: EventDto): string {
+  const { start, end } = eventWindow(event);
+  const params = [
+    'action=TEMPLATE',
+    `text=${encodeURIComponent(calendarTitle(event))}`,
+    `dates=${toGoogleUtc(start)}/${toGoogleUtc(end)}`,
+  ];
+  const notes = calendarNotes(event);
+  if (notes) params.push(`details=${encodeURIComponent(notes)}`);
+  if (event.venue) params.push(`location=${encodeURIComponent(event.venue)}`);
+  return `https://calendar.google.com/calendar/render?${params.join('&')}`;
+}
+
+/** Opens the game in Google Calendar's new-event view. */
+export async function promptAddToCalendar(event: EventDto): Promise<void> {
   try {
-    await Calendar.createEventInCalendarAsync({
-      title: calendarTitle(event),
-      startDate: start,
-      endDate: end,
-      location: event.venue ?? undefined,
-      notes: calendarNotes(event) || undefined,
-    });
-    // No confirmation alert: the system sheet already shows the result, and
-    // on Android the action is always reported as 'done' regardless of choice
+    await Linking.openURL(googleCalendarUrl(event));
   } catch {
     Alert.alert(
       'Could Not Add to Calendar',

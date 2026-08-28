@@ -1,20 +1,28 @@
 # Release Checklist
 
-For the next production release. Written 2026-08-27, when `main` had drifted
-well past the last store build and one release could no longer be an OTA.
+For the next production release. Written 2026-08-27; updated 2026-08-28 when
+`expo-calendar` was replaced with a Google Calendar web link, which removed the
+only native module that was blocking an over-the-air release.
 
-## This release must be a store binary
+## This release can be an OTA
 
-Not an `eas update`. `expo-calendar` was added on 2026-08-21 as a native
-module, and `utils/calendar.ts` imports it at the top of the file - a file
-the event detail screen and info tab import directly. `runtimeVersion` is
-pinned to the fixed string `"1.0.0"`, so an OTA reaches every build back to
-December, including every build without that native module. Those devices
-would crash on opening any event.
+`expo-calendar` (added 2026-08-21) was the one native module added since the
+last store build, and `utils/calendar.ts` imported it at the top of a file the
+event detail screen and info tab pull in directly — so an OTA would have
+crashed every device on opening an event. It has been replaced with a Google
+Calendar web link (`Linking.openURL`); no native module, no calendar
+permission.
 
-The last store build predates `expo-calendar`, so this applies to every user.
-Do not publish an OTA until a build carrying it has shipped and users are on
-it.
+With it gone, the JS bundle imports only native modules already in the current
+store build (`1.0.5`, shipped 2026-02-26): the roster-share modules
+(`expo-file-system`, `expo-sharing`, `expo-clipboard`, `react-native-view-shot`,
+added 2026-02-23) predate it. So an `eas update` at the pinned `runtimeVersion`
+`"1.0.0"` is safe for everyone on `1.0.5`.
+
+A store binary is still fine if you'd rather cut a fresh baseline — it's just no
+longer required. If you do build natively, note the app.json/Info.plist
+`userInterfaceStyle` was switched to `Dark` on this branch; confirm that's
+intended before it ships (it has no effect on an OTA).
 
 ## What this release carries
 
@@ -28,22 +36,22 @@ since 2026-02-26):
   This release is what unblocks them.
 - Registered-position display, organizer notifications (payment verified,
   player dropped), past-games view
-- Calendar integration (the native module above), D-League team affiliation
+- Add-to-calendar via Google Calendar web link, D-League team affiliation
 - Waitlist drag-reorder fix, org privacy with join approval
 - Draft events, dark-mode date pickers
 - Trophies: seven new types, rarity-ranked rows, tap-for-detail
 - Waitlist promotion notification
 - `js <update id>` on the profile screen (see Verifying below)
 
-## Before building
+## Before shipping
 
-- [ ] Bump `version` in **both** places (`1.0.5` → `1.0.6`):
-      `apps/mobile/app.json` and
-      `apps/mobile/ios/BHMHockey/Info.plist` (`CFBundleShortVersionString`)
-- [ ] Do **not** touch `buildNumber` / `versionCode` - EAS auto-increments
-      those on production builds
 - [ ] `yarn workspace @bhmhockey/mobile type-check` and `test` pass
 - [ ] API deployed first (see below) - the app expects the current API
+- [ ] OTA only: no `version` bump needed - the update id is how you tell
+      builds apart (see Verifying). Bump `version` in **both** `app.json` and
+      `ios/BHMHockey/Info.plist` (`CFBundleShortVersionString`) only if you cut
+      a store binary; never touch `buildNumber` / `versionCode` (EAS
+      auto-increments those).
 
 ## API
 
@@ -56,32 +64,29 @@ accumulated since February, through
 - [ ] Spot-check that the new columns exist (org privacy, draft defaults,
       D-League team, waiver signature fields)
 
-## Build and submit
+## Ship the update
 
 ```bash
 cd apps/mobile
+npx eas-cli update --branch production --message "Description"
+```
+
+Or, if cutting a store binary instead:
+
+```bash
 npx eas-cli build --platform ios --profile production
 npx eas-cli submit --platform ios
 ```
 
-- [ ] Confirm the build log shows the `ExpoCalendar` pod. The checked-in
-      `ios/Podfile.lock` has no entry for it - EAS runs `pod install` and
-      Expo autolinking should pick it up, but if it doesn't, the native
-      module is missing from the binary and the calendar button crashes.
-- [ ] `NSCalendarsWriteOnlyAccessUsageDescription` is in `Info.plist`
-      (write-only on purpose - the app uses the OS-provided sheet and never
-      reads the calendar)
-
-## After users are on the new build
+## After the update has propagated
 
 - [ ] Run both badge scripts against production:
       `docs/sql/add_badge_types_2026_08.sql` (five types) and
       `docs/sql/add_badge_types_holiday_games.sql` (Christmas, Halloween).
       Running them earlier would award badges whose icons aren't in the
-      shipped bundle, so holders would see a blank space.
-- [ ] Remove the "next release must be a store binary" note from `CLAUDE.md`
-      and `apps/mobile/CLAUDE.md` - OTAs are safe again once the calendar
-      build is out.
+      bundle yet, so holders would see a blank space. The icons ride the OTA
+      as assets, so wait until devices have pulled the update (check the `js`
+      line below) before running the SQL.
 
 ## Verifying rollout
 
