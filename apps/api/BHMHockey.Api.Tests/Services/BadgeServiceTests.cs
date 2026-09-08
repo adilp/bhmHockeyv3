@@ -1,8 +1,10 @@
 using BHMHockey.Api.Data;
+using BHMHockey.Api.Models.DTOs;
 using BHMHockey.Api.Models.Entities;
 using BHMHockey.Api.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace BHMHockey.Api.Tests.Services;
@@ -13,6 +15,7 @@ namespace BHMHockey.Api.Tests.Services;
 public class BadgeServiceTests : IDisposable
 {
     private readonly AppDbContext _context;
+    private readonly OrganizationAdminService _adminService;
     private readonly BadgeService _sut;
 
     public BadgeServiceTests()
@@ -21,7 +24,8 @@ public class BadgeServiceTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _context = new AppDbContext(options);
-        _sut = new BadgeService(_context);
+        _adminService = new OrganizationAdminService(_context);
+        _sut = new BadgeService(_context, _adminService, NullLogger<BadgeService>.Instance);
     }
 
     public void Dispose()
@@ -320,6 +324,280 @@ public class BadgeServiceTests : IDisposable
         result.Should().HaveCount(2);
         result[0].BadgeType.Code.Should().Be("badge1");
         result[1].BadgeType.Code.Should().Be("badge2");
+    }
+
+    #endregion
+
+    #region Admin: award, revoke, badge types
+
+    private async Task<Organization> CreateOrgWithAdmin(Guid adminUserId, string name = "AMP")
+    {
+        var org = new Organization
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            CreatorId = adminUserId,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Organizations.Add(org);
+        _context.OrganizationAdmins.Add(new OrganizationAdmin
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = org.Id,
+            UserId = adminUserId,
+            AddedAt = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+        return org;
+    }
+
+    private async Task Subscribe(Guid orgId, Guid userId)
+    {
+        _context.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = orgId,
+            UserId = userId,
+            NotificationEnabled = true,
+            SubscribedAt = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    private async Task PlayInEvent(Guid orgId, Guid userId)
+    {
+        var evt = new Event
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = orgId,
+            CreatorId = userId,
+            Name = "Pickup",
+            EventDate = DateTime.UtcNow.AddDays(-7),
+            MaxPlayers = 20,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _context.Events.Add(evt);
+        _context.EventRegistrations.Add(new EventRegistration
+        {
+            Id = Guid.NewGuid(),
+            EventId = evt.Id,
+            UserId = userId,
+            Status = "Registered",
+            RegisteredAt = DateTime.UtcNow.AddDays(-8)
+        });
+        await _context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task AwardBadgeAsync_NonAdmin_Throws()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var outsider = await CreateTestUser("outsider@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await CreateBadgeType("GOALIE", "Goalie", 1);
+
+        var act = async () => await _sut.AwardBadgeAsync(
+            org.Id, new AwardBadgeRequest("GOALIE", new List<Guid> { outsider.Id }), outsider.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        _context.UserBadges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AwardBadgeAsync_MemberAndPlayer_BothAwarded()
+    {
+        // Someone who plays without ever subscribing is still the admin's to
+        // award - that is the usual case for a pickup game
+        var admin = await CreateTestUser("admin@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var player = await CreateTestUser("player@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await Subscribe(org.Id, member.Id);
+        await PlayInEvent(org.Id, player.Id);
+        await CreateBadgeType("IRONMAN", "Ironman", 1);
+
+        var result = await _sut.AwardBadgeAsync(
+            org.Id,
+            new AwardBadgeRequest("IRONMAN", new List<Guid> { member.Id, player.Id }, "Ironman 2026"),
+            admin.Id);
+
+        result.Awarded.Should().Be(2);
+        result.Results.Should().OnlyContain(r => r.Outcome == "awarded");
+        var badges = await _context.UserBadges.ToListAsync();
+        badges.Should().HaveCount(2);
+        badges.Should().OnlyContain(b => b.CelebratedAt == null);   // celebration still fires
+        badges[0].Context!["description"].Should().Be("Ironman 2026");
+    }
+
+    [Fact]
+    public async Task AwardBadgeAsync_UserWithNoTieToTheOrg_NotEligible()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var stranger = await CreateTestUser("stranger@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await CreateBadgeType("GOALIE", "Goalie", 1);
+
+        var result = await _sut.AwardBadgeAsync(
+            org.Id, new AwardBadgeRequest("GOALIE", new List<Guid> { stranger.Id }), admin.Id);
+
+        result.Awarded.Should().Be(0);
+        result.Skipped.Should().Be(1);
+        result.Results.Single().Outcome.Should().Be("not_eligible");
+        _context.UserBadges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AwardBadgeAsync_RunTwice_DoesNotDuplicate()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await Subscribe(org.Id, member.Id);
+        await CreateBadgeType("SHUTOUT", "Shutout", 1);
+        var request = new AwardBadgeRequest("SHUTOUT", new List<Guid> { member.Id });
+
+        await _sut.AwardBadgeAsync(org.Id, request, admin.Id);
+        var second = await _sut.AwardBadgeAsync(org.Id, request, admin.Id);
+
+        second.Awarded.Should().Be(0);
+        second.AlreadyHeld.Should().Be(1);
+        (await _context.UserBadges.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AwardBadgeAsync_GhostPlayer_IsNotAwardable()
+    {
+        // Guests hold roster spots but have no account to hang a badge on
+        var admin = await CreateTestUser("admin@example.com");
+        var ghost = await CreateTestUser("ghost@placeholder.bhmhockey");
+        ghost.IsGhostPlayer = true;
+        await _context.SaveChangesAsync();
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await PlayInEvent(org.Id, ghost.Id);
+        await CreateBadgeType("GOALIE", "Goalie", 1);
+
+        var result = await _sut.AwardBadgeAsync(
+            org.Id, new AwardBadgeRequest("GOALIE", new List<Guid> { ghost.Id }), admin.Id);
+
+        result.Results.Single().Outcome.Should().Be("unknown_user");
+        _context.UserBadges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AwardBadgeAsync_UnknownBadgeCode_Throws()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+
+        var act = async () => await _sut.AwardBadgeAsync(
+            org.Id, new AwardBadgeRequest("NOPE", new List<Guid> { admin.Id }), admin.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task AwardBadgeAsync_PartialBatch_AwardsTheGoodOnes()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var stranger = await CreateTestUser("stranger@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await Subscribe(org.Id, member.Id);
+        await CreateBadgeType("GOALIE", "Goalie", 1);
+
+        var result = await _sut.AwardBadgeAsync(
+            org.Id,
+            new AwardBadgeRequest("GOALIE", new List<Guid> { member.Id, stranger.Id, Guid.NewGuid() }),
+            admin.Id);
+
+        result.Awarded.Should().Be(1);
+        result.Skipped.Should().Be(2);
+        (await _context.UserBadges.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RevokeBadgeAsync_RemovesTheBadge()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var member = await CreateTestUser("member@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await Subscribe(org.Id, member.Id);
+        var type = await CreateBadgeType("GOALIE", "Goalie", 1);
+        var badge = await CreateUserBadge(member.Id, type.Id);
+
+        var removed = await _sut.RevokeBadgeAsync(org.Id, badge.Id, admin.Id);
+
+        removed.Should().BeTrue();
+        _context.UserBadges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RevokeBadgeAsync_HolderOutsideTheOrg_Throws()
+    {
+        // An admin can undo their own org's mistakes, not reach into another's
+        var admin = await CreateTestUser("admin@example.com");
+        var stranger = await CreateTestUser("stranger@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        var type = await CreateBadgeType("GOALIE", "Goalie", 1);
+        var badge = await CreateUserBadge(stranger.Id, type.Id);
+
+        var act = async () => await _sut.RevokeBadgeAsync(org.Id, badge.Id, admin.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await _context.UserBadges.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RevokeBadgeAsync_MissingBadge_ReturnsFalse()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+
+        (await _sut.RevokeBadgeAsync(org.Id, Guid.NewGuid(), admin.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateBadgeTypeAsync_NormalisesCodeAndPersists()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+
+        var created = await _sut.CreateBadgeTypeAsync(
+            org.Id,
+            new CreateBadgeTypeRequest(" christmas_game ", "Christmas Game", "Played the Christmas game", "christmas", "special", 25),
+            admin.Id);
+
+        created.Code.Should().Be("CHRISTMAS_GAME");
+        (await _context.BadgeTypes.SingleAsync()).IconName.Should().Be("christmas");
+    }
+
+    [Fact]
+    public async Task CreateBadgeTypeAsync_DuplicateCode_Throws()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await CreateBadgeType("GOALIE", "Goalie", 1);
+
+        var act = async () => await _sut.CreateBadgeTypeAsync(
+            org.Id, new CreateBadgeTypeRequest("goalie", "Goalie", "dup", "goalie"), admin.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task CreateBadgeTypeAsync_NonAdmin_Throws()
+    {
+        var admin = await CreateTestUser("admin@example.com");
+        var outsider = await CreateTestUser("outsider@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+
+        var act = async () => await _sut.CreateBadgeTypeAsync(
+            org.Id, new CreateBadgeTypeRequest("NEW", "New", "d", "icon"), outsider.Id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        _context.BadgeTypes.Should().BeEmpty();
     }
 
     #endregion
