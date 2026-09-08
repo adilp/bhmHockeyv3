@@ -15,6 +15,7 @@ public class OrganizationsController : ControllerBase
     private readonly IOrganizationAutoRosterService _autoRosterService;
     private readonly IOrganizationWaiverService _waiverService;
     private readonly IOrganizationJoinRequestService _joinRequestService;
+    private readonly IBadgeService _badgeService;
     private readonly ILogger<OrganizationsController> _logger;
 
     public OrganizationsController(
@@ -23,6 +24,7 @@ public class OrganizationsController : ControllerBase
         IOrganizationAutoRosterService autoRosterService,
         IOrganizationWaiverService waiverService,
         IOrganizationJoinRequestService joinRequestService,
+        IBadgeService badgeService,
         ILogger<OrganizationsController> logger)
     {
         _organizationService = organizationService;
@@ -30,6 +32,7 @@ public class OrganizationsController : ControllerBase
         _autoRosterService = autoRosterService;
         _waiverService = waiverService;
         _joinRequestService = joinRequestService;
+        _badgeService = badgeService;
         _logger = logger;
     }
 
@@ -615,4 +618,94 @@ public class OrganizationsController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    #region Badges (organization admin)
+
+    /// <summary>
+    /// Every badge type in the system (admin only), for choosing one to award.
+    /// </summary>
+    [HttpGet("{id:guid}/badge-types")]
+    [Authorize]
+    public async Task<ActionResult<List<BadgeTypeDto>>> GetBadgeTypes(Guid id)
+    {
+        try
+        {
+            return Ok(await _badgeService.GetBadgeTypesAsync(id, GetCurrentUserId()));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
+    /// <summary>
+    /// Create a badge type (admin only). Types are global, so the code must be
+    /// unique system-wide. The icon must already be in the app's icon map -
+    /// ship the artwork first, or the badge shows as a blank space.
+    /// </summary>
+    [HttpPost("{id:guid}/badge-types")]
+    [Authorize]
+    public async Task<ActionResult<BadgeTypeDto>> CreateBadgeType(Guid id, [FromBody] CreateBadgeTypeRequest request)
+    {
+        try
+        {
+            var badgeType = await _badgeService.CreateBadgeTypeAsync(id, request, GetCurrentUserId());
+            return Ok(badgeType);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Create badge type denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Award a badge to several users at once (admin only). Idempotent, and
+    /// partial by design - the response says what happened to each id rather
+    /// than failing the batch over one of them.
+    /// </summary>
+    [HttpPost("{id:guid}/badges/award")]
+    [Authorize]
+    public async Task<ActionResult<AwardBadgeResponse>> AwardBadge(Guid id, [FromBody] AwardBadgeRequest request)
+    {
+        try
+        {
+            var result = await _badgeService.AwardBadgeAsync(id, request, GetCurrentUserId());
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Award badge denied for organization {OrganizationId}: requester is not an admin", id);
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Remove an awarded badge (admin only), for undoing a mistake.
+    /// </summary>
+    [HttpDelete("{id:guid}/badges/{userBadgeId:guid}")]
+    [Authorize]
+    public async Task<ActionResult> RevokeBadge(Guid id, Guid userBadgeId)
+    {
+        try
+        {
+            var removed = await _badgeService.RevokeBadgeAsync(id, userBadgeId, GetCurrentUserId());
+            return removed ? NoContent() : NotFound(new { message = "Badge not found" });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Revoke badge denied for organization {OrganizationId}", id);
+            return Forbid();
+        }
+    }
+
+    #endregion
 }

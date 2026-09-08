@@ -22,6 +22,7 @@ public class OrganizationsControllerTests
     private readonly Mock<IOrganizationAutoRosterService> _mockAutoRosterService;
     private readonly Mock<IOrganizationWaiverService> _mockWaiverService;
     private readonly Mock<IOrganizationJoinRequestService> _mockJoinRequestService;
+    private readonly Mock<IBadgeService> _mockBadgeService;
     private readonly OrganizationsController _controller;
     private readonly Guid _testUserId = Guid.NewGuid();
 
@@ -32,12 +33,14 @@ public class OrganizationsControllerTests
         _mockAutoRosterService = new Mock<IOrganizationAutoRosterService>();
         _mockWaiverService = new Mock<IOrganizationWaiverService>();
         _mockJoinRequestService = new Mock<IOrganizationJoinRequestService>();
+        _mockBadgeService = new Mock<IBadgeService>();
         _controller = new OrganizationsController(
             _mockOrgService.Object,
             _mockAdminService.Object,
             _mockAutoRosterService.Object,
             _mockWaiverService.Object,
             _mockJoinRequestService.Object,
+            _mockBadgeService.Object,
             Mock.Of<ILogger<OrganizationsController>>());
     }
 
