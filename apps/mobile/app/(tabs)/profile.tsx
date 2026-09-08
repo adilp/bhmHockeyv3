@@ -26,6 +26,7 @@ import {
   TrophyCase,
 } from '../../components';
 import { colors, spacing, radius } from '../../theme';
+import { canHaveDLeagueTeam } from '../../utils/dLeagueTeam';
 
 const BADGE_SAVE_DEBOUNCE_MS = 500;
 
@@ -176,9 +177,23 @@ export default function ProfileScreen() {
     }, BADGE_SAVE_DEBOUNCE_MS);
   }, [badges, authUser, setAuthUser]);
 
-  // The team picker only applies to D-League players
-  const playsDLeague =
-    (isGoalie && goalieSkill === 'D-League') || (isSkater && skaterSkill === 'D-League');
+  // The team picker is offered to D-League and Bronze players - plenty of
+  // Bronze players skate in both leagues. Silver and Gold aren't allowed in
+  // D-League, so they never see it.
+  const positionsForSave = buildPositionsFromState({ isGoalie, goalieSkill, isSkater, skaterSkill });
+  const canPickTeam = canHaveDLeagueTeam(positionsForSave);
+
+  // Moving to a level with no D-League team (Silver/Gold) clears the pick
+  // immediately, so the field matches what the server will store on save
+  // instead of quietly reappearing if they switch back. Turning every
+  // position off is not that move - the save is blocked until one is on - so
+  // the team survives a toggle.
+  const hasPosition = isGoalie || isSkater;
+  useEffect(() => {
+    if (hasPosition && !canPickTeam && dLeagueTeam !== null) {
+      setDLeagueTeam(null);
+    }
+  }, [hasPosition, canPickTeam, dLeagueTeam]);
 
   const handleSave = async () => {
     if (!isGoalie && !isSkater) {
@@ -189,15 +204,13 @@ export default function ProfileScreen() {
     try {
       setSaving(true);
 
-      const positions = buildPositionsFromState({ isGoalie, goalieSkill, isSkater, skaterSkill });
-
       const updates = {
         firstName,
         lastName,
         phoneNumber: phoneNumber || undefined,
-        positions,
+        positions: positionsForSave,
         venmoHandle: venmoHandle || undefined,
-        dLeagueTeam: playsDLeague ? dLeagueTeam : null,
+        dLeagueTeam: canPickTeam ? dLeagueTeam : null,
       };
 
       const updatedUser = await userService.updateProfile(updates);
@@ -358,7 +371,7 @@ export default function ProfileScreen() {
           />
         </FormSection>
 
-        {playsDLeague && (
+        {canPickTeam && (
           <FormSection title="D-League Team" hint="Optional - select your team if you're on one">
             <DLeagueTeamSelector
               value={dLeagueTeam}

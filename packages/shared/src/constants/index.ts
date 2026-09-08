@@ -14,6 +14,12 @@ export const DLEAGUE_TEAMS = [
 
 export const DLEAGUE_TEAM_NAMES = DLEAGUE_TEAMS.map((t) => t.name);
 
+// Skill levels allowed a D-League team. Bronze players are eligible because
+// plenty of them skate in both leagues; Silver and Gold are not allowed in
+// D-League at all, so a team would be meaningless for them.
+// Mirrored server-side in UserService.DLeagueEligibleSkillLevels.
+export const DLEAGUE_ELIGIBLE_SKILL_LEVELS = ['D-League', 'Bronze'] as const;
+
 // Positions (simplified to Goalie and Skater)
 export const POSITIONS = ['Goalie', 'Skater'] as const;
 

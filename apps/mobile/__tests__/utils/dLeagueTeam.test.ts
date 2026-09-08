@@ -1,4 +1,48 @@
-import { dLeagueTeamColor } from '../../utils/dLeagueTeam';
+import { canHaveDLeagueTeam, dLeagueTeamColor, isDLeagueEligibleSkill } from '../../utils/dLeagueTeam';
+
+describe('isDLeagueEligibleSkill', () => {
+  it('allows D-League and Bronze, since Bronze players skate in both leagues', () => {
+    expect(isDLeagueEligibleSkill('D-League')).toBe(true);
+    expect(isDLeagueEligibleSkill('Bronze')).toBe(true);
+  });
+
+  it('rejects Silver and Gold, who are not allowed in D-League', () => {
+    expect(isDLeagueEligibleSkill('Silver')).toBe(false);
+    expect(isDLeagueEligibleSkill('Gold')).toBe(false);
+  });
+
+  it('rejects a missing level', () => {
+    expect(isDLeagueEligibleSkill(null)).toBe(false);
+    expect(isDLeagueEligibleSkill(undefined)).toBe(false);
+  });
+});
+
+describe('canHaveDLeagueTeam', () => {
+  it('offers the team to a D-League player', () => {
+    expect(canHaveDLeagueTeam({ skater: 'D-League' })).toBe(true);
+    expect(canHaveDLeagueTeam({ goalie: 'D-League' })).toBe(true);
+  });
+
+  it('offers the team to a Bronze player', () => {
+    expect(canHaveDLeagueTeam({ skater: 'Bronze' })).toBe(true);
+    expect(canHaveDLeagueTeam({ goalie: 'Bronze' })).toBe(true);
+  });
+
+  it('withholds it from Silver and Gold players', () => {
+    expect(canHaveDLeagueTeam({ skater: 'Silver' })).toBe(false);
+    expect(canHaveDLeagueTeam({ goalie: 'Gold', skater: 'Silver' })).toBe(false);
+  });
+
+  it('offers it when only one of two positions qualifies', () => {
+    expect(canHaveDLeagueTeam({ goalie: 'Gold', skater: 'Bronze' })).toBe(true);
+  });
+
+  it('withholds it when no positions are set', () => {
+    expect(canHaveDLeagueTeam({})).toBe(false);
+    expect(canHaveDLeagueTeam(undefined)).toBe(false);
+    expect(canHaveDLeagueTeam(null)).toBe(false);
+  });
+});
 
 describe('dLeagueTeamColor', () => {
   it('maps each team to its jersey color', () => {

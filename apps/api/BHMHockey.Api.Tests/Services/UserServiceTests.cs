@@ -171,6 +171,63 @@ public class UserServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateProfileAsync_BronzePlayer_StoresTeam()
+    {
+        // Arrange - Bronze players often skate D-League too, so they get a team
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "Bronze" } });
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: "Bombers");
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().Be("Bombers");
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_BronzeGoalie_StoresTeam()
+    {
+        // Arrange - eligibility comes from any position, not just skater
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "goalie", "Bronze" } });
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: "Lawdog");
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().Be("Lawdog");
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_DroppingDLeagueButStillBronze_KeepsTeam()
+    {
+        // Arrange - a two-league player who now lists only Bronze is still eligible
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "D-League" } });
+        user.DLeagueTeam = "Knuckleheads";
+        await _context.SaveChangesAsync();
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: new Dictionary<string, string> { { "skater", "Bronze" } },
+            VenmoHandle: null, DLeagueTeam: null);
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().Be("Knuckleheads");
+    }
+
+    [Fact]
     public async Task UpdateProfileAsync_LeavingDLeague_ClearsStaleTeam()
     {
         // Arrange - on a team, then moves up to Silver
@@ -192,6 +249,27 @@ public class UserServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateProfileAsync_BronzeMovingUpToGold_ClearsStaleTeam()
+    {
+        // Arrange - a Bronze player with a team is promoted out of eligibility
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "Bronze" } });
+        user.DLeagueTeam = "Bandits";
+        await _context.SaveChangesAsync();
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: new Dictionary<string, string> { { "skater", "Gold" } },
+            VenmoHandle: null, DLeagueTeam: null);
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().BeNull();
+    }
+
+    [Fact]
     public async Task UpdateProfileAsync_NonDLeaguePlayer_CannotKeepATeam()
     {
         // Arrange - a Gold skater sending a team is ignored, not stored
@@ -207,6 +285,42 @@ public class UserServiceTests : IDisposable
 
         // Assert
         result.DLeagueTeam.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_SilverPlayer_CannotKeepATeam()
+    {
+        // Arrange - Silver is not allowed in D-League either
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "skater", "Silver" } });
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: "Bombers");
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_MixedLevels_KeepsTeamWhenOnePositionQualifies()
+    {
+        // Arrange - a Gold goalie who also skates Bronze stays eligible
+        var user = await CreateTestUser(
+            positions: new Dictionary<string, string> { { "goalie", "Gold" }, { "skater", "Bronze" } });
+
+        var request = new UpdateUserProfileRequest(
+            FirstName: null, LastName: null, PhoneNumber: null,
+            Positions: null, VenmoHandle: null, DLeagueTeam: "Killer Bees");
+
+        // Act
+        var result = await _sut.UpdateProfileAsync(user.Id, request);
+
+        // Assert
+        result.DLeagueTeam.Should().Be("Killer Bees");
     }
 
     [Fact]
