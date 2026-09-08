@@ -7,7 +7,7 @@ export interface User {
   phoneNumber?: string;
   positions?: UserPositions;  // Multi-position support
   venmoHandle?: string;
-  dLeagueTeam?: DLeagueTeam | null;  // Only meaningful for D-League players
+  dLeagueTeam?: DLeagueTeam | null;  // Only meaningful for D-League/Bronze players
   role: UserRole;
   pushToken?: string;
   isActive: boolean;
@@ -519,7 +519,7 @@ export interface UpdateUserProfileRequest {
   phoneNumber?: string;
   positions?: UserPositions;  // Multi-position support
   venmoHandle?: string;
-  // Cleared automatically by the server when no position is D-League
+  // Cleared automatically by the server when no position is D-League or Bronze
   dLeagueTeam?: DLeagueTeam | null;
 }
 

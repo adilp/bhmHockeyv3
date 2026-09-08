@@ -18,6 +18,15 @@ public class UserService : IUserService
         "Bombers", "Knuckleheads", "Killer Bees", "Molar Bears", "Lawdog", "Bandits"
     };
 
+    // Skill levels allowed a D-League team. Bronze counts because many Bronze
+    // players skate in both leagues; Silver and Gold are not allowed in
+    // D-League, so a team affiliation is meaningless for them.
+    // Mirrored client-side in DLEAGUE_ELIGIBLE_SKILL_LEVELS (@bhmhockey/shared).
+    private static readonly HashSet<string> DLeagueEligibleSkillLevels = new()
+    {
+        "D-League", "Bronze"
+    };
+
     public UserService(AppDbContext context)
     {
         _context = context;
@@ -91,9 +100,10 @@ public class UserService : IUserService
             }
         }
 
-        // A team only means something for a D-League player - drop it when they
-        // no longer play at that level so stale affiliations don't linger
-        if (!PlaysDLeague(user.Positions))
+        // A team only means something for someone eligible to play D-League -
+        // drop it when they move to a level that isn't (Silver/Gold) so stale
+        // affiliations don't linger
+        if (!IsDLeagueTeamEligible(user.Positions))
         {
             user.DLeagueTeam = null;
         }
@@ -120,13 +130,16 @@ public class UserService : IUserService
     }
 
     /// <summary>
-    /// Validates position dictionary: keys must be "goalie" or "skater", values must be valid skill levels.
+    /// True when any position is at a level allowed a D-League team (D-League or Bronze).
     /// </summary>
-    private static bool PlaysDLeague(Dictionary<string, string>? positions)
+    private static bool IsDLeagueTeamEligible(Dictionary<string, string>? positions)
     {
-        return positions != null && positions.Values.Any(skill => skill == "D-League");
+        return positions != null && positions.Values.Any(DLeagueEligibleSkillLevels.Contains);
     }
 
+    /// <summary>
+    /// Validates position dictionary: keys must be "goalie" or "skater", values must be valid skill levels.
+    /// </summary>
     private void ValidatePositions(Dictionary<string, string> positions)
     {
         if (positions.Count == 0)
