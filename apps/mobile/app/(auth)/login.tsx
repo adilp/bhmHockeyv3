@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { authService } from '@bhmhockey/api-client';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing, radius } from '../../theme';
+import { EMAIL_PASSWORD_RESET_ENABLED } from '../../config/features';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -29,6 +30,11 @@ export default function LoginScreen() {
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
 
   const handleForgotPassword = () => {
+    // Email reset flow once SES is live; the notify-an-admin popup until then
+    if (EMAIL_PASSWORD_RESET_ENABLED) {
+      router.push({ pathname: '/(auth)/reset-password', params: email ? { email } : {} });
+      return;
+    }
     setForgotPasswordEmail(email); // Pre-fill with email if they've typed one
     setForgotPasswordVisible(true);
   };

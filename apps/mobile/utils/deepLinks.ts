@@ -6,6 +6,7 @@ import { router } from 'expo-router';
  * - bhmhockey://tournament/{tournamentId}/team/{teamId}
  * - bhmhockey://tournament/{tournamentId}
  * - bhmhockey://organizations/{orgId}
+ * - bhmhockey://reset-password?token={token} (routed by Expo Router, see below)
  */
 
 interface DeepLinkData {
@@ -49,6 +50,14 @@ export function handleDeepLink(url: string) {
 
   const { path } = data;
   console.log('🔗 Deep link path:', path);
+
+  // reset-password?token=... is routed by Expo Router itself, because the link
+  // path matches app/(auth)/reset-password.tsx. Pushing it here as well would
+  // stack a second copy of the screen.
+  if (/^reset-password\/?$/.test(path)) {
+    console.log('🔗 Password reset link - routed by Expo Router');
+    return;
+  }
 
   // Match pattern: tournament/{tournamentId}/team/{teamId}
   const tournamentTeamMatch = path.match(/^tournament\/([^/]+)\/team\/([^/]+)\/?$/);
