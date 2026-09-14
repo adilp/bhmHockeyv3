@@ -5929,4 +5929,27 @@ public class EventServiceTests : IDisposable
     }
 
     #endregion
+
+    #region Organizer user search
+
+    [Fact]
+    public async Task SearchUsersForEventAsync_ExcludesDeletedAccounts()
+    {
+        // A player with an old deleted account and a current one shows up once -
+        // the deleted account can't log in, so adding it to a roster is a mistake
+        var organizer = await CreateTestUser("organizer@example.com");
+        var evt = await CreateTestEvent(organizer.Id);
+        var current = await CreateTestUser("current@example.com");
+        var deleted = await CreateTestUser("old@example.com");
+        current.FirstName = deleted.FirstName = "Britt";
+        current.LastName = deleted.LastName = "Guimond";
+        deleted.IsActive = false;
+        await _context.SaveChangesAsync();
+
+        var results = await _sut.SearchUsersForEventAsync(evt.Id, organizer.Id, "Guimond");
+
+        results.Should().ContainSingle().Which.Id.Should().Be(current.Id);
+    }
+
+    #endregion
 }
