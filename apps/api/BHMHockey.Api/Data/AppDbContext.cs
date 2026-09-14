@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<OrganizationWaiver> OrganizationWaivers { get; set; }
     public DbSet<OrganizationJoinRequest> OrganizationJoinRequests { get; set; }
     public DbSet<WaiverAcceptance> WaiverAcceptances { get; set; }
+    public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
     public DbSet<Event> Events { get; set; }
     public DbSet<EventRegistration> EventRegistrations { get; set; }
     public DbSet<Notification> Notifications { get; set; }
@@ -164,6 +165,24 @@ public class AppDbContext : DbContext
         });
 
         // OrganizationJoinRequest configuration - one reusable row per (org, user)
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TokenHash).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.CodeHash).IsRequired().HasMaxLength(64);
+
+            // Link tokens are looked up by hash
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+
+            // Rate limiting and "the latest outstanding code" both read a user's recent rows
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt });
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<OrganizationJoinRequest>(entity =>
         {
             entity.HasKey(e => e.Id);

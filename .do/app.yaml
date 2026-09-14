@@ -84,6 +84,34 @@ services:
       - key: Jwt__ExpiryMinutes
         value: "10080"  # 7 days
 
+      # SMTP (AWS SES) for password reset emails
+      # Non-secret values are safe to commit; the credentials are not.
+      - key: Smtp__Host
+        scope: RUN_TIME
+        value: email-smtp.us-east-1.amazonaws.com
+      - key: Smtp__Port
+        scope: RUN_TIME
+        value: "587"  # STARTTLS
+      - key: Smtp__FromAddress
+        scope: RUN_TIME
+        value: admin@bhmhockey.com
+      - key: Smtp__FromName
+        scope: RUN_TIME
+        value: BHM Hockey
+      - key: Smtp__Username
+        scope: RUN_TIME
+        type: SECRET
+        value: SET_IN_DO_CONSOLE_SES_SMTP_USERNAME
+      - key: Smtp__Password
+        scope: RUN_TIME
+        type: SECRET
+        value: SET_IN_DO_CONSOLE_SES_SMTP_PASSWORD
+
+      # Password reset links point at the Cloudflare redirect page
+      - key: PasswordReset__LinkBaseUrl
+        scope: RUN_TIME
+        value: https://bhmhockey.com/reset
+
       # CORS Configuration
       - key: Cors__AllowedOrigins
         scope: RUN_TIME

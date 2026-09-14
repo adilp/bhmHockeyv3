@@ -70,3 +70,22 @@ public record AdminStatsResponse(
     int TotalUsers,
     int ActiveUsers
 );
+
+/// <summary>
+/// Start a password reset. The response never says whether the email has an
+/// account, so this can't be used to check who is registered.
+/// </summary>
+public record PasswordResetRequest(string Email);
+
+/// <summary>
+/// Finish a password reset with EITHER the token from the emailed link, OR the
+/// email address plus the 6-digit code from the same email.
+/// </summary>
+public record ConfirmPasswordResetRequest(
+    string NewPassword,
+    string? Token = null,
+    string? Email = null,
+    string? Code = null
+);
+
+public record PasswordResetMessageResponse(string Message);
