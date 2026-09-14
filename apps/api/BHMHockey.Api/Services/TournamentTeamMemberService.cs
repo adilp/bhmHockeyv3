@@ -423,10 +423,12 @@ public class TournamentTeamMemberService : ITournamentTeamMemberService
             .Select(m => m.UserId)
             .ToListAsync();
 
-        // 3. Search users by email or name (case-insensitive, partial match)
+        // 3. Search users by email or name (case-insensitive, partial match).
+        // Deleted accounts can't log in, so they must not be addable to a team.
         var queryLower = query.ToLower();
         var users = await _context.Users
             .Where(u =>
+                u.IsActive &&
                 (u.Email.ToLower().Contains(queryLower) ||
                  u.FirstName.ToLower().Contains(queryLower) ||
                  u.LastName.ToLower().Contains(queryLower)) &&

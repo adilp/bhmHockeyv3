@@ -666,4 +666,30 @@ public class TournamentTeamMemberServiceTests : IDisposable
     }
 
     #endregion
+
+    #region User search
+
+    [Fact]
+    public async Task SearchUsersAsync_ExcludesDeletedAccounts()
+    {
+        // A deleted account can't log in to accept an invitation, so it must not
+        // be offered when a captain or admin adds players to a team
+        var admin = await CreateTestUser("admin@example.com");
+        var tournament = await CreateTestTournament(admin.Id);
+        var team = await CreateTestTeam(tournament.Id);
+        var current = await CreateTestUser("current@example.com");
+        var deleted = await CreateTestUser("old@example.com");
+        current.FirstName = deleted.FirstName = "Britt";
+        current.LastName = deleted.LastName = "Guimond";
+        deleted.IsActive = false;
+        await _context.SaveChangesAsync();
+        _mockTournamentTeamService.Setup(ts => ts.CanUserManageTeamAsync(tournament.Id, team.Id, admin.Id))
+            .ReturnsAsync(true);
+
+        var results = await _sut.SearchUsersAsync(tournament.Id, team.Id, "Guimond", admin.Id);
+
+        results.Should().ContainSingle().Which.Id.Should().Be(current.Id);
+    }
+
+    #endregion
 }

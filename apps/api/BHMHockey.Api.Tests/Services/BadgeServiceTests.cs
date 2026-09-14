@@ -486,6 +486,26 @@ public class BadgeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AwardBadgeAsync_DeletedAccount_IsNotAwardable()
+    {
+        // Played in the org, so otherwise eligible - but a deleted account can't
+        // log in to see a badge, and shouldn't collect one
+        var admin = await CreateTestUser("admin@example.com");
+        var deleted = await CreateTestUser("old@example.com");
+        deleted.IsActive = false;
+        await _context.SaveChangesAsync();
+        var org = await CreateOrgWithAdmin(admin.Id);
+        await PlayInEvent(org.Id, deleted.Id);
+        await CreateBadgeType("GOALIE", "Goalie", 1);
+
+        var result = await _sut.AwardBadgeAsync(
+            org.Id, new AwardBadgeRequest("GOALIE", new List<Guid> { deleted.Id }), admin.Id);
+
+        result.Results.Single().Outcome.Should().Be("unknown_user");
+        _context.UserBadges.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task AwardBadgeAsync_UnknownBadgeCode_Throws()
     {
         var admin = await CreateTestUser("admin@example.com");

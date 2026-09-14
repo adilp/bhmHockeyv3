@@ -273,9 +273,9 @@ public class BadgeService : IBadgeService
         }
 
         // Ghosts are placeholders for guests with no account - they can hold a
-        // roster spot but not a badge
+        // roster spot but not a badge. Deleted accounts can't hold one either.
         var realUserIds = await _context.Users
-            .Where(u => userIds.Contains(u.Id) && !u.IsGhostPlayer)
+            .Where(u => userIds.Contains(u.Id) && !u.IsGhostPlayer && u.IsActive)
             .Select(u => u.Id)
             .ToListAsync();
 

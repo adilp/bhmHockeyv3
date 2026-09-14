@@ -2152,11 +2152,13 @@ public class EventService : IEventService
             .ToListAsync();
 
         // Search users by first name OR last name (case-insensitive, contains)
-        // Exclude ghost players - they are placeholders for non-app users
+        // Exclude ghost players - they are placeholders for non-app users - and
+        // deleted accounts, which can't log in and must not land on a roster
         var queryLower = query.ToLower();
         var users = await _context.Users
             .Where(u =>
                 !u.IsGhostPlayer &&
+                u.IsActive &&
                 (u.FirstName.ToLower().Contains(queryLower) ||
                  u.LastName.ToLower().Contains(queryLower)) &&
                 !registeredUserIds.Contains(u.Id))
