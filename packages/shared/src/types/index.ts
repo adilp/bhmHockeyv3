@@ -1260,6 +1260,25 @@ export interface ForgotPasswordResponse {
   message: string;
 }
 
+// Self-service password reset by email (POST /auth/password-reset/request).
+// The response is identical whether or not the email has an account.
+export interface PasswordResetRequest {
+  email: string;
+}
+
+// Finish a reset with EITHER the token from the emailed link, OR the email
+// plus the 6-digit code from the same email (POST /auth/password-reset/confirm)
+export interface ConfirmPasswordResetRequest {
+  newPassword: string;
+  token?: string;
+  email?: string;
+  code?: string;
+}
+
+export interface PasswordResetMessageResponse {
+  message: string;
+}
+
 // ============================================
 // Tournament Audit Log Types (TRN-029)
 // ============================================

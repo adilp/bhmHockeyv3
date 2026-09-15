@@ -6,6 +6,9 @@ import type {
   ChangePasswordRequest,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  PasswordResetRequest,
+  ConfirmPasswordResetRequest,
+  PasswordResetMessageResponse,
 } from '@bhmhockey/shared';
 import { apiClient } from '../client';
 import { authStorage } from '../storage/auth';
@@ -84,6 +87,30 @@ export const authService = {
   async forgotPassword(data: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
     const response = await apiClient.instance.post<ForgotPasswordResponse>(
       '/auth/forgot-password',
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Email a reset link and 6-digit code. Resolves with the same message whether
+   * or not the address has an account.
+   */
+  async requestPasswordReset(data: PasswordResetRequest): Promise<PasswordResetMessageResponse> {
+    const response = await apiClient.instance.post<PasswordResetMessageResponse>(
+      '/auth/password-reset/request',
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Set a new password with the link token, or the email plus code.
+   * Rejects with the server's message when the token or code is invalid or expired.
+   */
+  async confirmPasswordReset(data: ConfirmPasswordResetRequest): Promise<PasswordResetMessageResponse> {
+    const response = await apiClient.instance.post<PasswordResetMessageResponse>(
+      '/auth/password-reset/confirm',
       data
     );
     return response.data;
