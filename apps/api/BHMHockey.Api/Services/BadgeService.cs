@@ -162,30 +162,6 @@ public class BadgeService : IBadgeService
     // Administration - organization admins awarding and managing badges
     // ----------------------------------------------------------------- //
 
-    /// <summary>
-    /// Users an organization's admin may award: its members, plus anyone who
-    /// has played in one of its events. Registration is the broader of the two
-    /// - people play without ever subscribing - and it is the same evidence a
-    /// badge is usually awarded for.
-    /// </summary>
-    private async Task<HashSet<Guid>> GetAwardableUserIdsAsync(Guid organizationId, IEnumerable<Guid> candidates)
-    {
-        var wanted = candidates.ToList();
-
-        var members = await _context.OrganizationSubscriptions
-            .Where(s => s.OrganizationId == organizationId && wanted.Contains(s.UserId))
-            .Select(s => s.UserId)
-            .ToListAsync();
-
-        var players = await _context.EventRegistrations
-            .Where(r => r.Event.OrganizationId == organizationId && wanted.Contains(r.UserId))
-            .Select(r => r.UserId)
-            .Distinct()
-            .ToListAsync();
-
-        return members.Concat(players).ToHashSet();
-    }
-
     private async Task RequireAdminAsync(Guid organizationId, Guid requesterId, string action)
     {
         if (!await _adminService.IsUserAdminAsync(organizationId, requesterId))
@@ -272,14 +248,16 @@ public class BadgeService : IBadgeService
             throw new InvalidOperationException($"At most {MaxAwardBatch} users can be awarded in one call");
         }
 
-        // Ghosts are placeholders for guests with no account - they can hold a
-        // roster spot but not a badge. Deleted accounts can't hold one either.
-        var realUserIds = await _context.Users
+        // Any real account can be awarded. Badge types are global rather than
+        // owned by an organization, and a game like Hockey Fights Cancer draws
+        // players from across the city who hold an account but belong to no org
+        // here - the earlier members-and-players rule left them permanently
+        // unawardable. Ghosts are placeholders for guests with no account: they
+        // can hold a roster spot but not a badge, and neither can a deleted one.
+        var awardable = (await _context.Users
             .Where(u => userIds.Contains(u.Id) && !u.IsGhostPlayer && u.IsActive)
             .Select(u => u.Id)
-            .ToListAsync();
-
-        var awardable = await GetAwardableUserIdsAsync(organizationId, realUserIds);
+            .ToListAsync()).ToHashSet();
 
         var alreadyHeld = await _context.UserBadges
             .Where(ub => ub.BadgeTypeId == badgeType.Id && userIds.Contains(ub.UserId))
@@ -295,13 +273,10 @@ public class BadgeService : IBadgeService
             {
                 results.Add(new AwardBadgeOutcomeDto(userId, "already_held", existingId));
             }
-            else if (!realUserIds.Contains(userId))
-            {
-                results.Add(new AwardBadgeOutcomeDto(userId, "unknown_user", null));
-            }
             else if (!awardable.Contains(userId))
             {
-                results.Add(new AwardBadgeOutcomeDto(userId, "not_eligible", null));
+                // No such account, a guest placeholder, or a deleted account
+                results.Add(new AwardBadgeOutcomeDto(userId, "unknown_user", null));
             }
             else
             {
@@ -352,16 +327,11 @@ public class BadgeService : IBadgeService
             return false;
         }
 
-        // Same reach as awarding: an admin can only undo within their own org's
-        // people, not reach into a badge somebody else's organization gave out
-        var awardable = await GetAwardableUserIdsAsync(organizationId, new[] { badge.UserId });
-        if (!awardable.Contains(badge.UserId))
-        {
-            _logger.LogWarning(
-                "Revoke denied for organization {OrganizationId}: badge {BadgeId} belongs to a user outside it",
-                organizationId, userBadgeId);
-            throw new UnauthorizedAccessException("That badge belongs to someone outside this organization");
-        }
+        // Symmetric with awarding: whatever an admin can give, they can take
+        // back. Holding revoke to a narrower set than award would strand badges
+        // on accounts nobody could correct - exactly the mistakes revoke exists
+        // to fix. A deleted account's badge is revocable too, so one awarded
+        // before the account closed can still be cleaned up.
 
         _context.UserBadges.Remove(badge);
         await _context.SaveChangesAsync();

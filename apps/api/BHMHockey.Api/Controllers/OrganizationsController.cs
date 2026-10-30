@@ -664,9 +664,10 @@ public class OrganizationsController : ControllerBase
     }
 
     /// <summary>
-    /// Award a badge to several users at once (admin only). Idempotent, and
-    /// partial by design - the response says what happened to each id rather
-    /// than failing the batch over one of them.
+    /// Award a badge to several users at once (admin only). Any real account can
+    /// be awarded - badge types are global, not owned by an organization.
+    /// Idempotent, and partial by design: the response says what happened to
+    /// each id rather than failing the batch over one of them.
     /// </summary>
     [HttpPost("{id:guid}/badges/award")]
     [Authorize]

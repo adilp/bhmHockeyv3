@@ -432,20 +432,23 @@ public class BadgeServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task AwardBadgeAsync_UserWithNoTieToTheOrg_NotEligible()
+    public async Task AwardBadgeAsync_UserWithNoTieToTheOrg_IsStillAwarded()
     {
+        // Badge types are global, and a city-wide charity game draws players who
+        // hold an account but belong to no organization here. Refusing them left
+        // the badge they earned permanently unawardable.
         var admin = await CreateTestUser("admin@example.com");
         var stranger = await CreateTestUser("stranger@example.com");
         var org = await CreateOrgWithAdmin(admin.Id);
-        await CreateBadgeType("GOALIE", "Goalie", 1);
+        await CreateBadgeType("FIGHTS_CANCER", "Hockey Fights Cancer", 1);
 
         var result = await _sut.AwardBadgeAsync(
-            org.Id, new AwardBadgeRequest("GOALIE", new List<Guid> { stranger.Id }), admin.Id);
+            org.Id, new AwardBadgeRequest("FIGHTS_CANCER", new List<Guid> { stranger.Id }), admin.Id);
 
-        result.Awarded.Should().Be(0);
-        result.Skipped.Should().Be(1);
-        result.Results.Single().Outcome.Should().Be("not_eligible");
-        _context.UserBadges.Should().BeEmpty();
+        result.Awarded.Should().Be(1);
+        result.Skipped.Should().Be(0);
+        result.Results.Single().Outcome.Should().Be("awarded");
+        (await _context.UserBadges.SingleAsync()).UserId.Should().Be(stranger.Id);
     }
 
     [Fact]
@@ -520,16 +523,19 @@ public class BadgeServiceTests : IDisposable
     [Fact]
     public async Task AwardBadgeAsync_PartialBatch_AwardsTheGoodOnes()
     {
+        // One real account, one guest placeholder, one id that matches nobody
         var admin = await CreateTestUser("admin@example.com");
         var member = await CreateTestUser("member@example.com");
-        var stranger = await CreateTestUser("stranger@example.com");
+        var ghost = await CreateTestUser("ghost@placeholder.bhmhockey");
+        ghost.IsGhostPlayer = true;
+        await _context.SaveChangesAsync();
         var org = await CreateOrgWithAdmin(admin.Id);
         await Subscribe(org.Id, member.Id);
         await CreateBadgeType("GOALIE", "Goalie", 1);
 
         var result = await _sut.AwardBadgeAsync(
             org.Id,
-            new AwardBadgeRequest("GOALIE", new List<Guid> { member.Id, stranger.Id, Guid.NewGuid() }),
+            new AwardBadgeRequest("GOALIE", new List<Guid> { member.Id, ghost.Id, Guid.NewGuid() }),
             admin.Id);
 
         result.Awarded.Should().Be(1);
@@ -554,16 +560,33 @@ public class BadgeServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task RevokeBadgeAsync_HolderOutsideTheOrg_Throws()
+    public async Task RevokeBadgeAsync_HolderOutsideTheOrg_IsRevocable()
     {
-        // An admin can undo their own org's mistakes, not reach into another's
+        // Symmetric with awarding - a badge an admin could give, they can take
+        // back. A narrower revoke would strand badges nobody could correct.
         var admin = await CreateTestUser("admin@example.com");
         var stranger = await CreateTestUser("stranger@example.com");
         var org = await CreateOrgWithAdmin(admin.Id);
         var type = await CreateBadgeType("GOALIE", "Goalie", 1);
         var badge = await CreateUserBadge(stranger.Id, type.Id);
 
-        var act = async () => await _sut.RevokeBadgeAsync(org.Id, badge.Id, admin.Id);
+        var removed = await _sut.RevokeBadgeAsync(org.Id, badge.Id, admin.Id);
+
+        removed.Should().BeTrue();
+        _context.UserBadges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RevokeBadgeAsync_StillRefusedForNonAdmins()
+    {
+        // Widening WHO can be awarded must not widen who may award or revoke
+        var admin = await CreateTestUser("admin@example.com");
+        var outsider = await CreateTestUser("outsider@example.com");
+        var org = await CreateOrgWithAdmin(admin.Id);
+        var type = await CreateBadgeType("GOALIE", "Goalie", 1);
+        var badge = await CreateUserBadge(outsider.Id, type.Id);
+
+        var act = async () => await _sut.RevokeBadgeAsync(org.Id, badge.Id, outsider.Id);
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
         (await _context.UserBadges.CountAsync()).Should().Be(1);

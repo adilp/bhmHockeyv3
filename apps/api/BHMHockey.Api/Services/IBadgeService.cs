@@ -54,10 +54,10 @@ public interface IBadgeService
     /// <summary>
     /// Award one badge type to several users (organization admin only).
     ///
-    /// Targets must be tied to the organization - a member, or someone who has
-    /// played in one of its events - which keeps an admin's reach to the people
-    /// they actually run games for. Partial by design: an ineligible id is
-    /// reported, not fatal.
+    /// Any real account can be awarded: badge types are global, and city-wide
+    /// games draw players who hold an account but belong to no organization
+    /// here. Guest placeholders and deleted accounts cannot hold a badge.
+    /// Partial by design: an unknown id is reported, not fatal.
     /// </summary>
     /// <exception cref="UnauthorizedAccessException">Requester is not an admin of the organization</exception>
     /// <exception cref="InvalidOperationException">Unknown badge code, or no users supplied</exception>
@@ -65,7 +65,7 @@ public interface IBadgeService
 
     /// <summary>
     /// Remove an awarded badge (organization admin only), for fixing a mistake.
-    /// The holder must be tied to the organization, on the same rule as awarding.
+    /// Symmetric with awarding - whatever an admin can give, they can take back.
     /// </summary>
     /// <exception cref="UnauthorizedAccessException">Requester is not an admin, or the holder isn't tied to the org</exception>
     /// <returns>False when the badge doesn't exist</returns>
