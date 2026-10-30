@@ -1,8 +1,13 @@
 # Release Checklist
 
-For the next production release. Written 2026-08-27; updated 2026-08-28 when
-`expo-calendar` was replaced with a Google Calendar web link, which removed the
-only native module that was blocking an over-the-air release.
+Written 2026-08-27 for the release that followed the `1.0.5` store build;
+updated 2026-08-28 when `expo-calendar` was replaced with a Google Calendar web
+link, which removed the only native module blocking an over-the-air release.
+
+**That release has shipped as an OTA.** What follows is the record of it and
+the pattern to reuse next time - re-read the OTA caveat below before the next
+one, because whether an OTA is safe at all depends on which native modules the
+current store build already contains.
 
 ## This release can be an OTA
 
@@ -80,13 +85,17 @@ npx eas-cli submit --platform ios
 
 ## After the update has propagated
 
-- [ ] Run both badge scripts against production:
-      `docs/sql/add_badge_types_2026_08.sql` (five types) and
-      `docs/sql/add_badge_types_holiday_games.sql` (Christmas, Halloween).
-      Running them earlier would award badges whose icons aren't in the
-      bundle yet, so holders would see a blank space. The icons ride the OTA
-      as assets, so wait until devices have pulled the update (check the `js`
-      line below) before running the SQL.
+- [x] Badge types created in production - all seven of them. This was done
+      with two throwaway SQL scripts, since nothing in the API could write a
+      `BadgeTypes` row at the time; both have been deleted. New types now go
+      in through `POST /organizations/{id}/badge-types`, so there is no SQL
+      step to repeat.
+
+      The ordering still matters for any *new* badge, however it is created:
+      a badge whose icon isn't in a bundle devices have actually pulled shows
+      up as a blank space in its holder's trophy case. Register the icon in
+      `components/badges/BadgeIcon.tsx`, ship the bundle, confirm it landed
+      (the `js` line below), and only then create the type and award it.
 
 ## Verifying rollout
 

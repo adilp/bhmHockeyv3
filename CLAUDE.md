@@ -158,34 +158,36 @@ const iconMap: Record<string, ReturnType<typeof require>> = {
 };
 ```
 
-#### Step 4: Insert into Database
-```sql
--- Create the badge type
-INSERT INTO "BadgeTypes" (
-  "Id", "Code", "Name", "Description", "IconName", "Category", "SortPriority", "CreatedAt"
-) VALUES (
-  gen_random_uuid(),
-  'MY_BADGE',
-  'My Badge Name',
-  'Description shown in trophy case',
-  'my_badge',  -- Must match iconMap key
-  'special',
-  10,
-  NOW()
-);
+#### Step 4: Create the Type and Award It (API)
 
--- Award to a user (CelebratedAt = NULL triggers celebration modal)
-INSERT INTO "UserBadges" (
-  "Id", "UserId", "BadgeTypeId", "Context", "EarnedAt", "CelebratedAt"
-) VALUES (
-  gen_random_uuid(),
-  'USER_ID_HERE',
-  (SELECT "Id" FROM "BadgeTypes" WHERE "Code" = 'MY_BADGE'),
-  '{"description": "Context shown in celebration"}',
-  NOW(),
-  NULL
-);
+Both are org-admin endpoints - no SQL, in any environment. `{orgId}` is any
+organization the caller administers; badge types are global, so which one you
+pass only establishes that you're an admin.
+
+```bash
+# Create the type. iconName MUST match an iconMap key (Step 3), and the bundle
+# carrying the artwork must already be on devices - otherwise every holder
+# sees a blank space where the badge should be.
+curl -X POST "$API/organizations/$ORG_ID/badge-types" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"code":"MY_BADGE","name":"My Badge Name",
+       "description":"Shown in the trophy case","iconName":"my_badge",
+       "category":"special","sortPriority":10}'
+
+# Award it. Any active, non-ghost account is eligible, up to 200 per call.
+# occasion is the line shown under the badge in the celebration and detail views.
+curl -X POST "$API/organizations/$ORG_ID/badges/award" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"badgeCode":"MY_BADGE","userIds":["<guid>","<guid>"],
+       "occasion":"AMP Ironman Game - July 25, 2026"}'
 ```
+
+Awarding is idempotent and partial by design: the response reports each id as
+`awarded`, `already_held` or `unknown_user` (guests and deleted accounts read
+as unknown) instead of failing the whole batch over one bad id. New awards land
+with `CelebratedAt = NULL`, which is what triggers the celebration modal.
+
+Mistakes come off with `DELETE /organizations/{orgId}/badges/{userBadgeId}`.
 
 #### Step 5: Clear Cache & Test
 ```bash
