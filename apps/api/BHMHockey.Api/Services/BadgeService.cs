@@ -313,7 +313,7 @@ public class BadgeService : IBadgeService
             code,
             toAdd.Count,
             results.Count(r => r.Outcome == "already_held"),
-            results.Count(r => r.Outcome is "not_eligible" or "unknown_user"),
+            results.Count(r => r.Outcome == "unknown_user"),
             results);
     }
 

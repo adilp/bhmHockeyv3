@@ -74,7 +74,7 @@ public record AwardBadgeRequest(
 /// </summary>
 public record AwardBadgeOutcomeDto(
     Guid UserId,
-    string Outcome,      // "awarded" | "already_held" | "not_eligible" | "unknown_user"
+    string Outcome,      // "awarded" | "already_held" | "unknown_user"
     Guid? UserBadgeId
 );
 
