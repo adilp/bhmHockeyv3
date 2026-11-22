@@ -10,6 +10,11 @@ public interface IOrganizationAdminService
     Task<bool> IsUserAdminAsync(Guid organizationId, Guid userId);
 
     /// <summary>
+    /// Check if a user administers at least one organization.
+    /// </summary>
+    Task<bool> IsAdminOfAnyOrganizationAsync(Guid userId);
+
+    /// <summary>
     /// Get all admins for an organization. Only admins can view the admin list.
     /// </summary>
     Task<List<OrganizationAdminDto>> GetAdminsAsync(Guid organizationId, Guid requesterId);

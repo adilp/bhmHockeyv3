@@ -20,6 +20,11 @@ public class OrganizationAdminService : IOrganizationAdminService
             .AnyAsync(a => a.OrganizationId == organizationId && a.UserId == userId);
     }
 
+    public async Task<bool> IsAdminOfAnyOrganizationAsync(Guid userId)
+    {
+        return await _context.OrganizationAdmins.AnyAsync(a => a.UserId == userId);
+    }
+
     public async Task<List<OrganizationAdminDto>> GetAdminsAsync(Guid organizationId, Guid requesterId)
     {
         // Only admins can view the admin list
