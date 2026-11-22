@@ -7,9 +7,10 @@ using System.Security.Claims;
 namespace BHMHockey.Api.Controllers;
 
 /// <summary>
-/// Admin-only check that the server can actually send email. Exists because a
-/// password reset answers the same way whether or not its email went out, so a
-/// broken SMTP setup is invisible from the outside.
+/// Check that the server can actually send email, for app admins and anyone who
+/// administers an organization. Exists because a password reset answers the
+/// same way whether or not its email went out, so a broken SMTP setup is
+/// invisible from the outside.
 /// </summary>
 [ApiController]
 [Route("api/auth/admin")]
@@ -18,15 +19,18 @@ public class EmailDiagnosticsController : ControllerBase
 {
     private readonly ISmtpDiagnostics _smtpDiagnostics;
     private readonly IUserService _userService;
+    private readonly IOrganizationAdminService _organizationAdminService;
     private readonly ILogger<EmailDiagnosticsController> _logger;
 
     public EmailDiagnosticsController(
         ISmtpDiagnostics smtpDiagnostics,
         IUserService userService,
+        IOrganizationAdminService organizationAdminService,
         ILogger<EmailDiagnosticsController> logger)
     {
         _smtpDiagnostics = smtpDiagnostics;
         _userService = userService;
+        _organizationAdminService = organizationAdminService;
         _logger = logger;
     }
 
@@ -45,20 +49,23 @@ public class EmailDiagnosticsController : ControllerBase
 
     /// <summary>
     /// Send a test email to the caller's own address and report where delivery
-    /// stopped. Always 200 once the attempt is made - a failed send is the
-    /// result, described in the body. The recipient is never taken from the
-    /// request, so this can't be used to mail anyone else.
+    /// stopped. Open to app admins and organization admins: the recipient is
+    /// never taken from the request, so the most it can do is mail the caller,
+    /// and no part of the SMTP password is ever returned. Always 200 once the
+    /// attempt is made - a failed send is the result, described in the body.
     /// </summary>
     [HttpPost("test-email")]
     public async Task<ActionResult<SmtpTestResponse>> SendTestEmail(CancellationToken cancellationToken)
     {
-        if (User.FindFirst(ClaimTypes.Role)?.Value != "Admin")
+        var userId = GetCurrentUserId();
+
+        var isAppAdmin = User.FindFirst(ClaimTypes.Role)?.Value == "Admin";
+        if (!isAppAdmin && !await _organizationAdminService.IsAdminOfAnyOrganizationAsync(userId))
         {
-            _logger.LogWarning("Test email denied: requester is not an admin");
+            _logger.LogWarning("Test email denied for user {UserId}: not an app or organization admin", userId);
             return Forbid();
         }
 
-        var userId = GetCurrentUserId();
         var user = await _userService.GetUserByIdAsync(userId);
         if (user == null || string.IsNullOrWhiteSpace(user.Email))
         {

@@ -12,13 +12,14 @@ using Xunit;
 namespace BHMHockey.Api.Tests.Controllers;
 
 /// <summary>
-/// Tests for EmailDiagnosticsController - admin-only, and only ever mails the
-/// caller's own address.
+/// Tests for EmailDiagnosticsController - open to app admins and organization
+/// admins, and only ever mails the caller's own address.
 /// </summary>
 public class EmailDiagnosticsControllerTests
 {
     private readonly Mock<ISmtpDiagnostics> _mockDiagnostics = new();
     private readonly Mock<IUserService> _mockUserService = new();
+    private readonly Mock<IOrganizationAdminService> _mockAdminService = new();
     private readonly EmailDiagnosticsController _sut;
     private readonly Guid _userId = Guid.NewGuid();
 
@@ -27,7 +28,14 @@ public class EmailDiagnosticsControllerTests
         _sut = new EmailDiagnosticsController(
             _mockDiagnostics.Object,
             _mockUserService.Object,
+            _mockAdminService.Object,
             Mock.Of<ILogger<EmailDiagnosticsController>>());
+    }
+
+    private void SetupAccount(string email)
+    {
+        _mockUserService.Setup(s => s.GetUserByIdAsync(_userId)).ReturnsAsync(UserWithEmail(_userId, email));
+        _mockDiagnostics.Setup(d => d.SendTestAsync(email, It.IsAny<CancellationToken>())).ReturnsAsync(Result(email));
     }
 
     private void SetupCaller(string role)
@@ -56,9 +64,10 @@ public class EmailDiagnosticsControllerTests
     [Theory]
     [InlineData("Player")]
     [InlineData("Organizer")]
-    public async Task SendTestEmail_NonAdmin_IsForbiddenAndSendsNothing(string role)
+    public async Task SendTestEmail_NotAnyKindOfAdmin_IsForbiddenAndSendsNothing(string role)
     {
         SetupCaller(role);
+        _mockAdminService.Setup(a => a.IsAdminOfAnyOrganizationAsync(_userId)).ReturnsAsync(false);
 
         var result = await _sut.SendTestEmail(CancellationToken.None);
 
@@ -67,19 +76,30 @@ public class EmailDiagnosticsControllerTests
     }
 
     [Fact]
-    public async Task SendTestEmail_Admin_SendsToTheirOwnAddressAndReturnsTheResult()
+    public async Task SendTestEmail_OrganizerWhoAdministersAnOrg_IsAllowed()
+    {
+        SetupCaller("Organizer");
+        _mockAdminService.Setup(a => a.IsAdminOfAnyOrganizationAsync(_userId)).ReturnsAsync(true);
+        SetupAccount("organizer@example.com");
+
+        var result = await _sut.SendTestEmail(CancellationToken.None);
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _mockDiagnostics.Verify(d => d.SendTestAsync("organizer@example.com", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendTestEmail_AppAdmin_SendsToTheirOwnAddressWithoutAnOrgCheck()
     {
         SetupCaller("Admin");
-        _mockUserService.Setup(s => s.GetUserByIdAsync(_userId))
-            .ReturnsAsync(UserWithEmail(_userId, "me@example.com"));
-        _mockDiagnostics.Setup(d => d.SendTestAsync("me@example.com", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result("me@example.com"));
+        SetupAccount("me@example.com");
 
         var result = await _sut.SendTestEmail(CancellationToken.None);
 
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().BeOfType<SmtpTestResponse>().Which.To.Should().Be("me@example.com");
         _mockDiagnostics.Verify(d => d.SendTestAsync("me@example.com", It.IsAny<CancellationToken>()), Times.Once);
+        _mockAdminService.Verify(a => a.IsAdminOfAnyOrganizationAsync(It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]

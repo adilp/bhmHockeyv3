@@ -139,6 +139,35 @@ public class OrganizationAdminServiceTests : IDisposable
 
     #endregion
 
+    #region IsAdminOfAnyOrganizationAsync Tests
+
+    [Fact]
+    public async Task IsAdminOfAnyOrganizationAsync_AdminOfOneOrg_ReturnsTrue()
+    {
+        var user = await CreateTestUser();
+        var org = await CreateTestOrganization(user.Id);
+        await AddAdmin(org.Id, user.Id);
+
+        var result = await _sut.IsAdminOfAnyOrganizationAsync(user.Id);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IsAdminOfAnyOrganizationAsync_AdminOfNothing_ReturnsFalse()
+    {
+        var owner = await CreateTestUser("owner@example.com");
+        var other = await CreateTestUser("other@example.com");
+        var org = await CreateTestOrganization(owner.Id);
+        await AddAdmin(org.Id, owner.Id);
+
+        var result = await _sut.IsAdminOfAnyOrganizationAsync(other.Id);
+
+        result.Should().BeFalse();
+    }
+
+    #endregion
+
     #region GetAdminsAsync Tests
 
     [Fact]
