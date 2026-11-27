@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,10 @@ import {
   WaiverAcceptanceModal,
 } from '../../../components';
 import type { TabKey } from '../../../components';
+import { DEFAULT_TABS } from '../../../components/event-detail/SegmentedControl';
+import { EventResultsTab } from '../../../components/game-results/EventResultsTab';
+import { useGameResultStore } from '../../../stores/gameResultStore';
+import { isPastEvent } from '../../../utils/gameResults';
 import { colors, spacing } from '../../../theme';
 import type { Position, RegistrationResultDto, WaiverSignatureDetails } from '@bhmhockey/shared';
 
@@ -39,6 +43,10 @@ export default function EventDetailScreen() {
   const [waiverModalVisible, setWaiverModalVisible] = useState(false);
   const orgWaiver = useOrganizationStore((state) => state.waiver);
   const fetchWaiver = useOrganizationStore((state) => state.fetchWaiver);
+  // Game results (AMP Vision): a Results segment appears only once a result is published
+  const gameResult = useGameResultStore((state) => (id ? state.results[id] : undefined));
+  const fetchGameResult = useGameResultStore((state) => state.fetchResult);
+  const autoOpenedResultsFor = useRef<string | null>(null);
 
   const {
     selectedEvent,
@@ -89,6 +97,31 @@ export default function EventDetailScreen() {
 
     setSelectedTab(defaultTab);
   }, [selectedEvent?.id]); // Only re-run when viewing a different event
+
+  // Game results: ask for a finished org game's result. Any failure (no such
+  // endpoint on the server, 404, 500, timeout) leaves the screen as it was.
+  const eventHasEnded = !!selectedEvent && isPastEvent(selectedEvent.eventDate)
+    && selectedEvent.status !== 'Draft' && selectedEvent.status !== 'Cancelled'
+    && !!selectedEvent.organizationId;
+  useEffect(() => {
+    if (id && eventHasEnded) fetchGameResult(id);
+  }, [id, eventHasEnded, fetchGameResult]);
+
+  const hasResult = gameResult?.status === 'ready' && !!gameResult.data;
+
+  // A finished game with a published result opens on Results, once per event
+  useEffect(() => {
+    if (hasResult && id && autoOpenedResultsFor.current !== id) {
+      autoOpenedResultsFor.current = id;
+      setSelectedTab('results');
+    }
+  }, [hasResult, id]);
+
+  const tabs = hasResult
+    ? [DEFAULT_TABS[0], DEFAULT_TABS[1], { key: 'results' as TabKey, label: 'Results' }, DEFAULT_TABS[2]]
+    : DEFAULT_TABS;
+  // If results were showing and then went away (withdrawn, switched off), fall back to Info
+  const visibleTab: TabKey = selectedTab === 'results' && !hasResult ? 'info' : selectedTab;
 
   const handleRefresh = async () => {
     if (!id) return;
@@ -411,7 +444,7 @@ export default function EventDetailScreen() {
   const renderTabContent = () => {
     if (!selectedEvent || !id) return null;
 
-    switch (selectedTab) {
+    switch (visibleTab) {
       case 'info':
         return (
           <EventInfoTab
@@ -435,6 +468,15 @@ export default function EventDetailScreen() {
         );
       case 'chat':
         return <EventChatTab event={selectedEvent} />;
+      case 'results':
+        return (
+          <EventResultsTab
+            eventId={id}
+            eventDate={selectedEvent.eventDate}
+            result={gameResult?.data ?? null}
+            currentUserId={user?.id}
+          />
+        );
       default:
         return null;
     }
@@ -477,7 +519,7 @@ export default function EventDetailScreen() {
       ) : (
         <View style={styles.content}>
           {/* Segmented Control */}
-          <SegmentedControl selectedTab={selectedTab} onTabChange={setSelectedTab} />
+          <SegmentedControl selectedTab={visibleTab} onTabChange={setSelectedTab} tabs={tabs} />
 
           {/* Tab Content */}
           <View style={styles.tabContent}>{renderTabContent()}</View>

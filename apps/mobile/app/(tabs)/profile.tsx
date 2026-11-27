@@ -27,6 +27,7 @@ import {
 } from '../../components';
 import { colors, spacing, radius } from '../../theme';
 import { canHaveDLeagueTeam } from '../../utils/dLeagueTeam';
+import { MyStatsSettings } from '../../components/game-results/MyStatsSettings';
 
 const BADGE_SAVE_DEBOUNCE_MS = 500;
 
@@ -332,6 +333,9 @@ export default function ProfileScreen() {
             <Text style={styles.badgeError}>{badgeSaveError}</Text>
           )}
         </FormSection>
+
+        {/* Game results (AMP Vision): appears only once the server has it */}
+        {user?.id ? <MyStatsSettings userId={user.id} /> : null}
 
         <FormSection title="Basic Information">
           <FormInput

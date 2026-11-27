@@ -18,6 +18,8 @@ import { EventCard, EmptyState } from '../../components';
 import { colors, spacing, radius } from '../../theme';
 import type { EventDto } from '@bhmhockey/shared';
 import type { EventCardVariant } from '../../components';
+import { useGameResultStore } from '../../stores/gameResultStore';
+import { resultsByEventId } from '../../utils/gameResults';
 
 // Filter options
 type FilterOption = 'all' | 'available' | 'registered' | 'organizing' | 'waitlisted' | 'past';
@@ -104,6 +106,22 @@ export default function EventsScreen() {
     return filtered.sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
   }, [events, pastEvents, activeFilter]);
 
+  // Game results (AMP Vision): a finished game's score on its Past card, from
+  // each organization's recent results. Any failure leaves the cards as they were.
+  const recentResults = useGameResultStore((s) => s.recentResults);
+  const fetchRecentResults = useGameResultStore((s) => s.fetchRecentResults);
+  const pastOrgIds = useMemo(
+    () => [...new Set(pastEvents.map((e) => e.organizationId).filter((x): x is string => !!x))],
+    [pastEvents]
+  );
+  useEffect(() => {
+    if (activeFilter === 'past') pastOrgIds.forEach((orgId) => fetchRecentResults(orgId, 20));
+  }, [activeFilter, pastOrgIds, fetchRecentResults]);
+  const resultByEvent = useMemo(
+    () => resultsByEventId(pastOrgIds.map((o) => recentResults[o]?.data ?? [])),
+    [pastOrgIds, recentResults]
+  );
+
   const handleEventPress = (eventId: string) => {
     router.push(`/events/${eventId}`);
   };
@@ -113,6 +131,7 @@ export default function EventsScreen() {
       event={item}
       variant={getEventVariant(item)}
       onPress={() => handleEventPress(item.id)}
+      result={activeFilter === 'past' ? resultByEvent[item.id] ?? null : undefined}
     />
   );
 

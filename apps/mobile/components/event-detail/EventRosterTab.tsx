@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { eventService } from '@bhmhockey/api-client';
+import { router } from 'expo-router';
 import type {
   EventRegistrationDto,
   EventDto,
@@ -669,6 +670,8 @@ export function EventRosterTab({ eventId, event, canManage, onPublishEvent }: Ev
         onMoveToRoster={canManage && selectedPlayer?.isWaitlisted ? handleMoveToRoster : undefined}
         onMoveToWaitlist={canManage && !selectedPlayer?.isWaitlisted ? handleMoveToWaitlist : undefined}
         onEditGuest={canManage ? handleEditGuest : undefined}
+        eventId={eventId}
+        onViewFullStats={(userId) => router.push(`/players/${userId}`)}
       />
 
       {/* Add Player Modal (also used in edit mode for guest players) */}

@@ -311,6 +311,8 @@ function RootLayoutContent() {
         <Stack.Screen name="organizations/create" options={{ title: 'Create Organization', presentation: 'modal' }} />
         <Stack.Screen name="organizations/[id]" options={{ title: 'Organization' }} />
         <Stack.Screen name="organizations/edit" options={{ title: 'Edit Organization' }} />
+        <Stack.Screen name="organizations/[id]/leaderboard" options={{ title: 'Leaderboard' }} />
+        <Stack.Screen name="players/[id]" options={{ title: 'Player' }} />
         {/* Tournament screens */}
         <Stack.Screen name="tournaments/create" options={{ title: 'Create Tournament' }} />
         <Stack.Screen name="tournaments/[id]/index" options={{ title: 'Tournament' }} />

@@ -13,6 +13,7 @@ import type { EventRegistrationDto, TeamAssignment, UserBadgeDto } from '@bhmhoc
 import { userService } from '@bhmhockey/api-client';
 import { colors, spacing, radius } from '../theme';
 import { TrophyCase } from './badges/TrophyCase';
+import { PlayerStatsSection } from './game-results/PlayerStatsSection';
 
 interface PlayerDetailModalProps {
   visible: boolean;
@@ -33,6 +34,10 @@ interface PlayerDetailModalProps {
   onMoveToWaitlist?: (registration: EventRegistrationDto) => void;
   /** Edit a guest (ghost) player in place (organizer only; shown only for ghost players) */
   onEditGuest?: (registration: EventRegistrationDto) => void;
+  /** The event this sheet was opened from: shows the player's line from its published result */
+  eventId?: string;
+  /** Open the player screen (game results). Omitted: no "View full stats" button. */
+  onViewFullStats?: (userId: string) => void;
 }
 
 const getPaymentStatusDisplay = (status?: string): { label: string; color: string } => {
@@ -61,17 +66,17 @@ export function PlayerDetailModal({
   onMoveToRoster,
   onMoveToWaitlist,
   onEditGuest,
+  eventId,
+  onViewFullStats,
 }: PlayerDetailModalProps) {
   const [badges, setBadges] = useState<UserBadgeDto[]>([]);
   const [isLoadingBadges, setIsLoadingBadges] = useState(false);
-  const [showAllBadges, setShowAllBadges] = useState(false);
 
   // Reset badge state when modal closes or registration changes
   useEffect(() => {
     if (!visible || !registration) {
       setBadges([]);
       setIsLoadingBadges(false);
-      setShowAllBadges(false);
       return;
     }
 
@@ -195,7 +200,16 @@ export function PlayerDetailModal({
                   </View>
                 )}
 
-                {/* Trophy Case - Visible to everyone */}
+                {/* Game stats (AMP Vision) - renders nothing until a result is published */}
+                {!user.isGhostPlayer && (
+                  <PlayerStatsSection
+                    userId={user.id}
+                    eventId={eventId}
+                    onViewFullStats={onViewFullStats ? () => { onClose(); onViewFullStats(user.id); } : undefined}
+                  />
+                )}
+
+                {/* Trophy Case - Visible to everyone, the full list expanded (the owner, 2026-11-27) */}
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel} allowFontScaling={false}>Trophy Case</Text>
                   {isLoadingBadges ? (
@@ -203,22 +217,10 @@ export function PlayerDetailModal({
                       <ActivityIndicator size="small" color={colors.primary.teal} />
                     </View>
                   ) : (
-                    <>
-                      <TrophyCase
-                        badges={showAllBadges ? badges : badges.slice(0, 2)}
-                        ownerName={`${user.firstName} ${user.lastName}`.trim()}
-                      />
-                      {badges.length > 2 && (
-                        <TouchableOpacity
-                          style={styles.expandButton}
-                          onPress={() => setShowAllBadges(prev => !prev)}
-                        >
-                          <Text style={styles.expandButtonText} allowFontScaling={false}>
-                            {showAllBadges ? 'Show less' : `View all (${badges.length})`}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
+                    <TrophyCase
+                      badges={badges}
+                      ownerName={`${user.firstName} ${user.lastName}`.trim()}
+                    />
                   )}
                 </View>
 

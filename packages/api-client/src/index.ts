@@ -9,6 +9,7 @@ export { eventService } from './services/events';
 export { notificationService } from './services/notifications';
 export { tournamentService } from './services/tournaments';
 export { adminService } from './services/admin';
+export { gameResultService } from './services/gameResults';
 
 // Export storage
 export { authStorage } from './storage/auth';
