@@ -13,7 +13,7 @@
 //
 //   node scripts/game-results/rehearse-past-game.mjs --new <new publish dir> \
 //     --pg "Host=127.0.0.1;Port=55433;Username=postgres" --psql /opt/homebrew/opt/postgresql@16/bin/psql \
-//     --org <orgId> --past <past_game.json> --result <game_result.json>
+//     --org <orgId> --past <past_game.json> --result <game_result.json> [--correction <past_game.json with cost>]
 import { spawn, execFileSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import fs from 'node:fs';
@@ -88,6 +88,27 @@ async function main() {
   const lb = await call('GET', `/organizations/${args.org}/leaderboard?season=2026&stat=points`, token);
   ok(lb.status === 200 && lb.json.rows.length === result.players.filter(p => p.userId).length, `leaderboard: ${lb.json?.rows.length} linked players ranked`);
   ok(psql(`SELECT count(*) FROM "Notifications"`) === '0', 'still no notification after the result');
+
+  // Optional: a payment correction of the game just created (--correction <past_game file with
+  // cost, paymentStatus on every entry and correctPayment true>), as an organization admin.
+  if (args.correction) {
+    const fix = JSON.parse(fs.readFileSync(args.correction, 'utf8'));
+    const c1 = await call('POST', `/organizations/${args.org}/past-games`, token, fix);
+    ok(c1.status === 200 && c1.json.outcome === 'payment_corrected' && c1.json.eventId === eventId, `payment corrected: ${c1.status} ${c1.text}`);
+    const c2 = await call('POST', `/organizations/${args.org}/past-games`, token, fix);
+    ok(c2.json?.outcome === 'unchanged', 'the same correction again is unchanged');
+    ok(Number(psql(`SELECT "Cost" FROM "Events" WHERE "Id"='${eventId}'`)) === Number(fix.cost), `the event costs ${fix.cost}`);
+    const want = fix.roster.map(r => r.paymentStatus).sort().join(',');
+    ok(psql(`SELECT string_agg("PaymentStatus", ',' ORDER BY "PaymentStatus") FROM "EventRegistrations" WHERE "EventId"='${eventId}' AND "Status"='Registered'`) === want,
+      `every registration records what the file states (${[...new Set(fix.roster.map(r => r.paymentStatus))].join(', ')})`);
+    ok(psql(`SELECT count(*) FROM "EventRegistrations" WHERE "EventId"='${eventId}' AND ("PaymentDeadlineAt" IS NOT NULL OR "PaymentMarkedAt" IS NOT NULL OR "Status"<>'Registered')`) === '0',
+      'no deadline, no marked-paid, nobody moved');
+    const ev = await call('GET', `/events/${eventId}`, token);
+    const owing = fix.roster.filter(r => r.paymentStatus !== 'Verified').length;
+    ok(ev.status === 200 && ev.json.cost === Number(fix.cost) && ev.json.unpaidCount === owing,
+      `the organizer's view: cost ${ev.json?.cost}, ${ev.json?.unpaidCount} unpaid`);
+    ok(psql(`SELECT count(*) FROM "Notifications"`) === '0', 'still no notification after the correction');
+  }
 
   api.kill('SIGTERM');
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');

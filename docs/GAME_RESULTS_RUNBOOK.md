@@ -84,6 +84,23 @@ nothing and returns the same event. The route refuses a future game and one
 before the results floor (`GameResultSettings`). Rehearse both files first on a
 local database (section 7, `rehearse-past-game.mjs`).
 
+**Cost and payment.** Optional, and never assumed. A body with `cost` above 0 must
+state every roster entry's `paymentStatus`: `Verified` (paid and settled: the
+player sees "Paid", the organizer's unpaid count leaves them out, nothing prompts
+anyone) or `Pending` (owes: the player sees the amount and the pay buttons). No
+payment deadline is ever set, so the expired-deadline job cannot select a past
+game. Without `cost` the game is free, as before.
+
+**Correcting a past game's cost and payment.** Send the same body again with
+`cost`, every entry's `paymentStatus` and `"correctPayment": true`. It changes
+the event's cost and each registration's payment and nothing else, and sends
+nothing (outcome `payment_corrected`; the same body again is `unchanged`). It is
+refused unless the game was added by this route and the roster names exactly its
+registered players with their positions. In AMP Vision:
+`export_game_result.py --past-game-start ... --past-game-cost <amount>
+--past-game-payment all-paid --correct-payment`, then `league_publish.py past-game`
+(its dry run prints the cost and payment in words) and `--send`.
+
 ## 5. Switch the feature off without a deploy of code (owner)
 
 App Platform -> api -> Settings -> Environment variables: add
@@ -119,11 +136,11 @@ In order of preference; each stops at the first that is enough.
 
 | what | command | result |
 |---|---|---|
-| API tests | `cd apps/api && dotnet test BHMHockey.Api.Tests` | 1,342 passed (1,289 before the change, all still passing) |
+| API tests | `cd apps/api && dotnet test BHMHockey.Api.Tests` | 1,348 passed (1,289 before game results, all still passing) |
 | installed-client contract | `--filter InstalledClientContract` | 137 endpoints unchanged; 9 additive, reviewed |
 | startup and compatibility on real PostgreSQL | `node scripts/game-results/startup-compat-check.mjs --old <old publish> --new <new publish> --pg ... --psql ...` | all 35 checks pass (step E also replays the new app's calls on the OLD API: 404, never 401): `docs/game-results/startup-compat-check.out.txt` |
 | rollback SQL | `scripts/game-results/rollback-sql-check.sh <migrated local db>` | down/up each twice, existing rows kept |
-| a past game's import, end to end | `node scripts/game-results/rehearse-past-game.mjs ... --past <past_game.json> --result <game_result.json>` | 16 checks pass: event created silently, result accepted, recap/stats (incl. the no-stats list, on PostgreSQL)/leaderboard read, no notification |
+| a past game's import, end to end | `node scripts/game-results/rehearse-past-game.mjs ... --past <past_game.json> --result <game_result.json> [--correction <past_game.json with cost>]` | 16 checks pass: event created silently, result accepted, recap/stats (incl. the no-stats list, on PostgreSQL)/leaderboard read, no notification; with `--correction`, 23: corrected once then unchanged, cost and every payment as stated, no deadline, the organizer's unpaid count, still no notification |
 
 The old build is `git archive <main before the change> apps/api` published to
 a local folder (`dotnet publish -c Release -o <dir>`); the new one is this
