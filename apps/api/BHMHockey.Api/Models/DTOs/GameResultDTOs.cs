@@ -180,12 +180,31 @@ public record CreatePastGameRequest(
     string? Venue,
     string? Visibility,                     // default "OrganizationMembers"
     string SourceGameKey,                   // "2026-11-22_main": refuses a second import
-    List<PastGameRosterEntry> Roster);
+    List<PastGameRosterEntry> Roster)
+{
+    /// <summary>
+    /// What the game cost per player, as the event's Cost. Optional: absent or 0 keeps the
+    /// game free (Cost 0, no payment recorded), exactly as before. Above 0, EVERY roster
+    /// entry must state its paymentStatus: nothing is ever assumed about who paid.
+    /// </summary>
+    public decimal? Cost { get; init; }
 
-public record PastGameRosterEntry(Guid UserId, string Team, string Position); // Black|White, Skater|Goalie
+    /// <summary>
+    /// When the game already exists (same organization and start time) and was added by
+    /// this route: correct its Cost and its registrations' payment to what this body says,
+    /// and nothing else. Sends nothing. Absent or false: an existing game is left as it is.
+    /// </summary>
+    public bool CorrectPayment { get; init; }
+}
+
+public record PastGameRosterEntry(Guid UserId, string Team, string Position) // Black|White, Skater|Goalie
+{
+    /// <summary>"Verified" (paid, settled) or "Pending" (owes); required when Cost is above 0, absent otherwise.</summary>
+    public string? PaymentStatus { get; init; }
+}
 
 public record CreatePastGameResponse(
     Guid EventId,
-    string Outcome,                         // "created" | "already_exists"
+    string Outcome,                         // "created" | "already_exists" | "payment_corrected" | "unchanged"
     int RegisteredCount,
     List<Guid> SkippedUserIds);             // unknown, inactive or ghost accounts: not added
