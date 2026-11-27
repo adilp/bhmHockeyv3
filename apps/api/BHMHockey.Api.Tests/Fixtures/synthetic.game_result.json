@@ -1,0 +1,793 @@
+{
+  "schemaVersion": "amp.game_result.v1",
+  "source": {
+    "system": "amp_vision",
+    "gameKey": "sample_game",
+    "revision": 1,
+    "generatedAtUtc": "2026-01-01T00:00:00+00:00",
+    "codeVersion": "fixture"
+  },
+  "eventId": "00000000-0000-0000-0000-0000000000e1",
+  "teams": {
+    "black": {
+      "label": "Sample Black",
+      "score": 3
+    },
+    "white": {
+      "label": "Sample White",
+      "score": 4
+    }
+  },
+  "finalScoreSource": "person",
+  "periodCount": 3,
+  "periodLengthSec": 1020,
+  "video": {
+    "url": null,
+    "chapters": [
+      {
+        "label": "Period 1",
+        "offsetSec": null
+      },
+      {
+        "label": "Period 2",
+        "offsetSec": null
+      },
+      {
+        "label": "Period 3",
+        "offsetSec": null
+      }
+    ]
+  },
+  "goals": [
+    {
+      "sequence": 1,
+      "team": "black",
+      "period": 1,
+      "periodElapsedSec": 100,
+      "scoreAfter": {
+        "black": 1,
+        "white": 0
+      },
+      "scorer": {
+        "playerKey": "amp:901"
+      },
+      "scorerSource": "person_click",
+      "assists": [
+        {
+          "playerKey": "amp:903"
+        }
+      ],
+      "assistsSource": "person_ruled",
+      "videoOffsetSec": null
+    },
+    {
+      "sequence": 2,
+      "team": "white",
+      "period": 1,
+      "periodElapsedSec": 400,
+      "scoreAfter": {
+        "black": 1,
+        "white": 1
+      },
+      "scorer": {
+        "playerKey": "amp:911"
+      },
+      "scorerSource": "person_click",
+      "assists": [],
+      "assistsSource": "person_ruled",
+      "videoOffsetSec": null
+    },
+    {
+      "sequence": 3,
+      "team": "black",
+      "period": 1,
+      "periodElapsedSec": 700,
+      "scoreAfter": {
+        "black": 2,
+        "white": 1
+      },
+      "scorer": {
+        "playerKey": "amp:902"
+      },
+      "scorerSource": "person_click",
+      "assists": [
+        {
+          "playerKey": "amp:904"
+        }
+      ],
+      "assistsSource": "person_ruled",
+      "videoOffsetSec": null
+    },
+    {
+      "sequence": 4,
+      "team": "white",
+      "period": 2,
+      "periodElapsedSec": 300,
+      "scoreAfter": {
+        "black": 2,
+        "white": 2
+      },
+      "scorer": {
+        "playerKey": "amp:912"
+      },
+      "scorerSource": "person_click",
+      "assists": [
+        {
+          "playerKey": "amp:911"
+        }
+      ],
+      "assistsSource": "person_ruled",
+      "videoOffsetSec": null
+    },
+    {
+      "sequence": 5,
+      "team": "white",
+      "period": 2,
+      "periodElapsedSec": 800,
+      "scoreAfter": {
+        "black": 2,
+        "white": 3
+      },
+      "scorer": {
+        "playerKey": "amp:913"
+      },
+      "scorerSource": "person_click",
+      "assists": [
+        {
+          "playerKey": "amp:912"
+        }
+      ],
+      "assistsSource": "person_ruled",
+      "videoOffsetSec": null
+    },
+    {
+      "sequence": 6,
+      "team": "black",
+      "period": 3,
+      "periodElapsedSec": 200,
+      "scoreAfter": {
+        "black": 3,
+        "white": 3
+      },
+      "scorer": {
+        "playerKey": "amp:901"
+      },
+      "scorerSource": "person_click",
+      "assists": [
+        {
+          "playerKey": "amp:902"
+        }
+      ],
+      "assistsSource": "person_ruled",
+      "videoOffsetSec": null
+    },
+    {
+      "sequence": 7,
+      "team": "white",
+      "period": 3,
+      "periodElapsedSec": 600,
+      "scoreAfter": {
+        "black": 3,
+        "white": 4
+      },
+      "scorer": {
+        "playerKey": "amp:914"
+      },
+      "scorerSource": "person_click",
+      "assists": [
+        {
+          "playerKey": "amp:915"
+        }
+      ],
+      "assistsSource": "person_ruled",
+      "videoOffsetSec": null
+    }
+  ],
+  "stars": [
+    {
+      "rank": 1,
+      "playerKey": "amp:901"
+    },
+    {
+      "rank": 2,
+      "playerKey": "amp:902"
+    },
+    {
+      "rank": 3,
+      "playerKey": "amp:911"
+    }
+  ],
+  "players": [
+    {
+      "playerKey": "amp:901",
+      "ampPlayerId": 901,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 01",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "1",
+      "isLoaner": false,
+      "goals": 2,
+      "assists": 0,
+      "points": 2,
+      "star": 1,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": null,
+      "estimatesWithheld": {
+        "iceTime": "held back by a sample check",
+        "distanceSkated": "shown only beside a shown ice time"
+      }
+    },
+    {
+      "playerKey": "amp:902",
+      "ampPlayerId": 902,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 02",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "2",
+      "isLoaner": false,
+      "goals": 1,
+      "assists": 1,
+      "points": 2,
+      "star": 2,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": null,
+      "estimatesWithheld": {
+        "iceTime": "held back by a sample check",
+        "distanceSkated": "shown only beside a shown ice time"
+      }
+    },
+    {
+      "playerKey": "amp:903",
+      "ampPlayerId": 903,
+      "userId": "00000000-0000-4000-8000-200000000003",
+      "link": "linked",
+      "displayName": "Sample Player 03",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "3",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 1,
+      "points": 1,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 13 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.8 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:904",
+      "ampPlayerId": 904,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 04",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "99",
+      "isLoaner": true,
+      "goals": 0,
+      "assists": 1,
+      "points": 1,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 14 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.9 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:905",
+      "ampPlayerId": 905,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 05",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "5",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 15 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 1.0 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:906",
+      "ampPlayerId": 906,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 06",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "6",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 16 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 1.1 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:907",
+      "ampPlayerId": 907,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 07",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "7",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 17 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.5 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:908",
+      "ampPlayerId": 908,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 08",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "8",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 18 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.6 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:909",
+      "ampPlayerId": 909,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 09",
+      "team": "black",
+      "position": "Skater",
+      "jersey": "9",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 10 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.7 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:910",
+      "ampPlayerId": 910,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 10",
+      "team": "black",
+      "position": "Goalie",
+      "jersey": "10",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": 4,
+      "saves": null,
+      "estimates": null,
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:911",
+      "ampPlayerId": 911,
+      "userId": "00000000-0000-4000-8000-200000000011",
+      "link": "linked",
+      "displayName": "Sample Player 11",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "11",
+      "isLoaner": false,
+      "goals": 1,
+      "assists": 1,
+      "points": 2,
+      "star": 3,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 12 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.9 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:912",
+      "ampPlayerId": 912,
+      "userId": "00000000-0000-4000-8000-200000000012",
+      "link": "linked",
+      "displayName": "Sample Player 12",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "12",
+      "isLoaner": false,
+      "goals": 1,
+      "assists": 1,
+      "points": 2,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 13 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 1.0 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:913",
+      "ampPlayerId": 913,
+      "userId": "00000000-0000-4000-8000-200000000013",
+      "link": "linked",
+      "displayName": "Sample Player 13",
+      "team": "white",
+      "position": "Skater",
+      "jersey": null,
+      "isLoaner": false,
+      "goals": 1,
+      "assists": 0,
+      "points": 1,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 14 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 1.1 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:914",
+      "ampPlayerId": 914,
+      "userId": "00000000-0000-4000-8000-200000000014",
+      "link": "linked",
+      "displayName": "Sample Player 14",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "14",
+      "isLoaner": false,
+      "goals": 1,
+      "assists": 0,
+      "points": 1,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 15 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.5 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:915",
+      "ampPlayerId": 915,
+      "userId": "00000000-0000-4000-8000-200000000015",
+      "link": "linked",
+      "displayName": "Sample Player 15",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "15",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 1,
+      "points": 1,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 16 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.6 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:916",
+      "ampPlayerId": 916,
+      "userId": "00000000-0000-4000-8000-200000000016",
+      "link": "linked",
+      "displayName": "Sample Player 16",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "16",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": null,
+      "estimatesWithheld": {
+        "iceTime": "held back by a sample check",
+        "distanceSkated": "shown only beside a shown ice time"
+      }
+    },
+    {
+      "playerKey": "amp:917",
+      "ampPlayerId": 917,
+      "userId": "00000000-0000-4000-8000-200000000017",
+      "link": "linked",
+      "displayName": "Sample Player 17",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "17",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 18 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.8 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:918",
+      "ampPlayerId": 918,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 18",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "18",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 10 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.9 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:919",
+      "ampPlayerId": 919,
+      "userId": "00000000-0000-4000-8000-200000000019",
+      "link": "linked",
+      "displayName": "Sample Player 19",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "19",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 11 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 1.0 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:920",
+      "ampPlayerId": 920,
+      "userId": null,
+      "link": "unlinked",
+      "displayName": "Sample Player 20",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "20",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 12 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 1.1 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:921",
+      "ampPlayerId": 921,
+      "userId": "00000000-0000-4000-8000-200000000021",
+      "link": "linked",
+      "displayName": "Sample Player 21",
+      "team": "white",
+      "position": "Skater",
+      "jersey": "21",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": null,
+      "saves": null,
+      "estimates": {
+        "iceTime": {
+          "display": "about 13 min",
+          "qualifier": "about"
+        },
+        "distanceSkated": {
+          "display": "at least 0.5 mi",
+          "qualifier": "atLeast"
+        }
+      },
+      "estimatesWithheld": null
+    },
+    {
+      "playerKey": "amp:922",
+      "ampPlayerId": 922,
+      "userId": "00000000-0000-4000-8000-200000000022",
+      "link": "linked",
+      "displayName": "Sample Player 22",
+      "team": "white",
+      "position": "Goalie",
+      "jersey": "22",
+      "isLoaner": false,
+      "goals": 0,
+      "assists": 0,
+      "points": 0,
+      "star": null,
+      "goalsAgainst": 3,
+      "saves": null,
+      "estimates": null,
+      "estimatesWithheld": null
+    }
+  ],
+  "measurement": {
+    "savesMeasured": false,
+    "assistsRuledOnly": true,
+    "goalsWithoutScorer": 0,
+    "goalsWithAssistsRuled": 7
+  },
+  "notes": [
+    "Saves not measured",
+    "Assists as ruled by a person"
+  ],
+  "estimateDisclaimer": "Estimates, not measurements. Sample text for a synthetic test body."
+}

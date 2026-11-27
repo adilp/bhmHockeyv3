@@ -225,6 +225,257 @@ namespace BHMHockey.Api.Migrations
                     b.ToTable("EventRegistrations");
                 });
 
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.GameGoal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AssistsSource")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("BlackScoreAfter")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("GameResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("Period")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PeriodElapsedSec")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("PrimaryAssistLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ScorerLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ScorerSource")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("SecondaryAssistLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Team")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<int?>("VideoOffsetSec")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WhiteScoreAfter")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PrimaryAssistLineId");
+
+                    b.HasIndex("ScorerLineId");
+
+                    b.HasIndex("SecondaryAssistLineId");
+
+                    b.HasIndex("GameResultId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("GameGoals");
+                });
+
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.GamePlayerLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("AmpPlayerId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Assists")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EstimatesJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("GameResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("Goals")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("GoalsAgainst")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsLoaner")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Jersey")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)");
+
+                    b.Property<int?>("Points")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Position")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<int?>("Saves")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourcePlayerKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("Star")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Team")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AmpPlayerId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("GameResultId", "SourcePlayerKey")
+                        .IsUnique();
+
+                    b.ToTable("GamePlayerLines");
+                });
+
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.GameResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlackLabel")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("BlackScore")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EstimateDisclaimer")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FinalScoreSource")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("MeasurementJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("NotesJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("PeriodCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PeriodLengthSec")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PublishedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SourceCodeVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SourceGameKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("SourceGeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SourceRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VideoChaptersJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("VideoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("WhiteLabel")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("WhiteScore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("WithdrawnAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WithdrawnReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationId", "Status");
+
+                    b.HasIndex("Source", "SourceGameKey")
+                        .IsUnique();
+
+                    b.ToTable("GameResults");
+                });
+
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1148,6 +1399,11 @@ namespace BHMHockey.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<bool>("HideGameStats")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -1314,6 +1570,75 @@ namespace BHMHockey.Api.Migrations
                     b.Navigation("Event");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.GameGoal", b =>
+                {
+                    b.HasOne("BHMHockey.Api.Models.Entities.GameResult", "GameResult")
+                        .WithMany("Goals")
+                        .HasForeignKey("GameResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.GamePlayerLine", "PrimaryAssistLine")
+                        .WithMany()
+                        .HasForeignKey("PrimaryAssistLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.GamePlayerLine", "ScorerLine")
+                        .WithMany()
+                        .HasForeignKey("ScorerLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.GamePlayerLine", "SecondaryAssistLine")
+                        .WithMany()
+                        .HasForeignKey("SecondaryAssistLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("GameResult");
+
+                    b.Navigation("PrimaryAssistLine");
+
+                    b.Navigation("ScorerLine");
+
+                    b.Navigation("SecondaryAssistLine");
+                });
+
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.GamePlayerLine", b =>
+                {
+                    b.HasOne("BHMHockey.Api.Models.Entities.GameResult", "GameResult")
+                        .WithMany("PlayerLines")
+                        .HasForeignKey("GameResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("GameResult");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.GameResult", b =>
+                {
+                    b.HasOne("BHMHockey.Api.Models.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BHMHockey.Api.Models.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+
+                    b.Navigation("Organization");
                 });
 
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.Notification", b =>
@@ -1710,6 +2035,13 @@ namespace BHMHockey.Api.Migrations
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.Event", b =>
                 {
                     b.Navigation("Registrations");
+                });
+
+            modelBuilder.Entity("BHMHockey.Api.Models.Entities.GameResult", b =>
+                {
+                    b.Navigation("Goals");
+
+                    b.Navigation("PlayerLines");
                 });
 
             modelBuilder.Entity("BHMHockey.Api.Models.Entities.Organization", b =>

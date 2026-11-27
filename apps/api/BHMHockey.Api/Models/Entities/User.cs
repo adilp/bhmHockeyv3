@@ -23,6 +23,12 @@ public class User
     public string? DLeagueTeam { get; set; }
 
     public bool IsGhostPlayer { get; set; } = false;
+
+    // The player's own switch: hide their game stats from other players (their
+    // profile stats and their leaderboard row). Read and written only through
+    // the game-results endpoints; deliberately NOT on UserDto, so no existing
+    // response changes shape. The column has a database default of false.
+    public bool HideGameStats { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
