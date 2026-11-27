@@ -205,6 +205,6 @@ public record PastGameRosterEntry(Guid UserId, string Team, string Position) // 
 
 public record CreatePastGameResponse(
     Guid EventId,
-    string Outcome,                         // "created" | "already_exists" | "payment_corrected" | "unchanged"
+    string Outcome,                         // "created" | "already_exists" | "payment_corrected" | "registration_closed" | "unchanged"
     int RegisteredCount,
     List<Guid> SkippedUserIds);             // unknown, inactive or ghost accounts: not added

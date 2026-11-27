@@ -606,6 +606,10 @@ public class EventService : IEventService
         return true;
     }
 
+    /// <summary>A game has ended once its start plus its duration is past.</summary>
+    public static bool HasEnded(Event evt, DateTime utcNow) =>
+        evt.EventDate.AddMinutes(Math.Max(evt.Duration, 0)) < utcNow;
+
     public async Task<RegistrationResultDto> RegisterAsync(Guid eventId, Guid userId, string? position = null)
     {
         var evt = await _context.Events
@@ -630,6 +634,15 @@ public class EventService : IEventService
         if (evt.RegistrationDeadline.HasValue && evt.RegistrationDeadline.Value < DateTime.UtcNow)
         {
             throw new InvalidOperationException("Registration deadline has passed");
+        }
+
+        // A game that is over takes no new sign-ups (nor waitlist joins): same refusal
+        // path and response shape as a passed deadline. Organizers placing players
+        // directly (add-player, guests) do not come through here.
+        if (HasEnded(evt, DateTime.UtcNow))
+        {
+            _logger.LogWarning("Registration blocked for event {EventId}: the game has already been played", eventId);
+            throw new InvalidOperationException("This game has already been played");
         }
 
         // Get user to validate/determine position

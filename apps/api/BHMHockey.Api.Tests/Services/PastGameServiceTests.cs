@@ -270,6 +270,96 @@ public class PastGameServiceTests : IDisposable
         (await _context.EventRegistrations.CountAsync(r => r.Status != "Registered")).Should().Be(0);
     }
 
+    // ---------------------------------------------- closed to sign-ups (a game that is over)
+
+    private EventService Events(INotificationService push) => new(_context, push, new OrganizationAdminService(_context),
+        new WaitlistService(_context, push, NullLogger<WaitlistService>.Instance),
+        new OrganizationWaiverService(_context, new OrganizationAdminService(_context), NullLogger<OrganizationWaiverService>.Instance),
+        NullLogger<EventService>.Instance);
+
+    private User Newcomer()
+    {
+        var u = Add(new User { Email = "c@x.test", FirstName = "Cleo", LastName = "Comer", PushToken = "ExponentPushToken[c]",
+            Positions = new Dictionary<string, string> { ["skater"] = "Silver" } });
+        _context.OrganizationSubscriptions.Add(new OrganizationSubscription { OrganizationId = _org.Id, UserId = u.Id, NotificationEnabled = true });
+        _context.SaveChanges();
+        return u;
+    }
+
+    [Fact]
+    public async Task APastGameIsCreatedClosedToSignUps()
+    {
+        await _sut.CreatePastGameAsync(_org.Id, Paid(20m), _admin.Id);
+        (await _context.Events.AsNoTracking().SingleAsync()).RegistrationDeadline.Should().Be(Played);
+    }
+
+    [Fact]
+    public async Task SendingTheCorrectionAgainClosesAGameAddedBeforeTheRuleAndThenIsUnchanged()
+    {
+        await _sut.CreatePastGameAsync(_org.Id, Request(), _admin.Id);
+        await _sut.CreatePastGameAsync(_org.Id, Paid(20m, correct: true), _admin.Id);
+        var evt = await _context.Events.SingleAsync();
+        evt.RegistrationDeadline = null;                       // as a game added before this rule
+        await _context.SaveChangesAsync();
+
+        var res = await _sut.CreatePastGameAsync(_org.Id, Paid(20m, correct: true), _admin.Id);
+
+        res!.Outcome.Should().Be("registration_closed");
+        var after = await _context.Events.AsNoTracking().Include(e => e.Registrations).SingleAsync();
+        after.RegistrationDeadline.Should().Be(Played);
+        after.Cost.Should().Be(20m);
+        after.Registrations.Should().OnlyContain(r => r.PaymentStatus == "Verified" && r.Status == "Registered");
+        (await _sut.CreatePastGameAsync(_org.Id, Paid(20m, correct: true), _admin.Id))!.Outcome.Should().Be("unchanged");
+        await RunEveryJobStrict();
+    }
+
+    [Fact]
+    public async Task ASignUpOnACorrectedPastGameIsRefusedAndWritesNothing()
+    {
+        await _sut.CreatePastGameAsync(_org.Id, Request(), _admin.Id);
+        await _sut.CreatePastGameAsync(_org.Id, Paid(20m, correct: true), _admin.Id);
+        var evt = await _context.Events.AsNoTracking().SingleAsync();
+        var who = Newcomer();
+        var push = new Mock<INotificationService>(MockBehavior.Strict);
+        var before = await _context.EventRegistrations.CountAsync();
+
+        foreach (var position in new[] { "Skater", null })
+            await FluentActions.Awaiting(() => Events(push.Object).RegisterAsync(evt.Id, who.Id, position))
+                .Should().ThrowAsync<InvalidOperationException>().WithMessage("Registration deadline has passed");
+
+        (await _context.EventRegistrations.CountAsync()).Should().Be(before);
+        (await _context.EventRegistrations.AnyAsync(r => r.UserId == who.Id)).Should().BeFalse();
+        push.VerifyNoOtherCalls();
+        await RunEveryJobStrict();
+    }
+
+    [Fact]
+    public async Task AnyGameThatHasEndedRefusesASignUpOrAWaitlistJoinTheWayAPassedDeadlineDoes()
+    {
+        var who = Newcomer();
+        var push = new Mock<INotificationService>(MockBehavior.Strict);
+        Event Game(DateTime start, int minutes, int max) =>
+            new() { OrganizationId = _org.Id, CreatorId = _admin.Id, EventDate = start, Duration = minutes, MaxPlayers = max,
+                    Status = "Published", Visibility = "Public", Cost = 0 };
+        var over = Game(DateTime.UtcNow.AddHours(-3), 60, 10);
+        var full = Game(DateTime.UtcNow.AddHours(-3), 60, 0);           // would be a waitlist join
+        var playing = Game(DateTime.UtcNow.AddMinutes(-30), 90, 10);    // started, not over
+        _context.Events.AddRange(over, full, playing);
+        await _context.SaveChangesAsync();
+
+        foreach (var e in new[] { over, full })
+            await FluentActions.Awaiting(() => Events(push.Object).RegisterAsync(e.Id, who.Id, "Skater"))
+                .Should().ThrowAsync<InvalidOperationException>().WithMessage("This game has already been played");
+        (await _context.EventRegistrations.AnyAsync(r => r.UserId == who.Id)).Should().BeFalse();
+
+        // Not over yet: unchanged behavior
+        (await Events(Mock.Of<INotificationService>()).RegisterAsync(playing.Id, who.Id, "Skater")).Status.Should().Be("Registered");
+
+        EventService.HasEnded(new Event { EventDate = DateTime.UtcNow.AddMinutes(-61), Duration = 60 }, DateTime.UtcNow).Should().BeTrue();
+        EventService.HasEnded(new Event { EventDate = DateTime.UtcNow.AddMinutes(-59), Duration = 60 }, DateTime.UtcNow).Should().BeFalse();
+        EventService.HasEnded(new Event { EventDate = DateTime.UtcNow.AddDays(1), Duration = 60 }, DateTime.UtcNow).Should().BeFalse();
+    }
+
     [Fact]
     public void TheWriterCannotReachAnyServiceThatMessagesOrBills()
     {
