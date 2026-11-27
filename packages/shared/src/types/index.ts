@@ -816,6 +816,9 @@ export interface UpdateTournamentRequest {
 // Import tournament admin types from dedicated file
 export * from './tournamentAdmin';
 
+// Game results (AMP Vision) - see gameResults.ts
+export * from './gameResults';
+
 // Import tournament announcement types from dedicated file
 export * from './tournamentAnnouncement';
 

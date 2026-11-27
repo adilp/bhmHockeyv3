@@ -18,6 +18,7 @@ import { Badge, SkillLevelBadges, BadgeIconsRow, MemberDetailModal } from '../..
 import { colors, spacing, radius } from '../../theme';
 import { shareOrganizationInvite } from '../../utils/share';
 import type { Organization, OrganizationMember } from '@bhmhockey/shared';
+import { OrgResultsSection } from '../../components/game-results/OrgResultsSection';
 
 export default function OrganizationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -360,6 +361,9 @@ export default function OrganizationDetailScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Game results (AMP Vision): renders nothing until results are published */}
+        <OrgResultsSection organizationId={organization.id} isMember={!!(organization.isSubscribed || isAdmin)} />
 
         {/* Members List - Visible to all subscribers */}
         {(organization.isSubscribed || isAdmin) && (

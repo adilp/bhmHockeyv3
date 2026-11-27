@@ -3,7 +3,7 @@ import { colors, spacing, radius } from '../theme';
 import { Badge } from './Badge';
 import { SkillLevelDots } from './SkillLevelDots';
 import { OrgAvatar } from './OrgAvatar';
-import type { EventDto, SkillLevel } from '@bhmhockey/shared';
+import type { EventDto, GameResultSummaryDto, SkillLevel } from '@bhmhockey/shared';
 import { getSelfPaymentBadgeInfo } from '../utils/payment';
 
 export type EventCardVariant = 'available' | 'registered' | 'waitlisted' | 'organizing';
@@ -12,6 +12,8 @@ interface EventCardProps {
   event: EventDto;
   variant: EventCardVariant;
   onPress: () => void;
+  /** A finished game's published result: the score replaces the price column. Omitted: unchanged card. */
+  result?: GameResultSummaryDto | null;
 }
 
 // Accent and dot colors per variant (available has no accent)
@@ -56,7 +58,7 @@ function formatDateTime(dateString: string): { date: string; time: string } {
 }
 
 
-export function EventCard({ event, variant, onPress }: EventCardProps) {
+export function EventCard({ event, variant, onPress, result }: EventCardProps) {
   const accentColor = variantColors[variant];
   const spotsLeft = event.maxPlayers - event.registeredCount;
 
@@ -115,7 +117,15 @@ export function EventCard({ event, variant, onPress }: EventCardProps) {
 
       {/* Price column */}
       <View style={styles.priceColumn}>
-        {event.cost > 0 ? (
+        {result ? (
+          <>
+            <Text style={styles.priceAmount}>{`${result.white.score}–${result.black.score}`}</Text>
+            <Text style={styles.priceLabel} numberOfLines={1}>
+              {`${result.white.label ?? 'White'}–${result.black.label ?? 'Black'}`}
+            </Text>
+            <Badge variant="teal">Results</Badge>
+          </>
+        ) : event.cost > 0 ? (
           <>
             <Text style={styles.priceAmount}>${event.cost}</Text>
             <Text style={styles.priceLabel}>per player</Text>

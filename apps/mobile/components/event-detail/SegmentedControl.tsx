@@ -1,24 +1,26 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, spacing, radius } from '../../theme';
 
-export type TabKey = 'info' | 'roster' | 'chat';
+export type TabKey = 'info' | 'roster' | 'chat' | 'results';
 
 interface SegmentedControlProps {
   selectedTab: TabKey;
   onTabChange: (tab: TabKey) => void;
+  /** Which segments to show, in order. Default: Info, Roster, Chat (unchanged). */
+  tabs?: { key: TabKey; label: string }[];
 }
 
-const TABS: { key: TabKey; label: string }[] = [
+export const DEFAULT_TABS: { key: TabKey; label: string }[] = [
   { key: 'info', label: 'Info' },
   { key: 'roster', label: 'Roster' },
   { key: 'chat', label: 'Chat' },
 ];
 
-export function SegmentedControl({ selectedTab, onTabChange }: SegmentedControlProps) {
+export function SegmentedControl({ selectedTab, onTabChange, tabs = DEFAULT_TABS }: SegmentedControlProps) {
   return (
     <View style={styles.container}>
       <View style={styles.tabsContainer}>
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isSelected = selectedTab === tab.key;
           return (
             <TouchableOpacity
