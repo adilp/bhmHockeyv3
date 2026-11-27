@@ -380,12 +380,6 @@ export function resultsByEventId(lists: GameResultSummaryDto[][]): Record<string
   return out;
 }
 
-export function isPastEvent(eventDate: string | undefined, now: Date = new Date()): boolean {
-  if (!eventDate) return false;
-  const t = new Date(eventDate).getTime();
-  return Number.isFinite(t) && t < now.getTime();
-}
-
 /** "Sun, Nov 22" in the phone's time zone; '' for a bad date. */
 export function shortDate(iso: string): string {
   const d = new Date(iso);

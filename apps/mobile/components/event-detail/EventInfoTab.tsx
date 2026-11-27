@@ -15,6 +15,9 @@ interface EventInfoTabProps {
   onCancelRegistration: () => void;
   onRefresh?: () => Promise<void>;
   isRefreshing?: boolean;
+  /** The game is over: no waitlist payment prompt, cost preview, calendar or cancel. A registered
+   *  player who still owes keeps the pay actions (payment is still collected after a game). */
+  hasEnded?: boolean;
 }
 
 export function EventInfoTab({
@@ -25,11 +28,12 @@ export function EventInfoTab({
   onCancelRegistration,
   onRefresh,
   isRefreshing = false,
+  hasEnded = false,
 }: EventInfoTabProps) {
   // Waitlist takes priority - if you're waitlisted, show waitlist payment section
-  const showWaitlistPaymentCard = event.amIWaitlisted && event.cost > 0;
+  const showWaitlistPaymentCard = !hasEnded && event.amIWaitlisted && event.cost > 0;
   const showPaymentCard = event.isRegistered && !event.amIWaitlisted && event.cost > 0;
-  const showCostPreview = !event.isRegistered && !event.amIWaitlisted && event.cost > 0;
+  const showCostPreview = !hasEnded && !event.isRegistered && !event.amIWaitlisted && event.cost > 0;
   const hasMoreDetails = event.description || event.registrationDeadline;
   const isRosterFull = event.registeredCount >= event.maxPlayers;
   // Waitlisted players should only pay when their spot fits open capacity (server-computed).
@@ -366,7 +370,7 @@ export function EventInfoTab({
           ADD TO CALENDAR (rostered players - always available, so players who
           skipped the prompt at registration or were auto-rostered can still add it)
           ═══════════════════════════════════════════════════════════════════ */}
-      {event.isRegistered && (
+      {event.isRegistered && !hasEnded && (
         <View style={styles.calendarSection}>
           <TouchableOpacity
             style={styles.calendarButton}
@@ -382,7 +386,7 @@ export function EventInfoTab({
       {/* ═══════════════════════════════════════════════════════════════════
           CANCEL REGISTRATION (for registered/waitlisted users)
           ═══════════════════════════════════════════════════════════════════ */}
-      {(event.isRegistered || event.amIWaitlisted) && (
+      {(event.isRegistered || event.amIWaitlisted) && !hasEnded && (
         <View style={styles.cancelSection}>
           <TouchableOpacity style={styles.cancelButton} onPress={onCancelRegistration}>
             <Text style={styles.cancelButtonText}>

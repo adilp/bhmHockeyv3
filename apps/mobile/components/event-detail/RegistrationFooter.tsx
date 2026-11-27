@@ -16,6 +16,8 @@ interface RegistrationFooterProps {
   // Draft events are only visible to their managers, and signups are closed
   // server-side until they publish
   isDraft?: boolean;
+  // The game is over: nothing to sign up for (the server refuses it too)
+  hasEnded?: boolean;
 }
 
 export function RegistrationFooter({
@@ -26,12 +28,13 @@ export function RegistrationFooter({
   isProcessing,
   onRegister,
   isDraft = false,
+  hasEnded = false,
 }: RegistrationFooterProps) {
   const insets = useSafeAreaInsets();
 
   // Draft - nobody can register yet, and publishing lives on the Roster tab
   // where the organizer is already building the game
-  if (isDraft) {
+  if (isDraft || hasEnded) {
     return null;
   }
 

@@ -8,7 +8,6 @@ import {
   clockText,
   countText,
   goalsByPeriod,
-  isPastEvent,
   myLine,
   playerGameRows,
   rankText,
@@ -234,10 +233,7 @@ describe('formatting', () => {
     expect(rows.map((_, i) => rankText(rows, i))).toEqual(['1', 'T2', 'T2', '4']);
   });
 
-  it('past-event check and the per-event map', () => {
-    expect(isPastEvent('2026-11-23T02:15:00Z', new Date('2026-11-27T00:00:00Z'))).toBe(true);
-    expect(isPastEvent('garbage')).toBe(false);
-    expect(isPastEvent(undefined)).toBe(false);
+  it('the per-event map', () => {
     const a = { eventId: 'a', eventDate: 'x', eventName: null, black: { label: null, score: 1 }, white: { label: null, score: 2 } };
     expect(Object.keys(resultsByEventId([[a], []]))).toEqual(['a']);
   });
