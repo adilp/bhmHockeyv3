@@ -49,6 +49,13 @@ public class WaitlistService : IWaitlistService
             return null;
         }
 
+        // Nobody is promoted onto a game that is over (EventService.HasEnded)
+        if (EventService.HasEnded(nextInLine.Event, DateTime.UtcNow))
+        {
+            _logger.LogInformation("No promotion for event {EventId}: the game has already been played", eventId);
+            return null;
+        }
+
         // Promote the user
         nextInLine.Status = "Registered";
         nextInLine.WaitlistPosition = null;
@@ -319,6 +326,17 @@ public class WaitlistService : IWaitlistService
         bool callerOwnsTransaction = false)
     {
         var result = new PromotionResult();
+
+        // Nobody is promoted onto a game that is over (EventService.HasEnded): every
+        // automatic promotion (a cancel, an organizer's removal, an expired payment
+        // deadline) comes through here, so it promotes and notifies no one. The action
+        // that freed the spot is the caller's and is unaffected.
+        var evt = await _context.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId);
+        if (evt != null && EventService.HasEnded(evt, DateTime.UtcNow))
+        {
+            _logger.LogInformation("PromoteFromWaitlistAsync: no promotion for event {EventId}, the game has already been played", eventId);
+            return result;
+        }
 
         // Get verified waitlist users ordered by RegisteredAt, then by Id
         var verifiedUsers = await _context.EventRegistrations

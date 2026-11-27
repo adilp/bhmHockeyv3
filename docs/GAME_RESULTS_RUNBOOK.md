@@ -96,12 +96,19 @@ its start, so the existing refusal ("Registration deadline has passed") answers 
 sign-up or waitlist join. A correction closes a game added before this rule; when
 its payment already matches, the outcome is `registration_closed`. Separately, any
 game whose start plus duration has passed refuses a player's sign-up ("This game
-has already been played", same 400 shape), and so does an organizer's add player
-(`POST /events/{id}/registrations/add-user`): same rule, same message, nothing
-written or sent. Still allowed on a finished game: this past-game route and its
-correction, the result routes, marking and verifying payments, removing a player,
-team swaps and every read. Guests (`create-ghost-player`) and the waitlist moves
-are not covered by this refusal.
+has already been played", same 400 shape), and so do an organizer's add player
+(`POST /events/{id}/registrations/add-user`) and move to roster
+(`POST /events/{id}/registrations/{registrationId}/move-to-roster`): same rule, same
+message, nothing written or sent. Nobody is promoted off the waitlist onto a finished
+game automatically either: a player's cancel, an organizer's removal and the
+expired-payment job still cancel as before, but promote and notify no one (the rule
+sits in `WaitlistService.PromoteFromWaitlistAsync` / `PromoteNextFromWaitlistAsync`,
+and a test enumerates their callers). Still allowed on a finished game: this
+past-game route and its correction, the result routes, marking and verifying
+payments, removing a player, team swaps and every read. Verifying a waitlisted
+player's payment still moves THAT player onto the roster (on purpose: payments are
+verified after games) and moves nobody else. Guests (`create-ghost-player`) are
+unchanged.
 
 **Correcting a past game's cost and payment.** Send the same body again with
 `cost`, every entry's `paymentStatus` and `"correctPayment": true`. It changes

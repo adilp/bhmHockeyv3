@@ -1852,6 +1852,14 @@ public class EventService : IEventService
         if (!await CanUserManageEventAsync(evt, organizerId))
             throw new UnauthorizedAccessException("You don't have permission to manage this event");
 
+        // Nobody comes off the waitlist onto a game that is over: same rule and message as
+        // add player and a player's own sign-up; the controller answers 400 { message }.
+        if (HasEnded(evt, DateTime.UtcNow))
+        {
+            _logger.LogWarning("Move to roster blocked for event {EventId}: the game has already been played", eventId);
+            return new MoveResultDto(false, GameOverMessage, null);
+        }
+
         var registration = await _context.EventRegistrations
             .Include(r => r.User)
             .FirstOrDefaultAsync(r => r.Id == registrationId && r.EventId == eventId);
