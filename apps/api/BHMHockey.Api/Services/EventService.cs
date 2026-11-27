@@ -610,6 +610,9 @@ public class EventService : IEventService
     public static bool HasEnded(Event evt, DateTime utcNow) =>
         evt.EventDate.AddMinutes(Math.Max(evt.Duration, 0)) < utcNow;
 
+    /// <summary>The refusal given when someone is put on a game that <see cref="HasEnded"/>.</summary>
+    public const string GameOverMessage = "This game has already been played";
+
     public async Task<RegistrationResultDto> RegisterAsync(Guid eventId, Guid userId, string? position = null)
     {
         var evt = await _context.Events
@@ -637,12 +640,12 @@ public class EventService : IEventService
         }
 
         // A game that is over takes no new sign-ups (nor waitlist joins): same refusal
-        // path and response shape as a passed deadline. Organizers placing players
-        // directly (add-player, guests) do not come through here.
+        // path and response shape as a passed deadline. The organizer's add-player
+        // refuses the same way (AddUserToWaitlistAsync); guests do not come through here.
         if (HasEnded(evt, DateTime.UtcNow))
         {
             _logger.LogWarning("Registration blocked for event {EventId}: the game has already been played", eventId);
-            throw new InvalidOperationException("This game has already been played");
+            throw new InvalidOperationException(GameOverMessage);
         }
 
         // Get user to validate/determine position
@@ -2212,6 +2215,16 @@ public class EventService : IEventService
         if (!await CanUserManageEventAsync(evt, organizerId))
         {
             throw new UnauthorizedAccessException("You don't have permission to manage this event");
+        }
+
+        // A game that is over takes no new player from the organizer either: same rule
+        // and message as a player's own sign-up (RegisterAsync), returned by the
+        // controller as the same 400 { message }. Nothing is written. Only adding a
+        // player is refused here; payments, removals and the past-game route are not.
+        if (HasEnded(evt, DateTime.UtcNow))
+        {
+            _logger.LogWarning("Add player blocked for event {EventId}: the game has already been played", eventId);
+            throw new InvalidOperationException(GameOverMessage);
         }
 
         // Verify user exists

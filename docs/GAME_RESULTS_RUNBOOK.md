@@ -96,8 +96,12 @@ its start, so the existing refusal ("Registration deadline has passed") answers 
 sign-up or waitlist join. A correction closes a game added before this rule; when
 its payment already matches, the outcome is `registration_closed`. Separately, any
 game whose start plus duration has passed refuses a player's sign-up ("This game
-has already been played", same 400 shape). Organizers adding a player directly are
-not affected.
+has already been played", same 400 shape), and so does an organizer's add player
+(`POST /events/{id}/registrations/add-user`): same rule, same message, nothing
+written or sent. Still allowed on a finished game: this past-game route and its
+correction, the result routes, marking and verifying payments, removing a player,
+team swaps and every read. Guests (`create-ghost-player`) and the waitlist moves
+are not covered by this refusal.
 
 **Correcting a past game's cost and payment.** Send the same body again with
 `cost`, every entry's `paymentStatus` and `"correctPayment": true`. It changes
