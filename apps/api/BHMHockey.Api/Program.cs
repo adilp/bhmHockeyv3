@@ -157,6 +157,13 @@ builder.Services.AddScoped<IStandingsService, StandingsService>();
 builder.Services.AddScoped<IRosterPublishService, RosterPublishService>();
 builder.Services.AddScoped<INotFullGameReminderService, NotFullGameReminderService>();
 
+// Game results (AMP Vision). The "GameResults" section is optional: with nothing
+// configured both switches are on. GameResults__ReadsEnabled=false hides the feature.
+builder.Services.Configure<GameResultOptions>(builder.Configuration.GetSection("GameResults"));
+builder.Services.AddScoped<IEventVisibility, EventVisibility>();
+builder.Services.AddScoped<IGameResultService, GameResultService>();
+builder.Services.AddScoped<IPastGameService, PastGameService>();
+
 // Background Services
 builder.Services.AddHostedService<WaitlistBackgroundService>();
 builder.Services.AddHostedService<EventReminderBackgroundService>();

@@ -1,0 +1,41 @@
+database gr_compat_1795813187307
+PASS  A. OLD API migrates an empty database and /health is 200
+PASS  A. the old schema has no GameResults table
+PASS  A. seed data created through the OLD API
+PASS  C. NEW API starts on the un-migrated database and /health is 200
+PASS  C. it applied exactly one pending migration, AddGameResults
+PASS  C. the three new tables exist
+PASS  C. Users.HideGameStats has a database default of false
+PASS  C. every existing user reads HideGameStats = false
+      status codes of the recorded GETs: {"200":27,"404":1}
+PASS  C. NEW API vs OLD API: 28 installed-client GETs byte-identical
+PASS  D. past game created (200)
+PASS  D. the past game wrote no notification
+PASS  D. a second past-game call is already_exists
+PASS  D. result published (200 created)
+PASS  D. the same body again is unchanged
+PASS  D. a player cannot publish (403)
+PASS  D. recap reads, a name-only scorer has no userId
+PASS  D. player stats total on read
+PASS  D. leaderboard ranks the one linked player
+PASS  D. recent results
+PASS  D. a game with no result is 404 (what the app shows as "no stats")
+PASS  D. the hide switch
+PASS  D. /users/me does not carry the new column
+PASS  E. OLD API starts on the MIGRATED database and /health is 200
+      status codes of the recorded GETs: {"200":27,"404":1}
+PASS  E. OLD API on migrated schema vs NEW API: 28 installed-client GETs byte-identical
+PASS  E. OLD API registers a user on the migrated Users table (200)
+PASS  E. the row the OLD API inserted took the default
+PASS  E. OLD API creates an event (201)
+      the OLD API answers the new app's calls: GET /events/{id}/result -> 404; GET /users/{id}/stats?season=2026 -> 404; GET /users/{id}/stats -> 404; GET /users/me/stats-visibility -> 404; PUT /users/me/stats-visibility -> 404; GET /organizations/{id}/leaderboard?stat=points&season=2026 -> 404; GET /organizations/{id}/results?limit=5 -> 404
+PASS  E. OLD API answers every new-app call with a non-401 error (the app hides the feature, the user stays signed in)
+PASS  F. NEW API restarts and /health is 200
+PASS  F. no pending migrations the second time
+PASS  G. NEW API exits (code SIGABRT) instead of serving when its migration cannot lock Users, after 7.4s
+PASS  G. the cause logged is the lock timeout
+PASS  G. the failed migration rolled back whole: no table, no column, no history row
+PASS  G. the OLD API still serves on the untouched schema
+
+ALL PASSED
+(databases gr_compat_1795813187307 and gr_compat_1795813187307_lock left for inspection)

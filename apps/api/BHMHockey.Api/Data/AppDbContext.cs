@@ -35,6 +35,9 @@ public class AppDbContext : DbContext
     public DbSet<TournamentMatch> TournamentMatches { get; set; }
     public DbSet<TournamentRegistration> TournamentRegistrations { get; set; }
     public DbSet<TournamentAnnouncement> TournamentAnnouncements { get; set; }
+    public DbSet<GameResult> GameResults { get; set; }
+    public DbSet<GamePlayerLine> GamePlayerLines { get; set; }
+    public DbSet<GameGoal> GameGoals { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -674,6 +677,113 @@ public class AppDbContext : DbContext
             {
                 entity.Property(e => e.TargetTeamIds).HasColumnType("jsonb");
             }
+        });
+
+        ConfigureGameResults(modelBuilder, isInMemory);
+    }
+
+    /// <summary>
+    /// Game results (published by AMP Vision). Three tables that nothing older
+    /// references, plus Users.HideGameStats. Additive only.
+    /// </summary>
+    private static void ConfigureGameResults(ModelBuilder modelBuilder, bool isInMemory)
+    {
+        modelBuilder.Entity<User>(entity =>
+        {
+            // A database default, so rows written by an older build (which does not
+            // know the column) still insert, and existing rows need no rewrite.
+            entity.Property(e => e.HideGameStats).HasDefaultValue(false);
+        });
+
+        modelBuilder.Entity<GameResult>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.EventId).IsUnique();                       // one result per game
+            entity.HasIndex(e => new { e.OrganizationId, e.Status });         // leaderboard, recent results
+            entity.HasIndex(e => new { e.Source, e.SourceGameKey }).IsUnique();
+
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.BlackLabel).HasMaxLength(50);
+            entity.Property(e => e.WhiteLabel).HasMaxLength(50);
+            entity.Property(e => e.FinalScoreSource).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.VideoUrl).HasMaxLength(500);
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.SourceGameKey).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.SourceCodeVersion).HasMaxLength(64);
+            entity.Property(e => e.PayloadHash).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.WithdrawnReason).HasMaxLength(500);
+
+            entity.HasOne(e => e.Event)
+                .WithMany()
+                .HasForeignKey(e => e.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Organization)
+                .WithMany()
+                .HasForeignKey(e => e.OrganizationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            if (!isInMemory)
+            {
+                entity.Property(e => e.VideoChaptersJson).HasColumnType("jsonb");
+                entity.Property(e => e.MeasurementJson).HasColumnType("jsonb");
+                entity.Property(e => e.NotesJson).HasColumnType("jsonb");
+            }
+        });
+
+        modelBuilder.Entity<GamePlayerLine>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.GameResultId, e.SourcePlayerKey }).IsUnique(); // the upsert key
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.AmpPlayerId);
+
+            entity.Property(e => e.SourcePlayerKey).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.DisplayName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Team).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Position).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Jersey).HasMaxLength(4);
+
+            entity.HasOne(e => e.GameResult)
+                .WithMany(r => r.PlayerLines)
+                .HasForeignKey(e => e.GameResultId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // A deleted account keeps its game lines as name-only (the goal still happened)
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            if (!isInMemory)
+            {
+                entity.Property(e => e.EstimatesJson).HasColumnType("jsonb");
+            }
+        });
+
+        modelBuilder.Entity<GameGoal>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.GameResultId, e.Sequence }).IsUnique();
+
+            entity.Property(e => e.Team).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.ScorerSource).HasMaxLength(30);
+            entity.Property(e => e.AssistsSource).IsRequired().HasMaxLength(30);
+
+            entity.HasOne(e => e.GameResult)
+                .WithMany(r => r.Goals)
+                .HasForeignKey(e => e.GameResultId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Lines and goals are replaced together in one transaction (goals first).
+            // Restrict keeps a goal from silently losing its scorer if a line were
+            // ever deleted alone.
+            entity.HasOne(e => e.ScorerLine).WithMany().HasForeignKey(e => e.ScorerLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.PrimaryAssistLine).WithMany().HasForeignKey(e => e.PrimaryAssistLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.SecondaryAssistLine).WithMany().HasForeignKey(e => e.SecondaryAssistLineId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
