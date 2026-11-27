@@ -95,6 +95,7 @@ public class PastGameService : IPastGameService
             Venue = request.Venue,
             MaxPlayers = Math.Max(eligible.Count, 1),
             Cost = PaidGame(request) ? request.Cost!.Value : 0,
+            RegistrationDeadline = eventDate,   // closed to sign-ups: the game is over
             Status = "Published",               // exactly what every other past game looks like
             Visibility = request.Visibility ?? "OrganizationMembers",
             IsRosterPublished = true,           // teams visible; nothing is sent (no publish call)
@@ -173,6 +174,10 @@ public class PastGameService : IPastGameService
         var now = DateTime.UtcNow;
         var changed = evt.Cost != cost;
         evt.Cost = cost;
+        // A correction also closes the game to sign-ups (games added before this rule had
+        // no deadline); a deadline already at or before the start is left as it is.
+        var closing = evt.RegistrationDeadline == null || evt.RegistrationDeadline > evt.EventDate;
+        if (closing) evt.RegistrationDeadline = evt.EventDate;
         foreach (var r in registered)
         {
             var status = paid ? byUser[r.UserId].PaymentStatus : null;
@@ -183,8 +188,16 @@ public class PastGameService : IPastGameService
             r.PaymentMarkedAt = null;
             r.PaymentDeadlineAt = null;
         }
-        if (!changed)
+        if (!changed && !closing)
             return new CreatePastGameResponse(evt.Id, "unchanged", registered.Count, new List<Guid>());
+        if (!changed)
+        {
+            evt.UpdatedAt = now;
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Past game {GameKey} (event {EventId}): closed to sign-ups by {UserId}, payment already as stated, no notifications",
+                request.SourceGameKey, evt.Id, callerId);
+            return new CreatePastGameResponse(evt.Id, "registration_closed", registered.Count, new List<Guid>());
+        }
 
         evt.UpdatedAt = now;
         await _context.SaveChangesAsync();

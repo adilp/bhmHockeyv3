@@ -89,6 +89,13 @@ async function main() {
   ok(lb.status === 200 && lb.json.rows.length === result.players.filter(p => p.userId).length, `leaderboard: ${lb.json?.rows.length} linked players ranked`);
   ok(psql(`SELECT count(*) FROM "Notifications"`) === '0', 'still no notification after the result');
 
+  // The game is over: a sign-up is refused the way a passed deadline is, and writes nothing
+  const regsBefore = psql(`SELECT count(*) FROM "EventRegistrations" WHERE "EventId"='${eventId}'`);
+  const signUp = await call('POST', `/events/${eventId}/register`, token, { position: 'Skater' });
+  ok(signUp.status === 400 && signUp.json?.message === 'Registration deadline has passed'
+     && psql(`SELECT count(*) FROM "EventRegistrations" WHERE "EventId"='${eventId}'`) === regsBefore,
+     `a sign-up on the past game is refused and writes nothing: ${signUp.status} ${signUp.text}`);
+
   // Optional: a payment correction of the game just created (--correction <past_game file with
   // cost, paymentStatus on every entry and correctPayment true>), as an organization admin.
   if (args.correction) {

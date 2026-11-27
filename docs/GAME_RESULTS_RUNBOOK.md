@@ -91,6 +91,14 @@ anyone) or `Pending` (owes: the player sees the amount and the pay buttons). No
 payment deadline is ever set, so the expired-deadline job cannot select a past
 game. Without `cost` the game is free, as before.
 
+**Closed to sign-ups.** A past game is created with its registration deadline at
+its start, so the existing refusal ("Registration deadline has passed") answers any
+sign-up or waitlist join. A correction closes a game added before this rule; when
+its payment already matches, the outcome is `registration_closed`. Separately, any
+game whose start plus duration has passed refuses a player's sign-up ("This game
+has already been played", same 400 shape). Organizers adding a player directly are
+not affected.
+
 **Correcting a past game's cost and payment.** Send the same body again with
 `cost`, every entry's `paymentStatus` and `"correctPayment": true`. It changes
 the event's cost and each registration's payment and nothing else, and sends
@@ -136,11 +144,11 @@ In order of preference; each stops at the first that is enough.
 
 | what | command | result |
 |---|---|---|
-| API tests | `cd apps/api && dotnet test BHMHockey.Api.Tests` | 1,348 passed (1,289 before game results, all still passing) |
+| API tests | `cd apps/api && dotnet test BHMHockey.Api.Tests` | 1,352 passed (1,289 before game results, all still passing) |
 | installed-client contract | `--filter InstalledClientContract` | 137 endpoints unchanged; 9 additive, reviewed |
 | startup and compatibility on real PostgreSQL | `node scripts/game-results/startup-compat-check.mjs --old <old publish> --new <new publish> --pg ... --psql ...` | all 35 checks pass (step E also replays the new app's calls on the OLD API: 404, never 401): `docs/game-results/startup-compat-check.out.txt` |
 | rollback SQL | `scripts/game-results/rollback-sql-check.sh <migrated local db>` | down/up each twice, existing rows kept |
-| a past game's import, end to end | `node scripts/game-results/rehearse-past-game.mjs ... --past <past_game.json> --result <game_result.json> [--correction <past_game.json with cost>]` | 16 checks pass: event created silently, result accepted, recap/stats (incl. the no-stats list, on PostgreSQL)/leaderboard read, no notification; with `--correction`, 23: corrected once then unchanged, cost and every payment as stated, no deadline, the organizer's unpaid count, still no notification |
+| a past game's import, end to end | `node scripts/game-results/rehearse-past-game.mjs ... --past <past_game.json> --result <game_result.json> [--correction <past_game.json with cost>]` | 16 checks pass: event created silently, result accepted, recap/stats (incl. the no-stats list, on PostgreSQL)/leaderboard read, no notification; with `--correction`, 24: a sign-up refused and nothing written, corrected once then unchanged, cost and every payment as stated, no deadline, the organizer's unpaid count, still no notification |
 
 The old build is `git archive <main before the change> apps/api` published to
 a local folder (`dotnet publish -c Release -o <dir>`); the new one is this
