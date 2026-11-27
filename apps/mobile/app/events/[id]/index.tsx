@@ -29,7 +29,7 @@ import type { TabKey } from '../../../components';
 import { DEFAULT_TABS } from '../../../components/event-detail/SegmentedControl';
 import { EventResultsTab } from '../../../components/game-results/EventResultsTab';
 import { useGameResultStore } from '../../../stores/gameResultStore';
-import { isPastEvent } from '../../../utils/gameResults';
+import { hasEnded } from '../../../utils/eventTiming';
 import { colors, spacing } from '../../../theme';
 import type { Position, RegistrationResultDto, WaiverSignatureDetails } from '@bhmhockey/shared';
 
@@ -100,7 +100,7 @@ export default function EventDetailScreen() {
 
   // Game results: ask for a finished org game's result. Any failure (no such
   // endpoint on the server, 404, 500, timeout) leaves the screen as it was.
-  const eventHasEnded = !!selectedEvent && isPastEvent(selectedEvent.eventDate)
+  const eventHasEnded = !!selectedEvent && hasEnded(selectedEvent)
     && selectedEvent.status !== 'Draft' && selectedEvent.status !== 'Cancelled'
     && !!selectedEvent.organizationId;
   useEffect(() => {
@@ -427,6 +427,8 @@ export default function EventDetailScreen() {
   const isFull = spotsLeft <= 0;
   const isWaitlisted = selectedEvent?.amIWaitlisted;
   const canManage = selectedEvent?.canManage || false;
+  // The game is over: the controls that only make sense before it are not shown
+  const ended = hasEnded(selectedEvent);
 
   const getOrgAbbreviation = (name: string) => {
     if (!name) return 'Event';
@@ -455,6 +457,7 @@ export default function EventDetailScreen() {
             onCancelRegistration={handleCancelRegistration}
             onRefresh={handleRefresh}
             isRefreshing={isRefreshing}
+            hasEnded={ended}
           />
         );
       case 'roster':
@@ -464,6 +467,7 @@ export default function EventDetailScreen() {
             event={selectedEvent}
             canManage={canManage}
             onPublishEvent={handlePublishEvent}
+            hasEnded={ended}
           />
         );
       case 'chat':
@@ -533,6 +537,7 @@ export default function EventDetailScreen() {
             isProcessing={isProcessing}
             onRegister={handleRegister}
             isDraft={selectedEvent.status === 'Draft'}
+            hasEnded={ended}
           />
 
           {/* Waiver acceptance modal (registration flow) - decline returns to the event */}

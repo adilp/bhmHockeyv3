@@ -47,9 +47,12 @@ interface EventRosterTabProps {
   /** Publishes a draft event. The roster's top button does this while the
    *  event is a draft, since the roster cannot be published before the event. */
   onPublishEvent?: () => void;
+  /** The game is over: no Add Player, no Publish, no waitlist moves (payments, team
+   *  swaps, removals and Share stay, for settling the record). */
+  hasEnded?: boolean;
 }
 
-export function EventRosterTab({ eventId, event, canManage, onPublishEvent }: EventRosterTabProps) {
+export function EventRosterTab({ eventId, event, canManage, onPublishEvent, hasEnded = false }: EventRosterTabProps) {
   const isDraft = event.status === 'Draft';
   const [allRegistrations, setAllRegistrations] = useState<EventRegistrationDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -574,19 +577,21 @@ export function EventRosterTab({ eventId, event, canManage, onPublishEvent }: Ev
         {/* Organizer action buttons */}
         {canManage && (
           <View style={styles.organizerActions}>
-            {/* Add Player button */}
-            <TouchableOpacity
-              style={styles.addPlayerButton}
-              onPress={() => setIsAddPlayerModalVisible(true)}
-            >
-              <Text style={styles.addPlayerButtonText} allowFontScaling={false}>
-                + Add Player
-              </Text>
-            </TouchableOpacity>
+            {/* Add Player button (not once the game is over) */}
+            {!hasEnded && (
+              <TouchableOpacity
+                style={styles.addPlayerButton}
+                onPress={() => setIsAddPlayerModalVisible(true)}
+              >
+                <Text style={styles.addPlayerButtonText} allowFontScaling={false}>
+                  + Add Player
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* One button, two stages: a draft must be published before its
                 roster can be, so the same slot does whichever comes next */}
-            {(isDraft || !event.isRosterPublished) && (
+            {(isDraft || !event.isRosterPublished) && !hasEnded && (
               <TouchableOpacity
                 style={[styles.publishButton, isPublishing && styles.publishButtonDisabled]}
                 onPress={isDraft ? onPublishEvent : handlePublishRoster}
@@ -667,8 +672,8 @@ export function EventRosterTab({ eventId, event, canManage, onPublishEvent }: Ev
         onMarkPaid={canManage ? handleMarkPaid : undefined}
         onVerifyPayment={canManage ? handleVerifyPayment : undefined}
         onResetPayment={canManage ? handleResetPayment : undefined}
-        onMoveToRoster={canManage && selectedPlayer?.isWaitlisted ? handleMoveToRoster : undefined}
-        onMoveToWaitlist={canManage && !selectedPlayer?.isWaitlisted ? handleMoveToWaitlist : undefined}
+        onMoveToRoster={canManage && !hasEnded && selectedPlayer?.isWaitlisted ? handleMoveToRoster : undefined}
+        onMoveToWaitlist={canManage && !hasEnded && !selectedPlayer?.isWaitlisted ? handleMoveToWaitlist : undefined}
         onEditGuest={canManage ? handleEditGuest : undefined}
         eventId={eventId}
         onViewFullStats={(userId) => router.push(`/players/${userId}`)}
