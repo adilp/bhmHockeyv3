@@ -100,10 +100,16 @@ has already been played", same 400 shape), and so do an organizer's add player
 (`POST /events/{id}/registrations/add-user`) and move to roster
 (`POST /events/{id}/registrations/{registrationId}/move-to-roster`): same rule, same
 message, nothing written or sent. Nobody is promoted off the waitlist onto a finished
-game automatically either: a player's cancel, an organizer's removal and the
-expired-payment job still cancel as before, but promote and notify no one (the rule
-sits in `WaitlistService.PromoteFromWaitlistAsync` / `PromoteNextFromWaitlistAsync`,
-and a test enumerates their callers). Still allowed on a finished game: this
+game automatically either (the rule sits in `WaitlistService.PromoteFromWaitlistAsync`
+/ `PromoteNextFromWaitlistAsync`, and a test enumerates their callers): an
+organizer's removal still removes but promotes and notifies no one. A player cannot
+drop from a finished game, from the roster or the waitlist (`DELETE
+/events/{id}/register` answers 400 { message } with the same message; nothing written,
+no "Player Dropped"), and the expired-payment job leaves a finished game alone: nobody
+is cancelled for an unpaid deadline, no "Registration Expired" is sent, and the
+registration stays as it is for the organizer to verify or remove (the job itself is
+switched off in `WaitlistBackgroundService` today; this holds if it is switched back
+on). A test lists every place a registration is cancelled. Still allowed on a finished game: this
 past-game route and its correction, the result routes, marking and verifying
 payments, removing a player, team swaps and every read. Verifying a waitlisted
 player's payment still moves THAT player onto the roster (on purpose: payments are

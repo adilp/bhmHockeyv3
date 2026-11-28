@@ -113,6 +113,17 @@ public class WaitlistService : IWaitlistService
             .Include(r => r.Event)
             .ToListAsync();
 
+        // A game that is over is left alone: nobody who played is cancelled for an unpaid
+        // deadline and nothing is sent; the registration stays as it is, for the organizer
+        // to verify or remove. Skipped quietly (one debug line per pass, not one per row).
+        var now = DateTime.UtcNow;
+        var finished = expiredRegistrations.Count(r => EventService.HasEnded(r.Event, now));
+        if (finished > 0)
+        {
+            _logger.LogDebug("Expired payment deadlines: {Count} registration(s) on games that are over left as they are", finished);
+            expiredRegistrations = expiredRegistrations.Where(r => !EventService.HasEnded(r.Event, now)).ToList();
+        }
+
         foreach (var registration in expiredRegistrations)
         {
             _logger.LogInformation(

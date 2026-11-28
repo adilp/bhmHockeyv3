@@ -257,19 +257,22 @@ public class FinishedGameWaitlistTests : IDisposable
     // ------------------------------------------------------- every caller, end to end
 
     [Fact]
-    public async Task APlayerCancellingOnAFinishedGameStillCancelsAndNobodyIsPromoted()
+    public async Task APlayerCancellingOnAFinishedGameIsRefusedAndNobodyIsPromoted()
     {
+        // Since the owner's later rule a player cannot drop from a finished game at all
+        // (FinishedGameDropTests); the waitlist is untouched either way.
         var evt = Finished(cost: 20);
         var leaver = Register(evt, _leaver, "Registered", "Verified");
         var waiting = Register(evt, _waiting, "Waitlisted", "Verified");
-        var sent = new List<string?>();
+        var push = new Mock<INotificationService>(MockBehavior.Strict);
 
-        (await Events(NoPromotionPush(sent).Object).CancelRegistrationAsync(evt.Id, _leaver.Id)).Should().BeTrue();
+        await FluentActions.Awaiting(() => Events(push.Object).CancelRegistrationAsync(evt.Id, _leaver.Id))
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage(EventService.GameOverMessage);
 
-        (await Reload(leaver)).Status.Should().Be("Cancelled");
+        (await Reload(leaver)).Status.Should().Be("Registered");
         (await Reload(waiting)).Status.Should().Be("Waitlisted");
         (await Reload(waiting)).WaitlistPosition.Should().Be(1);
-        sent.Should().Equal("player_dropped");            // the managers' notice of the cancel, as today
+        push.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -288,18 +291,19 @@ public class FinishedGameWaitlistTests : IDisposable
     }
 
     [Fact]
-    public async Task AnExpiredPaymentDeadlineOnAFinishedGameStillCancelsAndNobodyIsPromoted()
+    public async Task AnExpiredPaymentDeadlineOnAFinishedGameCancelsNobodyAndPromotesNobody()
     {
+        // Since the owner's later rule the job leaves a finished game alone (FinishedGameDropTests)
         var evt = Finished(cost: 20);
         var unpaid = Register(evt, _leaver, "Registered", "Pending", deadline: DateTime.UtcNow.AddMinutes(-5));
         var waiting = Register(evt, _waiting, "Waitlisted", "Verified");
-        var sent = new List<string?>();
+        var push = new Mock<INotificationService>(MockBehavior.Strict);
 
-        await Waitlist(NoPromotionPush(sent).Object).ProcessExpiredPaymentDeadlinesAsync();
+        await Waitlist(push.Object).ProcessExpiredPaymentDeadlinesAsync();
 
-        (await Reload(unpaid)).Status.Should().Be("Cancelled");    // the job's own action, unchanged
+        (await Reload(unpaid)).Status.Should().Be("Registered");
         (await Reload(waiting)).Status.Should().Be("Waitlisted");
-        sent.Should().Equal("registration_expired");
+        push.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -417,5 +421,17 @@ public class FinishedGameWaitlistTests : IDisposable
             "WaitlistService.PromoteNextFromWaitlistAsync", // guarded
             "WaitlistService.PromoteFromWaitlistAsync",   // guarded
             "PastGameService.CreatePastGameAsync");       // creates a finished game's roster
+    }
+
+    [Fact]
+    public void EveryPlaceThatCancelsARegistrationIsKnown()
+    {
+        // A new place that sets Status = "Cancelled" must be added here with its reason and
+        // with what it does on a game that is over (FinishedGameDropTests).
+        SitesOf(new Regex(@"\bStatus\s*=\s*""Cancelled""")).Should().BeEquivalentTo(
+            "EventService.DeleteAsync",                   // the EVENT's status (cancel a game); its registrations are untouched
+            "EventService.CancelRegistrationAsync",       // a player's own drop: refused once over
+            "EventService.RemoveRegistrationAsync",       // an organizer's removal: allowed on a finished game, on purpose
+            "WaitlistService.ProcessExpiredPaymentDeadlinesAsync"); // unpaid deadline: skips a game that is over
     }
 }

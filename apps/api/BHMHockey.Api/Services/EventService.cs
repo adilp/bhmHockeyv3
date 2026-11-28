@@ -869,6 +869,20 @@ public class EventService : IEventService
         var wasRegistered = registration.Status == "Registered";
         var wasWaitlisted = registration.Status == "Waitlisted";
 
+        // A player cannot drop from a game that is over, from the roster or the waitlist
+        // (on a paid game an unverified player who played sits on the waitlist). Nothing
+        // is written or sent; the controller answers 400 { message }. An organizer's
+        // removal (RemoveRegistrationAsync) is not affected.
+        if (wasRegistered || wasWaitlisted)
+        {
+            var evt = await _context.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId);
+            if (evt != null && HasEnded(evt, DateTime.UtcNow))
+            {
+                _logger.LogWarning("Cancel blocked for event {EventId}, user {UserId}: the game has already been played", eventId, userId);
+                throw new InvalidOperationException(GameOverMessage);
+            }
+        }
+
         // Use Serializable transaction to atomically cancel and promote
         await using var transaction = await _context.Database
             .BeginTransactionAsync(IsolationLevel.Serializable);
