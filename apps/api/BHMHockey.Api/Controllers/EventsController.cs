@@ -219,7 +219,19 @@ public class EventsController : ControllerBase
     public async Task<IActionResult> CancelRegistration(Guid id)
     {
         var userId = GetCurrentUserId();
-        var success = await _eventService.CancelRegistrationAsync(id, userId);
+        bool success;
+        try
+        {
+            success = await _eventService.CancelRegistrationAsync(id, userId);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == EventService.GameOverMessage)
+        {
+            // Only the game-over refusal becomes the 400 { message } a refused sign-up gets.
+            // Every other exception (a transient database failure, for one) surfaces exactly
+            // as it did before this rule.
+            _logger.LogWarning("Cancel registration rejected for event {EventId}: {Message}", id, ex.Message);
+            return BadRequest(new { message = ex.Message });
+        }
 
         if (!success)
         {
